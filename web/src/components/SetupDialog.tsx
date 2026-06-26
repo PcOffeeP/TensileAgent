@@ -1,20 +1,24 @@
 import { useState, useEffect } from "react";
-import { getConfigStatus, setupConfig, ConfigStatus } from "../api";
+import { getConfigStatus, setupConfig, updateModel, ConfigStatus } from "../api";
 
 interface SetupDialogProps {
   onComplete: () => void;
+  mode?: "setup" | "reconfigure";
 }
 
-export default function SetupDialog({ onComplete }: SetupDialogProps) {
-  const [step, setStep] = useState<"check" | "input" | "testing" | "select" | "done" | "error">("check");
+export default function SetupDialog({ onComplete, mode = "setup" }: SetupDialogProps) {
+  const [step, setStep] = useState<"check" | "input" | "testing" | "select" | "done" | "error">(() =>
+    mode === "reconfigure" ? "testing" : "check"
+  );
   const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  // On mount, check current status
+  // On mount, check current status (setup mode only)
   useEffect(() => {
+    if (mode === "reconfigure") return;
     (async () => {
       try {
         const status = await getConfigStatus();
@@ -30,7 +34,32 @@ export default function SetupDialog({ onComplete }: SetupDialogProps) {
         setStep("input");
       }
     })();
-  }, []);
+  }, [mode, onComplete]);
+
+  // Reconfigure mode: fetch available models using saved API key
+  useEffect(() => {
+    if (mode !== "reconfigure") return;
+    fetchAvailableModels();
+  }, [mode]);
+
+  async function fetchAvailableModels() {
+    setStep("testing");
+    setErrorMsg("");
+    try {
+      const data = await updateModel("");
+      if (data.available_models && data.available_models.length > 0) {
+        setModels(data.available_models);
+        // Pre-select current model if known
+        setStep("select");
+      } else {
+        setErrorMsg("未能获取模型列表，请确认 API Key 仍有效");
+        setStep("error");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "获取模型列表失败");
+      setStep("error");
+    }
+  }
 
   const handleTestConnection = async () => {
     if (!apiKey.trim()) return;
@@ -48,10 +77,15 @@ export default function SetupDialog({ onComplete }: SetupDialogProps) {
         const data = await res.json();
         // If the error mentions model not in list, that's actually good - connection worked
         if (data.detail && data.detail.includes("不在可用列表中")) {
-          // Extract models from error message
-          const match = data.detail.match(/可用模型: (.+)$/);
-          if (match) {
-            setModels(match[1].split(", ").filter(Boolean));
+          // Prefer available_models from response body (new format)
+          if (Array.isArray(data.available_models) && data.available_models.length > 0) {
+            setModels(data.available_models);
+          } else {
+            // Fallback: extract from error message (legacy format)
+            const match = data.detail.match(/可用模型: (.+)$/);
+            if (match) {
+              setModels(match[1].split(", ").filter(Boolean));
+            }
           }
           setStep("select");
           return;
@@ -74,7 +108,11 @@ export default function SetupDialog({ onComplete }: SetupDialogProps) {
     if (!selectedModel) return;
     setStep("testing");
     try {
-      await setupConfig(apiKey, selectedModel);
+      if (mode === "reconfigure") {
+        await updateModel(selectedModel);
+      } else {
+        await setupConfig(apiKey, selectedModel);
+      }
       setStep("done");
       // Wait a moment then proceed
       setTimeout(() => onComplete(), 1500);
@@ -100,13 +138,20 @@ export default function SetupDialog({ onComplete }: SetupDialogProps) {
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
           <span style={{ fontSize: 28 }}>⚙️</span>
           <h2 style={{ margin: 0, color: "#e0e0ff", fontSize: 22, fontWeight: 700 }}>
-            TensileAgent 配置
+            {mode === "reconfigure" ? "修改决策模型" : "TensileAgent 配置"}
           </h2>
         </div>
-        <p style={{ color: "#8888aa", margin: "0 0 28px 0", fontSize: 14, lineHeight: 1.5 }}>
-          首次使用需要配置远程决策模型的 API Key。
-          你的 Key 只会保存在本地 <code style={{ color: "#aaccff" }}>agent/.env</code> 文件中。
-        </p>
+        {mode === "setup" && (
+          <p style={{ color: "#8888aa", margin: "0 0 28px 0", fontSize: 14, lineHeight: 1.5 }}>
+            首次使用需要配置远程决策模型的 API Key。
+            你的 Key 只会保存在本地 <code style={{ color: "#aaccff" }}>agent/.env</code> 文件中。
+          </p>
+        )}
+        {mode === "reconfigure" && (
+          <p style={{ color: "#8888aa", margin: "0 0 28px 0", fontSize: 14, lineHeight: 1.5 }}>
+            从百炼平台获取可用模型列表，选择新的决策模型。
+          </p>
+        )}
 
         {/* Step: Connection Check */}
         {step === "check" && (
@@ -209,7 +254,14 @@ export default function SetupDialog({ onComplete }: SetupDialogProps) {
               <p style={{ color: "#ff6666", margin: 0, fontSize: 14 }}>❌ {errorMsg}</p>
             </div>
             <button
-              onClick={() => { setStep("input"); setErrorMsg(""); }}
+              onClick={() => {
+                setErrorMsg("");
+                if (mode === "reconfigure") {
+                  fetchAvailableModels();
+                } else {
+                  setStep("input");
+                }
+              }}
               style={{
                 width: "100%", padding: "12px 0", borderRadius: 8,
                 border: "1px solid #4a6cf7", background: "transparent",

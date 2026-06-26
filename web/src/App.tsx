@@ -16,6 +16,7 @@ export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [health, setHealth] = useState<{ ok: boolean; tasks: number; queue_size: number } | null>(null);
   const [configReady, setConfigReady] = useState<boolean | null>(null);
+  const [reconfiguring, setReconfiguring] = useState(false);
   const [taskEvents, setTaskEvents] = useState<Record<string, unknown[]>>({});
 
   const refreshTasks = useCallback(async () => {
@@ -92,6 +93,19 @@ export default function App() {
     return <SetupDialog onComplete={() => setConfigReady(true)} />;
   }
 
+  if (reconfiguring) {
+    return (
+      <SetupDialog
+        mode="reconfigure"
+        onComplete={() => {
+          setReconfiguring(false);
+          setCurrentView("config");
+          refreshConfig();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
@@ -118,13 +132,13 @@ export default function App() {
               onDeleteTask={handleDeleteTask}
             />
           )}
-          {currentView === "config" && <ConfigView config={config} onRefresh={refreshConfig} />}
+          {currentView === "config" && <ConfigView config={config} onRefresh={refreshConfig} onReconfigure={() => setReconfiguring(true)} />}
         </div>
         {selectedTask && (
           <aside className="w-[420px] border-l border-gray-800 overflow-auto">
             <TaskDetail
               task={selectedTask}
-              events={taskEvents[selectedTask.id] || []}
+              events={(taskEvents[selectedTask.id] || []) as Record<string, unknown>[]}
               onClose={() => setSelectedTask(null)}
             />
           </aside>

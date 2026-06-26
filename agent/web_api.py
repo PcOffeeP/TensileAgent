@@ -499,15 +499,53 @@ async def setup_config(body: dict):
 
     # Verify the selected model is in the available list
     if model not in models:
-        raise HTTPException(
+        return JSONResponse(
             status_code=400,
-            detail=f"模型 '{model}' 不在可用列表中。可用模型: {', '.join(models[:10])}",
+            content={
+                "detail": f"模型 '{model}' 不在可用列表中",
+                "available_models": models,
+            },
         )
 
     # Save
     save_api_key(api_key)
     save_model(model)
 
+    return {"ok": True, "model": model, "available_models_count": len(models)}
+
+
+@app.put("/api/config/model")
+async def update_model(body: dict):
+    """更新决策模型（使用已保存的 API Key）。
+
+    - model 为空字符串时：仅返回可用模型列表（不保存）
+    - model 非空时：校验并保存新模型
+    """
+    model = body.get("model", "").strip()
+
+    # 检查是否已配置
+    if not is_remote_configured():
+        raise HTTPException(status_code=400, detail="尚未完成初始配置，请先配置 API Key")
+
+    # 用已保存的 Key 拉取模型列表
+    models = list_available_models(api_key=get_api_key())
+
+    # 空 model：仅返回模型列表（供 reconfigure 模式使用）
+    if not model:
+        return {"available_models": models}
+
+    # 校验模型是否在可用列表中
+    if model not in models:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail": f"模型 '{model}' 不在可用列表中",
+                "available_models": models,
+            },
+        )
+
+    # 保存
+    save_model(model)
     return {"ok": True, "model": model, "available_models_count": len(models)}
 
 

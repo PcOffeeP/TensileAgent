@@ -110,3 +110,16 @@ export async function setupConfig(apiKey: string, model: string): Promise<{ ok: 
   }
   return res.json();
 }
+
+export async function updateModel(model: string): Promise<{ ok?: boolean; model?: string; available_models?: string[]; available_models_count?: number }> {
+  const res = await fetch("/api/config/model", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || "更新模型失败");
+  }
+  return data;
+}

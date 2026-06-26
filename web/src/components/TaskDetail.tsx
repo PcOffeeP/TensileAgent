@@ -16,8 +16,8 @@ const statusColors: Record<string, string> = {
 };
 
 export default function TaskDetail({ task, events, onClose }: TaskDetailProps) {
-  const result = task.result || {};
-  const status = result.status || task.status;
+  const result = task.result ?? {};
+  const status: string = (result.status as string) || task.status;
 
   return (
     <div className="p-4 space-y-4">
@@ -44,8 +44,8 @@ export default function TaskDetail({ task, events, onClose }: TaskDetailProps) {
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div><span className="text-gray-500">状态</span><br /><span className={statusColors[status as string] || ""}>{status}</span></div>
-            {result.type && <div><span className="text-gray-500">类型</span><br />{String(result.type)}</div>}
-            {result.location && <div><span className="text-gray-500">位置</span><br />{String(result.location)}</div>}
+            {!!result.type && <div><span className="text-gray-500">类型</span><br />{String(result.type)}</div>}
+            {!!result.location && <div><span className="text-gray-500">位置</span><br />{String(result.location)}</div>}
             {result.confidence != null && <div><span className="text-gray-500">置信度</span><br />{Number(result.confidence).toFixed(2)}</div>}
             {result.rounds != null && <div><span className="text-gray-500">轮数</span><br />{String(result.rounds)}</div>}
           </div>

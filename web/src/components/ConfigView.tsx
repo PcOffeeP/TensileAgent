@@ -4,9 +4,10 @@ import type { AppConfig } from "../api";
 interface ConfigViewProps {
   config: AppConfig | null;
   onRefresh: () => void;
+  onReconfigure?: () => void;
 }
 
-export default function ConfigView({ config, onRefresh }: ConfigViewProps) {
+export default function ConfigView({ config, onRefresh, onReconfigure }: ConfigViewProps) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -28,6 +29,14 @@ export default function ConfigView({ config, onRefresh }: ConfigViewProps) {
               <span className="text-gray-500">运行时目录</span><br />
               <span className="text-xs">{config.runtime_dir}</span>
             </div>
+            {onReconfigure && (
+              <button
+                onClick={onReconfigure}
+                className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                修改决策模型
+              </button>
+            )}
           </>
         ) : (
           <p className="text-gray-500 text-sm">加载中...</p>

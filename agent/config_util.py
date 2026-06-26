@@ -7,7 +7,6 @@ and listing available models from OpenAI-compatible endpoints.
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 from typing import Any
 
@@ -105,15 +104,10 @@ def get_configured_model() -> str | None:
 def save_model(model: str) -> None:
     """Update the remote model in agent/config.yaml."""
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        content = f.read()
-    # Replace model field under agent.remote
-    content = re.sub(
-        r'(?<=^remote:\n\s+)model:.*',
-        f"model: {model}",
-        content,
-        flags=re.MULTILINE,
-    )
-    CONFIG_PATH.write_text(content, encoding="utf-8")
+        config = yaml.safe_load(f) or {}
+    config.setdefault("agent", {}).setdefault("remote", {})["model"] = model
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
 
 
 def list_available_models(
