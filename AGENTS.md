@@ -7,14 +7,18 @@
 - `data/02_annotations/`：CSV 标注文件、`video_mapping.csv` 和 `all_videos_tag.csv`。
 - `data/05_splits/`：新 interval 方案生成的 `fold_*_{train,val}.json`、`test.json` 和划分决策记录。
 - `data/03_subvideos/`、`data/04_frames/`、`data/06_merged/`、`data/07_metadata/`：新 interval pipeline 的本地生成产物，不提交。
-- `pipeline/scripts/`：数据集准备、子视频生成、训练样本构建脚本；从仓库根目录运行。
-- `pipeline/config/`、`pipeline/templates/`：旧问题池和 JSON 模板。
-- `finetune/`：项目专属 LLaMA-Factory 配置、数据集注册表和验证脚本。
-- `LlamaFactory/`：LLaMA-Factory git submodule，不在 `finetune/` 中维护框架源码副本。
+- `pipeline/scripts/`：数据集准备、子视频生成、训练样本构建脚本；从仓库根目录运行。 （仅训练机）
+- `pipeline/config/`、`pipeline/templates/`：旧问题池和 JSON 模板。 （仅训练机）
+- `finetune/`：项目专属 LLaMA-Factory 配置、数据集注册表和验证脚本。 （仅训练机）
+- `LlamaFactory/`：LLaMA-Factory git submodule，不在 `finetune/` 中维护框架源码副本。 （仅训练机）
 - `docs/PROJECT_PLAN.md`、`docs/IMPLEMENTATIONS/`：项目级计划与分步骤实施方案。
 - `docs/archive/`：已过期的原设计资料和带日期的历史设计记录，不作为当前实现依据。
 - `assets/`：领域参考文档和项目原始说明材料；运行时配置仍保存在对应代码或配置目录。
 - `tests/`：项目级 pytest 测试。
+
+> **注意**：本仓库仅包含 Agent 决策系统。
+> `pipeline/`、`finetune/`、`LlamaFactory/`、`models/`、`scripts/` 等目录属于训练流水线，
+> 位于独立的 [mVllm_2](../mVllm_2) 仓库中。本仓库通过 HTTP API 调用训练侧部署的推理服务。
 
 ## 设计驱动工作流
 
@@ -32,7 +36,7 @@
 
 ```bash
 git submodule update --init --recursive
-cd LlamaFactory/
+cd LlamaFactory/  # （仅训练机）
 pip install -e ".[metrics]"
 pip install -r requirements/minicpm-v.txt
 ```
@@ -40,32 +44,32 @@ pip install -r requirements/minicpm-v.txt
 新 interval 数据流程：
 
 ```bash
-python3 pipeline/scripts/dataset_manager.py
-python3 pipeline/scripts/subvideo_builder.py
-python3 pipeline/scripts/training_sample_builder.py
-python3 scripts/validate_no_oob.py
+python3 pipeline/scripts/dataset_manager.py  # （仅训练机）
+python3 pipeline/scripts/subvideo_builder.py  # （仅训练机）
+python3 pipeline/scripts/training_sample_builder.py  # （仅训练机）
+python3 scripts/validate_no_oob.py  # （仅训练机）
 ```
 
 训练一个新 interval fold：
 
 ```bash
-cd finetune/
+cd finetune/  # （仅训练机）
 export DOWNSAMPLE_MODE=4x
 export DISABLE_VERSION_CHECK=1
-python3 train_with_contract.py MiniCPM/config/minicpmv4_5_lora_sft_interval_fold0.yaml
+python3 train_with_contract.py MiniCPM/config/minicpmv4_5_lora_sft_interval_fold0.yaml  # （仅训练机）
 ```
 
 项目级验证：
 
 ```bash
 python3 -m pytest tests -q
-python3 scripts/validate_no_oob.py
+python3 scripts/validate_no_oob.py  # （仅训练机）
 git diff --check
 ```
 
 ## 代码风格与命名约定
 
-使用 Python 3.11。遵循 `LlamaFactory/pyproject.toml` 的基本风格：4 空格缩进、双引号、每行 119 字符，并在需要时使用 Google 风格 docstring。确保 `pipeline/scripts/`、`scripts/` 和 `finetune/validation/` 下脚本可从仓库根目录通过 `python3` 运行。保留 `video_XXXX.mp4`、`fold_N_train`、`fold_N_val` 的命名方式。
+使用 Python 3.11。遵循 `LlamaFactory/pyproject.toml` 的基本风格：4 空格缩进、双引号、每行 119 字符，并在需要时使用 Google 风格 docstring。确保 `pipeline/scripts/`、`scripts/` 和 `finetune/validation/` 下脚本可从仓库根目录通过 `python3` 运行。 （仅训练机）保留 `video_XXXX.mp4`、`fold_N_train`、`fold_N_val` 的命名方式。
 
 ## 标签治理与数据口径
 
@@ -75,7 +79,7 @@ CSV 标注是权威来源。发生冲突时，不覆盖 CSV 原字段；通过 `
 
 ## 测试规范
 
-项目级测试从仓库根目录运行 `python3 -m pytest tests -q`。真实生成产物不存在时，部分 `data/07_metadata/` 或 `data/06_merged/` 相关测试应 `skip`，不能依赖本机 ignored 产物才能通过。修改 pipeline 后，优先运行相关单测、一个小样本脚本链路和 `scripts/validate_no_oob.py`。修改 Agent runtime 后，重点覆盖 `tests/test_iterative_agent.py`、`tests/test_sampling*.py`、`tests/test_parser.py`、`tests/test_inference.py`。
+项目级测试从仓库根目录运行 `python3 -m pytest tests -q`。真实生成产物不存在时，部分 `data/07_metadata/` 或 `data/06_merged/` 相关测试应 `skip`，不能依赖本机 ignored 产物才能通过。修改 pipeline 后，优先运行相关单测、一个小样本脚本链路和 `scripts/validate_no_oob.py`。 （仅训练机） 修改 Agent runtime 后，重点覆盖 `tests/test_iterative_agent.py`、`tests/test_sampling*.py`、`tests/test_parser.py`、`tests/test_inference.py`。
 
 ## Agent Runtime 规范
 

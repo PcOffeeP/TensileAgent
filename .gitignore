@@ -27,3 +27,7 @@ wheels/
 
 # API key file
 agent/.env
+
+# Node.js
+node_modules/
+web/dist/
