@@ -16,7 +16,7 @@ agent:
 
   local:
     provider: "ollama"
-    model: "qwen3.5:7b"
+    model: "qwen3.5:9b"
     base_url: "http://localhost:11434/v1"
 
 # Fine-tuned model backend configuration (used by InferenceClient).

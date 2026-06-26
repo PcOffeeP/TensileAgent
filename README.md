@@ -241,7 +241,7 @@ python3 -m agent.run --video xxx.mp4 --agent-model qwen-max
 python3 -m agent.run --video xxx.mp4 --agent-backend local
 
 # 本地指定具体模型
-python3 -m agent.run --video xxx.mp4 --agent-backend local --agent-model qwen3.5:7b
+python3 -m agent.run --video xxx.mp4 --agent-backend local --agent-model qwen3.5:9b
 ```
 
 ## 配置
@@ -259,7 +259,7 @@ agent:
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   local:
     provider: "ollama"
-    model: "qwen3.5:7b"
+    model: "qwen3.5:9b"
     base_url: "http://localhost:11434/v1"
 
 backend:                         # 微调模型推理服务
