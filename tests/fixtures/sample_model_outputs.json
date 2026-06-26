@@ -1,0 +1,52 @@
+[
+  {
+    "description": "positive sample with normal fracture_between interval",
+    "model_output": {
+      "has_fracture": true,
+      "fracture_between": [17, 18],
+      "type": "韧性断裂",
+      "location": "inside_gauge",
+      "confidence": 0.92
+    }
+  },
+  {
+    "description": "negative sample with no fracture",
+    "model_output": {
+      "has_fracture": false,
+      "fracture_between": null,
+      "type": "未断裂",
+      "location": null,
+      "confidence": 0.95
+    }
+  },
+  {
+    "description": "abnormal sample (not clamped)",
+    "model_output": {
+      "has_fracture": false,
+      "fracture_between": null,
+      "type": "未夹紧",
+      "location": null,
+      "confidence": 0.90
+    }
+  },
+  {
+    "description": "video anomaly: fracture presence unknown",
+    "model_output": {
+      "has_fracture": null,
+      "fracture_between": null,
+      "type": "视频异常",
+      "location": null,
+      "confidence": 0.70
+    }
+  },
+  {
+    "description": "video anomaly: confirmed fracture but unreliable time",
+    "model_output": {
+      "has_fracture": true,
+      "fracture_between": null,
+      "type": "视频异常",
+      "location": null,
+      "confidence": 0.65
+    }
+  }
+]

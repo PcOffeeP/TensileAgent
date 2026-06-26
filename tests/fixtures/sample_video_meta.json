@@ -1,0 +1,14 @@
+[
+  {
+    "video_id": "video_0001",
+    "fps": 30.0,
+    "total_frames": 15000,
+    "duration": 500.0
+  },
+  {
+    "video_id": "video_0002",
+    "fps": 25.0,
+    "total_frames": 6000,
+    "duration": 240.0
+  }
+]

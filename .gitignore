@@ -1,0 +1,29 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# video files
+*.mp4
+*.mov
+
+# cache 文件
+.cache/
+
+# macOS system files
+.DS_Store
+
+# pytest cache
+.pytest_cache/
+
+# Runtime artifacts
+/data/08_runtime/
+
+# API key file
+agent/.env
