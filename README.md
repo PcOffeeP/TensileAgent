@@ -170,16 +170,20 @@ Meta-Agent 决定要检查的区间 [start, end] 和提示词
 ### 安装
 
 ```bash
-# 安装核心依赖
-pip install -e .
+# 创建虚拟环境并安装依赖
+uv venv --python 3.11
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+uv sync
 
-# 安装开发依赖（pytest、ruff）
-pip install -e ".[dev]"
+# 含开发依赖
+uv sync --dev
 ```
 
 ### 配置远程模型
 
-首次使用需要配置远程决策模型的 API Key：
+**推荐 Web 方式**：启动 Web 服务后，浏览器打开 http://127.0.0.1:8765，首次访问会自动弹出 SetupDialog，在界面中输入百炼 API Key 并选择决策模型即可完成配置。（需先构建前端，见下一步）
+
+**备选 CLI 方式**：
 
 ```bash
 # 交互式配置向导
@@ -207,13 +211,30 @@ python3 -m agent.run --video xxx.mp4 --mock
 ### 启动 Web 工作台
 
 ```bash
-# 启动后端 API 服务
-python3 -m agent.web_api
-# 访问 http://127.0.0.1:8765
+# 1. 安装前端依赖并构建（首次或前端代码有更新时）
+cd web
+npm install
+npm run build
+cd ..
 
-# 开发模式（前后端分离）：
-# 终端 1: python3 -m agent.web_api
-# 终端 2: cd web && npm run dev
+# 2. 启动后端（同时托管 API 和前端页面）
+python3 -m agent.web_api
+
+# 3. 浏览器打开 http://127.0.0.1:8765
+#    首次访问会自动弹出配置向导 (SetupDialog)
+#    输入百炼 API Key → 测试连接 → 选择决策模型 → 完成
+#    之后即可上传视频开始分析
+```
+
+开发模式（前后端分离，支持热更新）：
+
+```bash
+# 终端 1: 启动后端
+cd web && npm install && npm run build && cd ..
+python3 -m agent.web_api
+
+# 终端 2: 启动前端开发服务器
+cd web && npm run dev
 # 前端访问 http://localhost:5173，API 代理到 :8765
 ```
 
@@ -267,7 +288,7 @@ backend:                         # 微调模型推理服务
   model: "minicpmv4_5"
 ```
 
-API Key 通过 `agent/setup.py` 写入 `agent/.env`，不直接存储在配置文件中。
+API Key 可通过 Web UI 的 SetupDialog 或 `agent/setup.py` 写入 `agent/.env`，不直接存储在配置文件中。`config.yaml` 的 `agent.remote.model` 同样可通过 Web 的 ConfigView → 修改决策模型来修改。
 
 ## 测试
 
@@ -301,4 +322,4 @@ pytest tests/test_schema.py -v
 | 后端 | FastAPI + Uvicorn + SSE |
 | 前端 | React 19 + Vite 8 + Tailwind CSS 4 + lucide-react |
 | 测试 | pytest |
-| 包管理 | uv / pip |
+| 包管理 | uv |
