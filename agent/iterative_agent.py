@@ -132,6 +132,7 @@ class IterativeAgent:
         self.best_positive_round: dict[str, Any] | None = None
         self.coverage_index = 0
         self.pending_recheck_range: list[float] | None = None
+        self.direct_no_fracture: bool = False
 
         self.clip_builder = clip_builder or FfmpegVideoClipBuilder()
         self.inference_client = inference_client or self._default_inference_client()
@@ -619,6 +620,8 @@ class IterativeAgent:
             return True, "模型明确报告无法识别"
 
         if status == "no_fracture":
+            if self.direct_no_fracture:
+                return True, "INITIAL 全量扫描高置信度无断裂，直接结束"
             if self._has_complete_no_fracture_coverage():
                 return True, "五个固定重叠区间均得到高于门槛的未断裂结果"
             return False, "尚未完成五个固定重叠区间的未断裂覆盖检查"
@@ -773,6 +776,20 @@ class IterativeAgent:
             )
 
             if is_global_scope:
+                confidence = float(model_output.get("confidence", 0.0))
+                fracture_type = model_output.get("type")
+
+                # 明确无断裂 + 高置信度 → 直接结束
+                if (
+                    fracture_type == FractureType.NO_FRACTURE
+                    and confidence >= self.confidence_threshold
+                ):
+                    self.state = "NO_FRACTURE"
+                    self.direct_no_fracture = True
+                    self.no_fracture_count = 0
+                    return
+
+                # 不明确（低置信度或异常类型）→ 进入 COVERAGE 进一步验证
                 self.state = "COVERAGE"
                 self.coverage_index = 0
                 self.no_fracture_count = 0
