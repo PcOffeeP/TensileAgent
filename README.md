@@ -1,6 +1,6 @@
 # TensileAgent
 
-材料拉伸断裂视频智能分析系统。核心采用「MiniCPM-V 4.5 微调模型 + Meta-Agent 迭代定位」两阶段方案。
+材料拉伸断裂视频 Agent 分析系统。当前仓库只维护 Agent 端：通过 HTTP 调用外部视觉推理服务，并由 Meta-Agent 迭代定位断裂区间。
 
 ## 仓库结构
 
@@ -27,9 +27,7 @@ TensileAgent/
 │       └── components/     ← UI 组件（上传、配置、任务详情、导航）
 ├── tests/                  ← pytest 测试（25+ 文件）
 ├── docs/                   ← 设计文档
-│   ├── PROJECT_PLAN.md     ← 项目计划 v9.0
-│   ├── PROJECT_WORKFLOW.md ← 双机协同工作流
-│   └── IMPLEMENTATIONS/    ← 实施方案
+│   └── PROJECT_PLAN.md     ← Agent-only 项目计划 v10.0
 ├── data/08_runtime/        ← 运行时产物（gitignored）
 ├── pyproject.toml          ← Python 项目配置
 ├── .gitignore
