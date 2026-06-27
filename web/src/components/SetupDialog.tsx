@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getConfigStatus, setupConfig, updateModel, ConfigStatus } from "../api";
 
 interface SetupDialogProps {
@@ -16,6 +16,10 @@ export default function SetupDialog({ onComplete, mode = "setup" }: SetupDialogP
   const [selectedModel, setSelectedModel] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
+  // Keep a stable reference to the latest onComplete
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
   // On mount, check current status (setup mode only)
   useEffect(() => {
     if (mode === "reconfigure") return;
@@ -25,7 +29,7 @@ export default function SetupDialog({ onComplete, mode = "setup" }: SetupDialogP
         setConfigStatus(status);
         if (status.configured) {
           // Already configured, just proceed
-          onComplete();
+          onCompleteRef.current();
         } else {
           setStep("input");
         }
@@ -34,7 +38,7 @@ export default function SetupDialog({ onComplete, mode = "setup" }: SetupDialogP
         setStep("input");
       }
     })();
-  }, [mode, onComplete]);
+  }, [mode]);
 
   // Reconfigure mode: fetch available models using saved API key
   useEffect(() => {
@@ -49,11 +53,11 @@ export default function SetupDialog({ onComplete, mode = "setup" }: SetupDialogP
       const data = await updateModel("");
       if (data.available_models && data.available_models.length > 0) {
         setModels(data.available_models);
-        // Pre-select current model if known
         setStep("select");
       } else {
-        setErrorMsg("未能获取模型列表，请确认 API Key 仍有效");
-        setStep("error");
+        // 列表为空 → 进入手动输入
+        setModels([]);
+        setStep("select");
       }
     } catch (err: any) {
       setErrorMsg(err.message || "获取模型列表失败");
@@ -66,55 +70,32 @@ export default function SetupDialog({ onComplete, mode = "setup" }: SetupDialogP
     setStep("testing");
     setErrorMsg("");
     try {
-      // Call setup with a dummy model first to get available models
-      // We'll use a different approach - hit status to validate the key
-      const res = await fetch("/api/config/setup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: apiKey, model: "__test__" }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        // If the error mentions model not in list, that's actually good - connection worked
-        if (data.detail && data.detail.includes("不在可用列表中")) {
-          // Prefer available_models from response body (new format)
-          if (Array.isArray(data.available_models) && data.available_models.length > 0) {
-            setModels(data.available_models);
-          } else {
-            // Fallback: extract from error message (legacy format)
-            const match = data.detail.match(/可用模型: (.+)$/);
-            if (match) {
-              setModels(match[1].split(", ").filter(Boolean));
-            }
-          }
-          setStep("select");
-          return;
-        }
-        setErrorMsg(data.detail || "连接失败");
-        setStep("error");
-        return;
+      const data = await setupConfig(apiKey, "", "test");
+      if (data.available_models && data.available_models.length > 0) {
+        setModels(data.available_models);
+        setStep("select");
+      } else {
+        // 列表为空 → 进入手动输入
+        setModels([]);
+        setStep("select");
       }
-      // If it succeeded somehow, we have the data
-      const data = await res.json();
-      // This shouldn't happen with __test__ model, but just in case
-      setStep("select");
-    } catch (e: any) {
-      setErrorMsg(e.message || "网络错误");
+    } catch (err: any) {
+      setErrorMsg(err.message || "网络错误");
       setStep("error");
     }
   };
 
   const handleSave = async () => {
-    if (!selectedModel) return;
+    if (!selectedModel.trim()) return;
     setStep("testing");
+    setErrorMsg("");
     try {
       if (mode === "reconfigure") {
         await updateModel(selectedModel);
       } else {
-        await setupConfig(apiKey, selectedModel);
+        await setupConfig(apiKey, selectedModel, "setup");
       }
       setStep("done");
-      // Wait a moment then proceed
       setTimeout(() => onComplete(), 1500);
     } catch (e: any) {
       setErrorMsg(e.message || "保存失败");
@@ -206,40 +187,69 @@ export default function SetupDialog({ onComplete, mode = "setup" }: SetupDialogP
         {/* Step: Select Model */}
         {step === "select" && (
           <>
-            <p style={{ color: "#66cc88", fontSize: 14, marginBottom: 16 }}>
-              ✅ 连接成功！请选择要使用的模型：
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto" }}>
-              {models.map((m) => (
-                <label
-                  key={m}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-                    borderRadius: 8, background: selectedModel === m ? "#2a3a6a" : "#0f0f23",
-                    border: selectedModel === m ? "1px solid #4a6cf7" : "1px solid #2a2a4a",
-                    cursor: "pointer", color: "#c0c0e0", fontSize: 14, transition: "all 0.15s",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="model"
-                    value={m}
-                    checked={selectedModel === m}
-                    onChange={() => setSelectedModel(m)}
-                    style={{ accentColor: "#4a6cf7" }}
-                  />
-                  <code style={{ fontSize: 13 }}>{m}</code>
-                </label>
-              ))}
+            {models.length > 0 ? (
+              <p style={{ color: "#66cc88", fontSize: 14, marginBottom: 16 }}>
+                ✅ 连接成功！请选择要使用的模型：
+              </p>
+            ) : (
+              <p style={{ color: "#ffaa33", fontSize: 14, marginBottom: 16 }}>
+                ⚠️ 未获取到推荐模型列表，请手动输入
+              </p>
+            )}
+
+            {models.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto" }}>
+                <p style={{ color: "#8888aa", fontSize: 12, margin: 0 }}>推荐模型（从百炼平台获取）</p>
+                {models.map((m) => (
+                  <label
+                    key={m}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
+                      borderRadius: 8, background: selectedModel === m ? "#2a3a6a" : "#0f0f23",
+                      border: selectedModel === m ? "1px solid #4a6cf7" : "1px solid #2a2a4a",
+                      cursor: "pointer", color: "#c0c0e0", fontSize: 14, transition: "all 0.15s",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="model"
+                      value={m}
+                      checked={selectedModel === m}
+                      onChange={() => setSelectedModel(m)}
+                      style={{ accentColor: "#4a6cf7" }}
+                    />
+                    <code style={{ fontSize: 13 }}>{m}</code>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {/* 手动输入始终可见 */}
+            <div style={{ marginTop: "1rem", borderTop: "1px solid #333", paddingTop: "1rem" }}>
+              <p style={{ color: "#aabbdd", fontSize: 13, marginBottom: 8 }}>
+                {models.length > 0 ? "或手动输入模型名" : "请输入模型名"}
+              </p>
+              <input
+                type="text"
+                placeholder="例如 qwen-max, qwen-plus"
+                value={models.includes(selectedModel) ? "" : selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                style={{
+                  width: "100%", padding: "12px 16px", borderRadius: 8, border: "1px solid #333",
+                  background: "#0f0f23", color: "#e0e0ff", fontSize: 15, outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
             </div>
+
             <button
               onClick={handleSave}
-              disabled={!selectedModel}
+              disabled={!selectedModel.trim()}
               style={{
                 width: "100%", marginTop: 20, padding: "12px 0", borderRadius: 8,
-                border: "none", background: selectedModel ? "#4a6cf7" : "#2a2a4a",
-                color: selectedModel ? "#fff" : "#666", fontSize: 15, fontWeight: 600,
-                cursor: selectedModel ? "pointer" : "not-allowed",
+                border: "none", background: selectedModel.trim() ? "#4a6cf7" : "#2a2a4a",
+                color: selectedModel.trim() ? "#fff" : "#666", fontSize: 15, fontWeight: 600,
+                cursor: selectedModel.trim() ? "pointer" : "not-allowed",
               }}
             >
               保存配置
@@ -253,23 +263,39 @@ export default function SetupDialog({ onComplete, mode = "setup" }: SetupDialogP
             <div style={{ background: "#2a1a1a", borderRadius: 8, padding: 16, marginBottom: 16 }}>
               <p style={{ color: "#ff6666", margin: 0, fontSize: 14 }}>❌ {errorMsg}</p>
             </div>
-            <button
-              onClick={() => {
-                setErrorMsg("");
-                if (mode === "reconfigure") {
-                  fetchAvailableModels();
-                } else {
-                  setStep("input");
-                }
-              }}
-              style={{
-                width: "100%", padding: "12px 0", borderRadius: 8,
-                border: "1px solid #4a6cf7", background: "transparent",
-                color: "#4a6cf7", fontSize: 15, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              重试
-            </button>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                onClick={() => {
+                  setErrorMsg("");
+                  if (mode === "reconfigure") {
+                    fetchAvailableModels();
+                  } else {
+                    setStep("input");
+                  }
+                }}
+                style={{
+                  flex: 1, padding: "12px 0", borderRadius: 8,
+                  border: "1px solid #4a6cf7", background: "transparent",
+                  color: "#4a6cf7", fontSize: 15, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                重试
+              </button>
+              <button
+                onClick={() => {
+                  setErrorMsg("");
+                  setModels([]);
+                  setStep("select");
+                }}
+                style={{
+                  flex: 1, padding: "12px 0", borderRadius: 8,
+                  border: "1px solid #555", background: "transparent",
+                  color: "#aaa", fontSize: 15, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                跳过，手动输入
+              </button>
+            </div>
           </>
         )}
 

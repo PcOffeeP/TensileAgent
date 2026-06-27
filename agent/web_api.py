@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import uvicorn
+import yaml
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -20,12 +21,14 @@ from sse_starlette.sse import EventSourceResponse
 
 from agent.runner import run_one
 from agent.config_util import (
+    get_active_backend,
     get_api_key,
     get_configured_model,
-    is_remote_configured,
     list_available_models,
+    load_config,
     save_api_key,
     save_model,
+    save_remote_model,
 )
 
 # ── 路径常量 ──────────────────────────────────────────────
@@ -288,15 +291,23 @@ async def get_config():
     cfg = {}
     if CONFIG_PATH.exists():
         try:
-            cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            cfg = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
         except Exception:
-            cfg = {"path": str(CONFIG_PATH)}
+            cfg = {}
+    active_backend = get_active_backend()
+    agent_cfg = cfg.get("agent", {})
+    if active_backend == "remote":
+        active_model = agent_cfg.get("remote", {}).get("model")
+    elif active_backend == "local":
+        active_model = agent_cfg.get("local", {}).get("model")
+    else:
+        active_model = None
     return {
-        "config_path": str(CONFIG_PATH),
+        "active_backend": active_backend,
+        "active_model": active_model,
         "mock": cfg.get("mock", False),
-        "model": cfg.get("model", cfg.get("llm", {}).get("model", "unknown")),
         "runtime_dir": str(RUNTIME_DIR),
-        "max_rounds": cfg.get("max_rounds", 10),
+        "max_rounds": agent_cfg.get("max_rounds", 10),
     }
 
 
@@ -452,66 +463,111 @@ async def create_batch_tasks(
 
 @app.get("/api/config/status")
 async def get_config_status():
-    """Check if remote backend is configured.
+    """Check backend configuration status.
 
-    Returns configuration status without exposing the full API key.
+    Returns active_backend plus remote/local dimensions without exposing
+    the full API key.
     """
-    configured = is_remote_configured()
+    active_backend = get_active_backend()
     api_key = get_api_key()
+    remote_model = get_configured_model()
+
+    # 本地模型信息
+    config = load_config()
+    local_model = config.get("agent", {}).get("local", {}).get("model")
+
+    # 按当前 backend 判断是否已配置
+    if active_backend == "remote":
+        configured = bool(api_key) and bool(remote_model)
+    elif active_backend == "local":
+        configured = bool(local_model)
+    else:
+        configured = False
+
     masked_key = None
     if api_key and len(api_key) > 8:
         masked_key = api_key[:6] + "*" * (len(api_key) - 10) + api_key[-4:]
 
     return {
+        "active_backend": active_backend,
         "configured": configured,
-        "has_api_key": bool(api_key),
-        "has_model": bool(get_configured_model()),
-        "api_key_masked": masked_key,
-        "current_model": get_configured_model(),
+        "remote": {
+            "has_api_key": bool(api_key),
+            "current_model": remote_model,
+            "api_key_masked": masked_key,
+        },
+        "local": {
+            "current_model": local_model,
+        },
     }
 
 
 @app.post("/api/config/setup")
 async def setup_config(body: dict):
-    """Save API key and model, with connection test.
+    """Save API key and model, with best-effort connection test.
 
     Request body:
     {
         "api_key": "sk-...",
-        "model": "qwen-max"
+        "model": "qwen-max",
+        "action": "setup"   // optional: "setup" (default) or "test"
     }
+
+    - /models query is best-effort (used for recommendations, not as a blocker).
+    - Only an invalid API key blocks the operation.
+    - Backward-compatible with old frontends that send model="__test__".
     """
     api_key = body.get("api_key", "").strip()
     model = body.get("model", "").strip()
+    action = body.get("action", "setup")
+
+    # 兼容旧前端：model 以 "__" 开头视为 test 模式
+    if action == "setup" and model.startswith("__"):
+        action = "test"
 
     if not api_key:
         raise HTTPException(status_code=400, detail="API Key 不能为空")
-    if not model:
-        raise HTTPException(status_code=400, detail="模型名称不能为空")
 
-    # Test connection by listing models
-    models = list_available_models(api_key=api_key)
-    if not models:
+    # 拉取模型列表（best-effort）
+    result = list_available_models(api_key=api_key)
+    available_models = result.get("models", [])
+
+    # 认证失败 → 阻断
+    if not result["ok"] and result.get("error_kind") == "auth_error":
         raise HTTPException(
             status_code=400,
-            detail="连接测试失败，请检查 API Key 是否正确",
+            detail=result.get("warning", "API Key 验证失败"),
         )
 
-    # Verify the selected model is in the available list
-    if model not in models:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "detail": f"模型 '{model}' 不在可用列表中",
-                "available_models": models,
-            },
-        )
+    # 仅测试连接（action=test 或 model 为空）
+    if action == "test" or not model:
+        return {
+            "ok": result["ok"],
+            "available_models": available_models,
+            "warning": result.get("warning"),
+            "models_source": "platform" if result["ok"] else "manual",
+        }
 
-    # Save
+    # 保存配置 — /models 成功时做推荐，失败时跳过校验
+    if result["ok"] and model not in available_models:
+        # 模型不在列表中，但仍允许保存
+        save_api_key(api_key)
+        save_remote_model(model, activate=True)
+        return {
+            "ok": True,
+            "model": model,
+            "available_models_count": len(available_models),
+            "warning": f"模型 '{model}' 不在平台推荐列表中，已保存",
+        }
+
+    # 正常保存
     save_api_key(api_key)
-    save_model(model)
-
-    return {"ok": True, "model": model, "available_models_count": len(models)}
+    save_remote_model(model, activate=True)
+    return {
+        "ok": True,
+        "model": model,
+        "available_models_count": len(available_models),
+    }
 
 
 @app.put("/api/config/model")
@@ -519,34 +575,43 @@ async def update_model(body: dict):
     """更新决策模型（使用已保存的 API Key）。
 
     - model 为空字符串时：仅返回可用模型列表（不保存）
-    - model 非空时：校验并保存新模型
+    - model 非空时：保存新模型（/models 仅做推荐，不阻断）
     """
     model = body.get("model", "").strip()
 
-    # 检查是否已配置
-    if not is_remote_configured():
+    # 检查是否已配置 API Key（不要求 backend 必须是 remote）
+    if not get_api_key():
         raise HTTPException(status_code=400, detail="尚未完成初始配置，请先配置 API Key")
 
     # 用已保存的 Key 拉取模型列表
-    models = list_available_models(api_key=get_api_key())
+    result = list_available_models(api_key=get_api_key())
+    available_models = result.get("models", [])
 
     # 空 model：仅返回模型列表（供 reconfigure 模式使用）
     if not model:
-        return {"available_models": models}
+        return {
+            "available_models": available_models,
+            "ok": result["ok"],
+            "warning": result.get("warning"),
+        }
 
-    # 校验模型是否在可用列表中
-    if model not in models:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "detail": f"模型 '{model}' 不在可用列表中",
-                "available_models": models,
-            },
-        )
+    # 保存 — /models 成功时做推荐，失败时跳过校验
+    if result["ok"] and model not in available_models:
+        save_remote_model(model, activate=False)
+        return {
+            "ok": True,
+            "model": model,
+            "available_models_count": len(available_models),
+            "warning": f"模型 '{model}' 不在平台推荐列表中，已切换",
+        }
 
-    # 保存
-    save_model(model)
-    return {"ok": True, "model": model, "available_models_count": len(models)}
+    # 正常保存
+    save_remote_model(model, activate=False)
+    return {
+        "ok": True,
+        "model": model,
+        "available_models_count": len(available_models),
+    }
 
 
 # ── 静态文件托管和主入口 ──────────────────────────────────

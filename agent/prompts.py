@@ -7,8 +7,7 @@ This module contains:
 2. The **Meta-Agent** system prompt and conversation user prompt builder,
    used by ``IterativeAgent``.
 
-See ``docs/IMPLEMENTATIONS/model-agent-contract.md`` for the authoritative
-contract.
+See ``docs/PROJECT_PLAN.md`` for the authoritative Agent-side contract.
 """
 
 from __future__ import annotations

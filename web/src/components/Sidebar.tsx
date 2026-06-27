@@ -55,7 +55,9 @@ export default function Sidebar({ currentView, onViewChange, tasks, onSelectTask
       {config && (
         <div className="p-3 border-t border-gray-800 text-xs text-gray-600">
           {config.mock && <span className="text-yellow-400 mr-2">Mock</span>}
-          {config.model}
+          <span>{config.active_backend}</span>
+          <span className="mx-1">·</span>
+          <span>{config.active_model || "未配置"}</span>
         </div>
       )}
     </aside>

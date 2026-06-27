@@ -1,6 +1,6 @@
 """Contract acceptance tests for the model-agent interface.
 
-Covers the three acceptance criteria from ``docs/IMPLEMENTATIONS/model-agent-contract.md``:
+Covers the three acceptance criteria from ``docs/PROJECT_PLAN.md``:
 
 1. Three public states (fracture / no_fracture / unrecognized) — all condition
    field combinations with both valid and invalid paths.

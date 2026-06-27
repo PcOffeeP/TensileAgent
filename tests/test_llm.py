@@ -94,7 +94,9 @@ def test_factory_creates_local_client():
         mock_openai.assert_called_once_with(api_key="EMPTY", base_url="http://localhost:11434/v1")
 
 
-def test_factory_rejects_missing_remote_api_key():
+@patch("agent.llm._get_api_key", return_value=None)
+@patch.dict("os.environ", {}, clear=True)
+def test_factory_rejects_missing_remote_api_key(mock_get_key):
     config = {
         "agent": {
             "backend": "remote",
@@ -105,9 +107,8 @@ def test_factory_rejects_missing_remote_api_key():
             },
         }
     }
-    with patch.dict("os.environ", {}, clear=True):
-        with pytest.raises(ValueError, match="Remote backend requires"):
-            AgentLLMFactory.create(config)
+    with pytest.raises(ValueError, match="Remote backend requires"):
+        AgentLLMFactory.create(config)
 
 
 def test_factory_rejects_unknown_backend():

@@ -1,8 +1,8 @@
 """Pydantic models that formalize the model/agent interface contract.
 
-See ``docs/IMPLEMENTATIONS/model-agent-contract.md`` for the authoritative
-definitions. This module implements the v2 model output, tool schemas and
-public result envelopes used by the iterative localization pipeline.
+See ``docs/PROJECT_PLAN.md`` for the authoritative Agent-side contract. This
+module implements the model output, tool schemas and public result envelopes
+used by the iterative localization pipeline.
 """
 
 from __future__ import annotations

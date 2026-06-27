@@ -80,9 +80,13 @@ def _interactive_setup() -> None:
 
     # ── Step 2: Test connection ──
     print(f"{Colors.BOLD}Step 2: 正在测试连接...{Colors.RESET}")
-    models = list_available_models(api_key=api_key)
+    result = list_available_models(api_key=api_key)
+    models = result.get("models", [])
+    if not result["ok"]:
+        _print_error(f"连接失败: {result.get('warning', '未知错误')}")
+        sys.exit(1)
     if not models:
-        _print_error("连接失败或无可用模型，请检查 API Key 是否正确")
+        _print_error("平台返回空模型列表，请检查 API Key 是否正确")
         sys.exit(1)
     _print_success(f"已连接，发现 {len(models)} 个可用模型")
     print()

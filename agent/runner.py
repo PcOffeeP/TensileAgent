@@ -162,6 +162,10 @@ def run_one(
     stage = "configuration"
     try:
         config = load_config(config_path)
+        config.setdefault("agent", {})
+        config["agent"].setdefault("backend", "remote")
+        config["agent"].setdefault("remote", {})
+        config["agent"].setdefault("local", {})
 
         # 允许 CLI 参数覆盖 agent 后端和模型
         if agent_backend is not None:

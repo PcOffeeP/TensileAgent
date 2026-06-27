@@ -21,9 +21,9 @@ export default function ConfigView({ config, onRefresh, onReconfigure }: ConfigV
           <>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div><span className="text-gray-500">Mock 模式</span><br /><span className={config.mock ? "text-yellow-400" : "text-gray-400"}>{config.mock ? "开启" : "关闭"}</span></div>
-              <div><span className="text-gray-500">模型</span><br /><span>{config.model}</span></div>
+              <div><span className="text-gray-500">当前后端</span><br /><span>{config.active_backend}</span></div>
+              <div><span className="text-gray-500">当前模型</span><br /><span>{config.active_model || "未配置"}</span></div>
               <div><span className="text-gray-500">最大轮数</span><br /><span>{config.max_rounds}</span></div>
-              <div><span className="text-gray-500">配置文件</span><br /><span className="text-xs truncate">{config.config_path}</span></div>
             </div>
             <div className="text-sm">
               <span className="text-gray-500">运行时目录</span><br />

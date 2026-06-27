@@ -13,9 +13,9 @@ export interface Task {
 }
 
 export interface AppConfig {
-  config_path: string;
+  active_backend: string;
+  active_model: string | null;
   mock: boolean;
-  model: string;
   runtime_dir: string;
   max_rounds: number;
 }
@@ -79,11 +79,16 @@ export function getExportUrl(taskId: string, fmt: "json" | "jsonl" | "csv"): str
 // ── Config Setup Types ──
 
 export interface ConfigStatus {
+  active_backend: string;
   configured: boolean;
-  has_api_key: boolean;
-  has_model: boolean;
-  api_key_masked: string | null;
-  current_model: string | null;
+  remote: {
+    has_api_key: boolean;
+    current_model: string | null;
+    api_key_masked: string | null;
+  };
+  local: {
+    current_model: string | null;
+  };
 }
 
 export interface AvailableModel {
@@ -98,20 +103,29 @@ export async function getConfigStatus(): Promise<ConfigStatus> {
   return res.json();
 }
 
-export async function setupConfig(apiKey: string, model: string): Promise<{ ok: boolean }> {
+export async function setupConfig(
+  apiKey: string,
+  model: string,
+  action: "test" | "setup" = "setup"
+): Promise<{
+  ok: boolean;
+  model?: string;
+  available_models?: string[];
+  available_models_count?: number;
+  warning?: string;
+  models_source?: string;
+}> {
   const res = await fetch("/api/config/setup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ api_key: apiKey, model }),
+    body: JSON.stringify({ api_key: apiKey, model, action }),
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.detail || "配置保存失败");
-  }
-  return res.json();
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "配置失败");
+  return data;
 }
 
-export async function updateModel(model: string): Promise<{ ok?: boolean; model?: string; available_models?: string[]; available_models_count?: number }> {
+export async function updateModel(model: string): Promise<{ ok?: boolean; model?: string; available_models?: string[]; available_models_count?: number; warning?: string }> {
   const res = await fetch("/api/config/model", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },

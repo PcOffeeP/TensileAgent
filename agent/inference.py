@@ -1,8 +1,8 @@
-"""Concrete inference client for the fine-tuned MiniCPM-V model.
+"""Concrete inference client for the external visual inference model.
 
-The default implementation talks to an OpenAI-compatible LLaMA-Factory
-endpoint.  It encodes the temporary MP4 clip as a Base64 ``data:video/mp4``
-URL so that no local path is sent to the model service.
+The default implementation talks to an OpenAI-compatible HTTP endpoint. It
+encodes the temporary MP4 clip as a Base64 ``data:video/mp4`` URL so that no
+local path is sent to the model service.
 """
 
 from __future__ import annotations

@@ -1,8 +1,7 @@
 """Meta-Agent iterative controller.
 
-Implements the deterministic state machine described in
-``docs/IMPLEMENTATIONS/model-agent-contract.md`` section 3.3, migrated to the
-v2 ``ToolSampleAndInfer`` / v3 ``ToolTerminate`` / ``FinalOutput`` contract.
+Implements the deterministic state machine described in ``docs/PROJECT_PLAN.md``
+using the ``ToolSampleAndInfer`` / ``ToolTerminate`` / ``FinalOutput`` contract.
 """
 
 from __future__ import annotations
