@@ -11,35 +11,35 @@ export default function ConfigView({ config, onRefresh, onReconfigure }: ConfigV
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">配置</h2>
-        <button onClick={onRefresh} className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 rounded text-sm hover:bg-gray-700">
+        <h2 className="text-xl font-bold text-slate-900">配置</h2>
+        <button onClick={onRefresh} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded text-sm hover:bg-slate-200 text-slate-800 transition-colors">
           <RefreshCw className="w-4 h-4" /> 刷新
         </button>
       </div>
-      <div className="bg-gray-900 rounded-lg p-4 space-y-3">
+      <div className="bg-white border border-slate-200 shadow-sm rounded-lg p-4 space-y-3">
         {config ? (
           <>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-gray-500">Mock 模式</span><br /><span className={config.mock ? "text-yellow-400" : "text-gray-400"}>{config.mock ? "开启" : "关闭"}</span></div>
-              <div><span className="text-gray-500">当前后端</span><br /><span>{config.active_backend}</span></div>
-              <div><span className="text-gray-500">当前模型</span><br /><span>{config.active_model || "未配置"}</span></div>
-              <div><span className="text-gray-500">最大轮数</span><br /><span>{config.max_rounds}</span></div>
+              <div><span className="text-slate-500">Mock 模式</span><br /><span className={config.mock ? "text-amber-600 font-medium" : "text-slate-400"}>{config.mock ? "开启" : "关闭"}</span></div>
+              <div><span className="text-slate-500">当前后端</span><br /><span className="text-slate-900 font-medium">{config.active_backend}</span></div>
+              <div><span className="text-slate-500">当前模型</span><br /><span className="text-slate-900 font-medium">{config.active_model || "未配置"}</span></div>
+              <div><span className="text-slate-500">最大轮数</span><br /><span className="text-slate-900 font-medium">{config.max_rounds}</span></div>
             </div>
             <div className="text-sm">
-              <span className="text-gray-500">运行时目录</span><br />
-              <span className="text-xs">{config.runtime_dir}</span>
+              <span className="text-slate-500">运行时目录</span><br />
+              <span className="text-xs text-slate-700 font-mono">{config.runtime_dir}</span>
             </div>
             {onReconfigure && (
               <button
                 onClick={onReconfigure}
-                className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                className="mt-4 px-4 py-2 bg-[#002FA7] hover:bg-[#002FA7]/90 text-white rounded-lg transition-colors shadow-sm"
               >
                 修改决策模型
               </button>
             )}
           </>
         ) : (
-          <p className="text-gray-500 text-sm">加载中...</p>
+          <p className="text-slate-500 text-sm">加载中...</p>
         )}
       </div>
     </div>

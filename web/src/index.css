@@ -3,24 +3,57 @@
 :root {
   --sidebar-width: 260px;
   --right-panel-width: 420px;
+  --color-bg-base: #FAF9F6;
+  --color-bg-panel: rgba(255, 255, 255, 0.85);
+  --color-border: rgba(0, 47, 167, 0.15);
+  --color-klein: #002FA7;
 }
 
 body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background-color: #0A0A0F;
-  color: #e2e8f0;
+  background-color: var(--color-bg-base);
+  color: #111827;
+  /* Dynamic Background: Material Stretching Effect */
+  background-image: 
+    radial-gradient(circle at 50% 50%, rgba(0, 47, 167, 0.05) 0%, transparent 60%),
+    linear-gradient(90deg, rgba(0, 47, 167, 0.03) 1px, transparent 1px),
+    linear-gradient(rgba(0, 47, 167, 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px, 40px 40px;
+  background-position: center center, 0 0, 0 0;
+  animation: stretch-grid 12s ease-in-out infinite alternate;
+}
+
+@keyframes stretch-grid {
+  0% {
+    background-size: 100% 100%, 40px 40px, 40px 40px;
+    background-position: center center, 0 0, 0 0;
+  }
+  100% {
+    /* Simulate horizontal stretching and vertical compression (Poisson's ratio effect) */
+    background-size: 100% 100%, 70px 40px, 40px 36px;
+    background-position: center center, 15px 0, 0 0;
+  }
 }
 
 /* 滚动条 */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.4); }
+::-webkit-scrollbar-thumb { background: rgba(0, 47, 167, 0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 47, 167, 0.4); }
 
 /* Glassmorphism utilities */
 .glass-panel {
-  background: rgba(30, 41, 59, 0.4);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--color-bg-panel);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 8px 32px rgba(0, 47, 167, 0.08);
+}
+
+/* For data-dense dashboard elements */
+.data-table-row {
+  border-bottom: 1px solid var(--color-border);
+}
+.data-table-row:hover {
+  background: rgba(0, 47, 167, 0.04);
 }

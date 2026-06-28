@@ -83,7 +83,7 @@ export default function App() {
 
   if (configReady === null) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#0f0f23", color: "#8888aa" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#FAF9F6", color: "#6b7280" }}>
         <p>加载中...</p>
       </div>
     );
@@ -135,7 +135,7 @@ export default function App() {
           {currentView === "config" && <ConfigView config={config} onRefresh={refreshConfig} onReconfigure={() => setReconfiguring(true)} />}
         </div>
         {selectedTask && (
-          <aside className="w-[420px] border-l border-gray-800 overflow-auto">
+          <aside className="w-[420px] border-l border-[var(--color-border)] overflow-auto bg-white/50 backdrop-blur-sm z-20 shadow-[-10px_0_30px_rgba(0,47,167,0.03)]">
             <TaskDetail
               task={selectedTask}
               events={(taskEvents[selectedTask.id] || []) as Record<string, unknown>[]}
