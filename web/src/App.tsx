@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
-import { listTasks, getConfig, getConfigStatus, type Task, type AppConfig, subscribeEvents, getHealth } from "./api";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { listTasks, getConfig, getConfigStatus, deleteTask, type Task, type AppConfig, getHealth } from "./api";
 import Sidebar from "./components/Sidebar";
 import AnalysisView from "./components/AnalysisView";
 import HistoryView from "./components/HistoryView";
 import ConfigView from "./components/ConfigView";
-import TaskDetail from "./components/TaskDetail";
 import SetupDialog from "./components/SetupDialog";
 
 type View = "analysis" | "history" | "config";
@@ -12,12 +11,11 @@ type View = "analysis" | "history" | "config";
 export default function App() {
   const [currentView, setCurrentView] = useState<View>("analysis");
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [health, setHealth] = useState<{ ok: boolean; tasks: number; queue_size: number } | null>(null);
   const [configReady, setConfigReady] = useState<boolean | null>(null);
   const [reconfiguring, setReconfiguring] = useState(false);
-  const [taskEvents, setTaskEvents] = useState<Record<string, unknown[]>>({});
 
   const refreshTasks = useCallback(async () => {
     try {
@@ -34,85 +32,57 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Check if remote is configured
     getConfigStatus()
       .then(status => setConfigReady(status.configured))
-      .catch(() => setConfigReady(true)); // If can't check, assume configured
+      .catch(() => setConfigReady(true));
     refreshTasks();
     refreshConfig();
     const interval = setInterval(refreshTasks, 3000);
     return () => clearInterval(interval);
   }, [refreshTasks, refreshConfig]);
 
-  const handleTaskCreated = useCallback((taskId: string) => {
-    const unsub = subscribeEvents(taskId, (event: any) => {
-      setTaskEvents((prev) => ({
-        ...prev,
-        [taskId]: [...(prev[taskId] || []), event],
-      }));
-      if (event.event === "task_completed" || event.event === "task_failed") {
-        refreshTasks();
-      }
-    });
-    setTimeout(() => {
-      refreshTasks().then(() => {
-        const t = tasks.find((x) => x.id === taskId);
-        if (t) setSelectedTask(t);
+  const handleTaskCreated = useCallback((newTasks: Task[]) => {
+    if (newTasks.length === 0) return;
+    setTasks(prev => {
+      const next = [...prev];
+      newTasks.forEach(t => {
+        const idx = next.findIndex(x => x.id === t.id);
+        if (idx >= 0) next[idx] = t;
+        else next.unshift(t);
       });
-    }, 500);
-    return unsub;
-  }, [refreshTasks, tasks]);
-
-  const handleSelectTask = useCallback(async (taskId: string) => {
-    const { getTask } = await import("./api");
-    try {
-      const t = await getTask(taskId);
-      setSelectedTask(t);
-      setCurrentView("analysis");
-    } catch { /* ignore */ }
+      return next;
+    });
+    setActiveTaskId(newTasks[0].id);
+    setCurrentView("analysis");
   }, []);
 
+
   const handleDeleteTask = useCallback(async (taskId: string) => {
-    const { deleteTask } = await import("./api");
     try {
       await deleteTask(taskId);
-      if (selectedTask?.id === taskId) setSelectedTask(null);
+      if (activeTaskId === taskId) setActiveTaskId(null);
       refreshTasks();
     } catch { /* ignore */ }
-  }, [selectedTask, refreshTasks]);
+  }, [activeTaskId, refreshTasks]);
+
+  const activeTask = useMemo(() => tasks.find(t => t.id === activeTaskId) || null, [tasks, activeTaskId]);
 
   if (configReady === null) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#FAF9F6", color: "#6b7280" }}>
+      <div className="flex items-center justify-center h-screen bg-[#FAF9F6] text-slate-500">
         <p>加载中...</p>
       </div>
     );
   }
 
-  if (configReady === false) {
-    return <SetupDialog onComplete={() => setConfigReady(true)} />;
-  }
-
-  if (reconfiguring) {
-    return (
-      <SetupDialog
-        mode="reconfigure"
-        onComplete={() => {
-          setReconfiguring(false);
-          setCurrentView("config");
-          refreshConfig();
-        }}
-      />
-    );
-  }
+  if (configReady === false) return <SetupDialog onComplete={() => setConfigReady(true)} />;
+  if (reconfiguring) return <SetupDialog mode="reconfigure" onComplete={() => { setReconfiguring(false); setCurrentView("config"); refreshConfig(); }} />;
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-[#FAF9F6]">
       <Sidebar
         currentView={currentView}
         onViewChange={setCurrentView}
-        tasks={tasks}
-        onSelectTask={handleSelectTask}
         config={config}
         health={health}
       />
@@ -120,29 +90,19 @@ export default function App() {
         <div className="flex-1 overflow-auto p-6">
           {currentView === "analysis" && (
             <AnalysisView
+              activeTask={activeTask}
               onTaskCreated={handleTaskCreated}
-              tasks={tasks}
-              onSelectTask={setSelectedTask}
+              onCloseActiveTask={() => setActiveTaskId(null)}
             />
           )}
           {currentView === "history" && (
             <HistoryView
               tasks={tasks}
-              onSelectTask={handleSelectTask}
               onDeleteTask={handleDeleteTask}
             />
           )}
           {currentView === "config" && <ConfigView config={config} onRefresh={refreshConfig} onReconfigure={() => setReconfiguring(true)} />}
         </div>
-        {selectedTask && (
-          <aside className="w-[420px] border-l border-[var(--color-border)] overflow-auto bg-white/50 backdrop-blur-sm z-20 shadow-[-10px_0_30px_rgba(0,47,167,0.03)]">
-            <TaskDetail
-              task={selectedTask}
-              events={(taskEvents[selectedTask.id] || []) as Record<string, unknown>[]}
-              onClose={() => setSelectedTask(null)}
-            />
-          </aside>
-        )}
       </main>
     </div>
   );

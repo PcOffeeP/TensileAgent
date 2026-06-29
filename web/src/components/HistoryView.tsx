@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Search, Trash2, ChevronRight, Play, CheckCircle, XCircle, Clock } from "lucide-react";
 import type { Task } from "../api";
+import ActiveAnalysisWorkspace from "./ActiveAnalysisWorkspace";
 
 interface HistoryViewProps {
   tasks: Task[];
@@ -15,9 +16,24 @@ const statusIcon: Record<string, React.ReactNode> = {
   failed: <XCircle className="w-4 h-4 text-rose-500" />,
 };
 
-export default function HistoryView({ tasks, onSelectTask, onDeleteTask }: HistoryViewProps) {
+function formatResultSummary(t: Task): string {
+  if (!t.result) return "";
+  switch (t.result.status) {
+    case 'fracture':
+      return ` · 发现断裂 (${t.result.time_range ? t.result.time_range.join('-') : '未知'})`;
+    case 'no_fracture':
+      return ' · 无断裂';
+    case 'unrecognized':
+      return ' · 无法识别';
+    default:
+      return "";
+  }
+}
+
+export default function HistoryView({ tasks, onDeleteTask }: Omit<HistoryViewProps, 'onSelectTask'>) {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     return tasks.filter((t) => {
@@ -26,6 +42,27 @@ export default function HistoryView({ tasks, onSelectTask, onDeleteTask }: Histo
       return true;
     });
   }, [tasks, search, filterStatus]);
+
+  if (selectedTaskId) {
+    const task = tasks.find(t => t.id === selectedTaskId);
+    if (!task) {
+      setSelectedTaskId(null);
+      return null;
+    }
+    return (
+      <div className="h-full flex flex-col relative">
+        <ActiveAnalysisWorkspace
+          task={task}
+          onClose={() => setSelectedTaskId(null)}
+          onDelete={() => {
+            onDeleteTask(selectedTaskId);
+            setSelectedTaskId(null);
+          }}
+          isHistoryMode={true}
+        />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -55,13 +92,13 @@ export default function HistoryView({ tasks, onSelectTask, onDeleteTask }: Histo
       </div>
       <div className="space-y-1">
         {filtered.map((t) => (
-          <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-lg hover:bg-slate-50 cursor-pointer group transition-colors" onClick={() => onSelectTask(t.id)}>
+          <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-lg hover:bg-slate-50 cursor-pointer group transition-colors" onClick={() => setSelectedTaskId(t.id)}>
             {statusIcon[t.status] || <Play className="w-4 h-4 text-slate-400" />}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-900 truncate">{t.video_id}</p>
+              <p className="text-sm font-medium text-slate-900 truncate">{t.video_name || t.video_id}</p>
               <p className="text-xs text-slate-500">
                 {t.created_at?.slice(0, 19).replace("T", " ") || ""}
-                {t.result?.type ? ` · ${t.result.type}` : ""}
+                {formatResultSummary(t)}
               </p>
             </div>
             <span className={`text-xs px-2 py-0.5 rounded font-medium ${
