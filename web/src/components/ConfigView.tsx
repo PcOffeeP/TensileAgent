@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, ChevronRight } from "lucide-react";
 import type { AppConfig } from "../api";
 
 interface ConfigViewProps {
@@ -16,30 +16,58 @@ export default function ConfigView({ config, onRefresh, onReconfigure }: ConfigV
           <RefreshCw className="w-4 h-4" /> 刷新
         </button>
       </div>
-      <div className="bg-white border border-slate-200 shadow-sm rounded-lg p-4 space-y-3">
+      <div className="bg-white border border-slate-200 shadow-sm rounded-lg overflow-hidden">
         {config ? (
-          <>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-slate-500">Mock 模式</span><br /><span className={config.mock ? "text-amber-600 font-medium" : "text-slate-400"}>{config.mock ? "开启" : "关闭"}</span></div>
-              <div><span className="text-slate-500">当前后端</span><br /><span className="text-slate-900 font-medium">{config.active_backend}</span></div>
-              <div><span className="text-slate-500">当前模型</span><br /><span className="text-slate-900 font-medium">{config.active_model || "未配置"}</span></div>
-              <div><span className="text-slate-500">最大轮数</span><br /><span className="text-slate-900 font-medium">{config.max_rounds}</span></div>
+          <div className="flex flex-col divide-y divide-slate-100">
+            {/* 模型配置 */}
+            <div 
+              className={`flex items-center justify-between p-4 ${onReconfigure ? 'cursor-pointer hover:bg-slate-50' : ''} transition-colors`}
+              onClick={onReconfigure}
+            >
+              <div className="min-w-0 pr-4">
+                <div className="text-slate-900 font-medium text-sm">当前模型</div>
+                <div className="text-slate-500 text-xs mt-1 truncate" title={config.active_model || "未配置"}>{config.active_model || "未配置"}</div>
+              </div>
+              {onReconfigure ? <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <div className="w-4 h-4" />}
             </div>
-            <div className="text-sm">
-              <span className="text-slate-500">运行时目录</span><br />
-              <span className="text-xs text-slate-700 font-mono">{config.runtime_dir}</span>
+
+            {/* 其他配置项 */}
+            <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors">
+              <div className="min-w-0 pr-4">
+                <div className="text-slate-900 font-medium text-sm">当前后端</div>
+                <div className="text-slate-500 text-xs mt-1 truncate">{config.active_backend}</div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
             </div>
-            {onReconfigure && (
-              <button
-                onClick={onReconfigure}
-                className="mt-4 px-4 py-2 bg-[#002FA7] hover:bg-[#002FA7]/90 text-white rounded-lg transition-colors shadow-sm"
-              >
-                修改决策模型
-              </button>
-            )}
-          </>
+
+            <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors">
+              <div className="min-w-0 pr-4">
+                <div className="text-slate-900 font-medium text-sm">Mock 模式</div>
+                <div className={config.mock ? "text-amber-600 text-xs mt-1 font-medium" : "text-slate-500 text-xs mt-1"}>{config.mock ? "开启" : "关闭"}</div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            </div>
+
+            <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors">
+              <div className="min-w-0 pr-4">
+                <div className="text-slate-900 font-medium text-sm">最大轮数</div>
+                <div className="text-slate-500 text-xs mt-1">{config.max_rounds}</div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            </div>
+
+            <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors">
+              <div className="min-w-0 pr-4">
+                <div className="text-slate-900 font-medium text-sm">运行时目录</div>
+                <div className="text-slate-500 text-xs mt-1 font-mono truncate" title={config.runtime_dir}>{config.runtime_dir}</div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            </div>
+          </div>
         ) : (
-          <p className="text-slate-500 text-sm">加载中...</p>
+          <div className="p-4">
+            <p className="text-slate-500 text-sm">加载中...</p>
+          </div>
         )}
       </div>
     </div>

@@ -8,7 +8,7 @@ agent:
   max_rounds: 10
   remote:
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    model: qwen3.7-max-preview
+    model: glm-5
     provider: dashscope
   temperature: 0.7
   tolerance_seconds: 1.0

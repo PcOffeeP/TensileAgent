@@ -79,7 +79,7 @@ export default function UploadPanel({ onTaskCreated }: UploadPanelProps) {
       <div className="text-center mb-6">
         <h2 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center justify-center gap-3 mb-3">
           <Activity className="w-8 h-8 text-[#002FA7]" />
-          智能视频张力分析
+          材料拉伸智能分析
         </h2>
         <p className="text-sm text-slate-500">上传拉伸试验视频，Agent 将自动进行推理并标记断裂区间。</p>
       </div>
