@@ -105,7 +105,7 @@ _API_KEY_RE = re.compile(r"sk-\S+")
 
 # ── 工具函数 ──────────────────────────────────────────────
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now().astimezone().isoformat()
 
 
 def _task_path(task_id: str) -> Path:

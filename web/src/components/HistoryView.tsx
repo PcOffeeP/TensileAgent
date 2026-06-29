@@ -30,6 +30,18 @@ function formatResultSummary(t: Task): string {
   }
 }
 
+function formatDateTime(isoString: string | undefined): string {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString.slice(0, 19).replace("T", " ");
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  } catch {
+    return isoString.slice(0, 19).replace("T", " ");
+  }
+}
+
 export default function HistoryView({ tasks, onDeleteTask }: Omit<HistoryViewProps, 'onSelectTask'>) {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -97,7 +109,7 @@ export default function HistoryView({ tasks, onDeleteTask }: Omit<HistoryViewPro
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-900 truncate">{t.video_name || t.video_id}</p>
               <p className="text-xs text-slate-500">
-                {t.created_at?.slice(0, 19).replace("T", " ") || ""}
+                {formatDateTime(t.created_at)}
                 {formatResultSummary(t)}
               </p>
             </div>
