@@ -17,10 +17,24 @@ from agent.config_util import (
     _MINIMAL_CONFIG,
     get_active_backend,
     get_api_key,
+    get_local_model_digest,
     list_available_models,
     save_api_key,
     save_remote_model,
+    clear_session_overrides,
+    load_config,
+    save_active_config,
+    set_session_overrides,
+    list_local_models,
 )
+
+
+@pytest.fixture(autouse=True)
+def isolate_local_config(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("agent.config_util.LOCAL_CONFIG_PATH", tmp_path / "config.local.yaml")
+    clear_session_overrides()
+    yield
+    clear_session_overrides()
 
 
 # ── get_api_key ────────────────────────────────────────────────────────────
@@ -136,7 +150,7 @@ class TestDeepMergeDefaults:
         _deep_merge_defaults(config, _MINIMAL_CONFIG)
 
         assert "agent" in config
-        assert config["agent"]["backend"] == "remote"
+        assert config["agent"]["backend"] == "local"
         assert config["agent"]["tolerance_seconds"] == 1.0
         assert config["agent"]["max_rounds"] == 10
         assert config["agent"]["remote"]["provider"] == "dashscope"
@@ -170,8 +184,8 @@ class TestSaveRemoteModel:
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """activate=True → config writes agent.backend: 'remote'."""
-        config_file = tmp_path / "config.yaml"
-        monkeypatch.setattr("agent.config_util.CONFIG_PATH", config_file)
+        config_file = tmp_path / "config.local.yaml"
+        monkeypatch.setattr("agent.config_util.LOCAL_CONFIG_PATH", config_file)
 
         save_remote_model("qwen-turbo", activate=True)
 
@@ -183,9 +197,9 @@ class TestSaveRemoteModel:
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """activate=False → config preserves existing agent.backend."""
-        config_file = tmp_path / "config.yaml"
+        config_file = tmp_path / "config.local.yaml"
         config_file.write_text("agent:\n  backend: local\n", encoding="utf-8")
-        monkeypatch.setattr("agent.config_util.CONFIG_PATH", config_file)
+        monkeypatch.setattr("agent.config_util.LOCAL_CONFIG_PATH", config_file)
 
         save_remote_model("qwen-turbo", activate=False)
 
@@ -197,19 +211,16 @@ class TestSaveRemoteModel:
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """CONFIG_PATH doesn't exist → creates file with full defaults + model."""
-        config_file = tmp_path / "config.yaml"
+        config_file = tmp_path / "config.local.yaml"
         assert not config_file.exists()
-        monkeypatch.setattr("agent.config_util.CONFIG_PATH", config_file)
+        monkeypatch.setattr("agent.config_util.LOCAL_CONFIG_PATH", config_file)
 
         save_remote_model("qwen-plus")
 
         assert config_file.exists()
         saved = yaml.safe_load(config_file.read_text(encoding="utf-8"))
-        assert saved["agent"]["backend"] == "remote"
         assert saved["agent"]["remote"]["model"] == "qwen-plus"
-        # Minimal defaults are also present
-        assert saved["agent"]["tolerance_seconds"] == 1.0
-        assert saved["agent"]["local"]["provider"] == "ollama"
+        assert "backend" not in saved["agent"]
 
 
 # ── list_available_models ──────────────────────────────────────────────────
@@ -250,3 +261,51 @@ class TestListAvailableModels:
 
         assert result["ok"] is False
         assert result["error_kind"] == "auth_error"
+
+
+def test_effective_config_precedence(tmp_path, monkeypatch):
+    default = tmp_path / "config.yaml"
+    local = tmp_path / "config.local.yaml"
+    default.write_text("agent:\n  backend: remote\n  remote:\n    model: remote-default\n", encoding="utf-8")
+    local.write_text("agent:\n  backend: local\n  local:\n    model: local-persisted\n", encoding="utf-8")
+    monkeypatch.setattr("agent.config_util.CONFIG_PATH", default)
+    monkeypatch.setattr("agent.config_util.LOCAL_CONFIG_PATH", local)
+    set_session_overrides(backend="local", model="session-model")
+    config = load_config()
+    assert config["agent"]["backend"] == "local"
+    assert config["agent"]["local"]["model"] == "session-model"
+    assert config["agent"]["remote"]["model"] == "remote-default"
+
+
+def test_save_active_config_only_writes_ignored_local_file(tmp_path, monkeypatch):
+    tracked = tmp_path / "config.yaml"
+    tracked.write_text("agent:\n  backend: local\n", encoding="utf-8")
+    local = tmp_path / "config.local.yaml"
+    monkeypatch.setattr("agent.config_util.CONFIG_PATH", tracked)
+    monkeypatch.setattr("agent.config_util.LOCAL_CONFIG_PATH", local)
+    before = tracked.read_text(encoding="utf-8")
+    save_active_config("local", "tensile-qwen35:9b", reasoning_effort="none")
+    assert tracked.read_text(encoding="utf-8") == before
+    assert yaml.safe_load(local.read_text(encoding="utf-8"))["agent"]["local"]["model"] == "tensile-qwen35:9b"
+
+
+def test_list_local_models_parses_ollama_tags():
+    response = MagicMock()
+    response.json.return_value = {"models": [{"name": "qwen3:8b", "digest": "d1", "size": 123}]}
+    with patch("agent.config_util.requests.get", return_value=response):
+        result = list_local_models()
+    assert result["ok"] is True
+    assert result["models"][0]["id"] == "qwen3:8b"
+
+
+def test_local_model_digest_requires_exact_ollama_id():
+    result = {
+        "ok": True,
+        "models": [
+            {"id": "qwen3:8b", "digest": "official"},
+            {"id": "qwen3:14b", "digest": "other"},
+        ],
+    }
+    with patch("agent.config_util.list_local_models", return_value=result):
+        assert get_local_model_digest("qwen3:8b") == "official"
+        assert get_local_model_digest("qwen3") is None

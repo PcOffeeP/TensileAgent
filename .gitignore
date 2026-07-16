@@ -27,6 +27,7 @@ wheels/
 
 # API key file
 agent/.env
+agent/config.local.yaml
 
 # Node.js
 node_modules/

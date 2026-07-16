@@ -19,6 +19,8 @@ AGENT_DIR = Path(__file__).parent
 PROJECT_DIR = AGENT_DIR.parent
 DOT_ENV_PATH = AGENT_DIR / ".env"
 CONFIG_PATH = AGENT_DIR / "config.yaml"
+LOCAL_CONFIG_PATH = AGENT_DIR / "config.local.yaml"
+_SESSION_OVERRIDES: dict[str, Any] = {}
 
 
 # ── .env file helpers ──
@@ -79,15 +81,53 @@ def save_api_key(api_key: str) -> None:
     _write_dotenv("LLM_API_KEY", api_key)
 
 
-def load_config() -> dict[str, Any]:
-    """Load and return the YAML configuration at agent/config.yaml.
-
-    Returns an empty dict when config.yaml does not exist.
-    """
-    if not CONFIG_PATH.exists():
+def _read_yaml(path: Path) -> dict[str, Any]:
+    if not path.exists():
         return {}
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    with open(path, "r", encoding="utf-8") as f:
+        value = yaml.safe_load(f) or {}
+    return value if isinstance(value, dict) else {}
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Merge ``override`` into ``base`` recursively and return ``base``."""
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def load_config() -> dict[str, Any]:
+    """Load effective configuration.
+
+    Precedence is session overrides > ignored local config > tracked defaults.
+    """
+    config = _read_yaml(CONFIG_PATH)
+    _deep_merge(config, _read_yaml(LOCAL_CONFIG_PATH))
+    _deep_merge(config, _SESSION_OVERRIDES)
+    return config
+
+
+def set_session_overrides(*, backend: str | None = None, model: str | None = None) -> None:
+    """Set process-local Web/CLI overrides without touching persistent files."""
+    _SESSION_OVERRIDES.clear()
+    if backend is None and model is None:
+        return
+    effective_backend = backend or load_config().get("agent", {}).get("backend", "local")
+    agent: dict[str, Any] = {"backend": effective_backend}
+    if model is not None:
+        agent[effective_backend] = {"model": model}
+    _SESSION_OVERRIDES["agent"] = agent
+
+
+def clear_session_overrides() -> None:
+    _SESSION_OVERRIDES.clear()
+
+
+def has_session_overrides() -> bool:
+    return bool(_SESSION_OVERRIDES)
 
 
 def get_active_backend() -> str:
@@ -117,18 +157,20 @@ def get_configured_model() -> str | None:
 
 _MINIMAL_CONFIG: dict[str, Any] = {
     "agent": {
-        "backend": "remote",
+        "backend": "local",
         "tolerance_seconds": 1.0,
         "max_rounds": 10,
         "max_low_conf_rounds": 2,
-        "temperature": 0.7,
+        "temperature": 0.2,
         "remote": {
             "provider": "dashscope",
             "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         },
         "local": {
             "provider": "ollama",
+            "model": "tensile-qwen35:9b",
             "base_url": "http://localhost:11434/v1",
+            "reasoning_effort": "none",
         },
     },
     "backend": {
@@ -149,20 +191,14 @@ def _deep_merge_defaults(config: dict, defaults: dict) -> dict:
 
 
 def save_model(model: str) -> None:
-    """Update the remote model in agent/config.yaml.
+    """Backward-compatible alias that persists the remote model locally."""
+    save_remote_model(model)
 
-    Always ensures a minimal set of required config keys exist via
-    ``_deep_merge_defaults``, then writes ``agent.remote.model``.
-    """
-    if CONFIG_PATH.exists():
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f) or {}
-    else:
-        config = {}
-    _deep_merge_defaults(config, _MINIMAL_CONFIG)
-    config["agent"]["remote"]["model"] = model
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
+def _write_local_config(config: dict[str, Any]) -> None:
+    LOCAL_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(LOCAL_CONFIG_PATH, "w", encoding="utf-8") as f:
+        yaml.safe_dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
 
 def save_remote_model(model: str, activate: bool = False) -> None:
@@ -171,17 +207,87 @@ def save_remote_model(model: str, activate: bool = False) -> None:
     When ``activate`` is True, ``agent.backend`` is set to ``"remote"``.
     Otherwise the backend setting is left unchanged.
     """
-    if CONFIG_PATH.exists():
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f) or {}
-    else:
-        config = {}
-    _deep_merge_defaults(config, _MINIMAL_CONFIG)
-    config.setdefault("agent", {}).setdefault("remote", {})["model"] = model
+    config = _read_yaml(LOCAL_CONFIG_PATH)
+    agent = config.setdefault("agent", {})
+    agent.setdefault("remote", {})["model"] = model
     if activate:
-        config["agent"]["backend"] = "remote"
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+        agent["backend"] = "remote"
+    _write_local_config(config)
+
+
+def save_active_config(
+    backend: str,
+    model: str,
+    *,
+    reasoning_effort: str = "none",
+) -> None:
+    """Persist an active local/remote choice in the ignored local config."""
+    if backend not in {"local", "remote"}:
+        raise ValueError("backend must be 'local' or 'remote'")
+    if not model.strip():
+        raise ValueError("model must not be empty")
+    if reasoning_effort not in {"none", "low", "medium", "high"}:
+        raise ValueError("unsupported reasoning_effort")
+    config = _read_yaml(LOCAL_CONFIG_PATH)
+    agent = config.setdefault("agent", {})
+    agent["backend"] = backend
+    selected = agent.setdefault(backend, {})
+    selected["model"] = model.strip()
+    if backend == "local":
+        selected["reasoning_effort"] = reasoning_effort
+    _write_local_config(config)
+
+
+def get_active_model_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return a secret-free snapshot of the selected decision backend."""
+    config = config or load_config()
+    agent = config.get("agent", {})
+    backend = agent.get("backend", "unconfigured")
+    selected = agent.get(backend, {}) if backend in {"local", "remote"} else {}
+    return {
+        "backend": backend,
+        "provider": selected.get("provider"),
+        "model": selected.get("model"),
+        "base_url": selected.get("base_url"),
+        "reasoning_effort": selected.get("reasoning_effort", "none"),
+    }
+
+
+def _ollama_api_root(base_url: str) -> str:
+    value = base_url.rstrip("/")
+    return value[:-3] if value.endswith("/v1") else value
+
+
+def list_local_models(base_url: str = "http://localhost:11434/v1") -> dict[str, Any]:
+    """Return installed Ollama models and stable health information."""
+    try:
+        response = requests.get(f"{_ollama_api_root(base_url)}/api/tags", timeout=3)
+        response.raise_for_status()
+        models = []
+        for item in response.json().get("models", []):
+            if not isinstance(item, dict) or not item.get("name"):
+                continue
+            models.append({
+                "id": item["name"],
+                "digest": item.get("digest"),
+                "size": item.get("size"),
+                "modified_at": item.get("modified_at"),
+            })
+        return {"ok": True, "models": sorted(models, key=lambda item: item["id"]), "error_kind": None}
+    except requests.exceptions.ConnectionError:
+        return {"ok": False, "models": [], "error_kind": "service_unavailable", "warning": "Ollama 未启动，请运行 ollama serve"}
+    except requests.exceptions.Timeout:
+        return {"ok": False, "models": [], "error_kind": "timeout", "warning": "Ollama 响应超时"}
+    except (requests.exceptions.RequestException, AttributeError, ValueError, TypeError) as exc:
+        return {"ok": False, "models": [], "error_kind": "invalid_response", "warning": str(exc)}
+
+
+def get_local_model_digest(model: str, base_url: str = "http://localhost:11434/v1") -> str | None:
+    result = list_local_models(base_url)
+    for item in result.get("models", []):
+        if item.get("id") == model:
+            return item.get("digest")
+    return None
 
 
 def list_available_models(

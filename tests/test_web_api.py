@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -31,6 +32,7 @@ def tmp_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(web_api, "HISTORY_DIR", history)
     monkeypatch.setattr(web_api, "EVENTS_DIR", events)
     monkeypatch.setattr(web_api, "RUNTIME_INDEX_PATH", runtime / "private_runtime_index.json")
+    monkeypatch.setattr(web_api, "LLM_TRACES_DIR", runtime / "llm_traces")
     runtime.mkdir(parents=True, exist_ok=True)
     uploads.mkdir(parents=True, exist_ok=True)
     history.mkdir(parents=True, exist_ok=True)
@@ -50,6 +52,18 @@ def client(tmp_runtime, monkeypatch):
             await asyncio.sleep(3600)
 
     monkeypatch.setattr(web_api, "_queue_worker", dummy_worker)
+    monkeypatch.setattr(
+        web_api,
+        "_validated_model_snapshot",
+        lambda: {
+            "backend": "local",
+            "provider": "ollama",
+            "model": "tensile-qwen35:9b",
+            "base_url": "http://localhost:11434/v1",
+            "reasoning_effort": "none",
+            "digest": "test-digest",
+        },
+    )
     with TestClient(web_api.app) as c:
         yield c
 
@@ -449,6 +463,30 @@ class TestEndpoints:
         assert data["video_name"] == "test.mp4"
         assert "video_path" not in data
         assert data["status"] == web_api.TASK_STATUS_QUEUED
+
+    def test_create_task_pins_complete_decision_model_snapshot(
+        self, client, tmp_runtime, monkeypatch
+    ):
+        video = tmp_runtime / "uploads" / "snapshot.mp4"
+        video.write_text("fake video")
+        snapshot = {
+            "backend": "local",
+            "provider": "ollama",
+            "model": "tensile-qwen35:9b",
+            "base_url": "http://localhost:11434/v1",
+            "reasoning_effort": "none",
+            "digest": "sha256:pinned",
+        }
+        monkeypatch.setattr(web_api, "_validated_model_snapshot", lambda: snapshot.copy())
+
+        resp = client.post(
+            "/api/tasks", data={"video_path": str(video), "video_id": "snapshot"}
+        )
+
+        assert resp.status_code == 200
+        task = web_api.tasks[resp.json()["task_id"]]
+        assert task.decision_model == snapshot
+        assert resp.json()["decision_model"] == snapshot
 
     def test_get_task_returns_public_task(self, client):
         task = TaskModel(
@@ -1016,11 +1054,42 @@ class TestHistoryPersistence:
         assert resp.status_code == 200
         task_id = resp.json()["id"]
         assert task_id in web_api._load_runtime_index()
+        web_api.tasks[task_id].status = web_api.TASK_STATUS_COMPLETED
 
         resp = client.delete(f"/api/tasks/{task_id}")
         assert resp.status_code == 200
 
         assert task_id not in web_api._load_runtime_index()
+
+    def test_delete_running_task_is_rejected_and_switch_remains_blocked(self, client):
+        task = TaskModel(
+            id="running-delete",
+            status=web_api.TASK_STATUS_RUNNING,
+            created_at="now",
+        )
+        web_api.tasks[task.id] = task
+
+        response = client.delete(f"/api/tasks/{task.id}")
+
+        assert response.status_code == 409
+        assert task.id in web_api.tasks
+        assert web_api._configuration_switch_blocked()
+
+    def test_delete_completed_task_removes_transport_traces(self, client, tmp_runtime):
+        task = TaskModel(
+            id="completed-trace",
+            status=web_api.TASK_STATUS_COMPLETED,
+            created_at="now",
+        )
+        web_api.tasks[task.id] = task
+        trace_dir = web_api.LLM_TRACES_DIR / task.id
+        trace_dir.mkdir(parents=True)
+        (trace_dir / "round-0001.json").write_text("{}", encoding="utf-8")
+
+        response = client.delete(f"/api/tasks/{task.id}")
+
+        assert response.status_code == 200
+        assert not trace_dir.exists()
 
 
 class TestConfigEndpoint:
@@ -1029,3 +1098,169 @@ class TestConfigEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["runtime_dir"] == "<redacted>"
+
+
+class TestDecisionModelConfigEndpoints:
+    def test_local_snapshot_without_digest_fails_closed(self, tmp_runtime, monkeypatch):
+        monkeypatch.setattr(
+            web_api,
+            "_current_model_snapshot",
+            lambda: {
+                "backend": "local",
+                "provider": "ollama",
+                "model": "tensile-qwen35:9b",
+                "base_url": "http://localhost:11434/v1",
+                "reasoning_effort": "none",
+                "digest": None,
+            },
+        )
+        with pytest.raises(web_api.HTTPException) as exc:
+            web_api._validated_model_snapshot()
+        assert exc.value.status_code == 503
+
+    @pytest.mark.parametrize(
+        "snapshot",
+        [
+            {
+                "backend": "unconfigured",
+                "provider": "ollama",
+                "model": "tensile-qwen35:9b",
+                "base_url": "http://localhost:11434/v1",
+                "reasoning_effort": "none",
+                "digest": "digest",
+            },
+            {
+                "backend": "remote",
+                "provider": None,
+                "model": "qwen3.7-max",
+                "base_url": "https://example.com/v1",
+                "reasoning_effort": "none",
+                "digest": None,
+            },
+            {
+                "backend": "remote",
+                "provider": "dashscope",
+                "model": "qwen3.7-max",
+                "base_url": None,
+                "reasoning_effort": "none",
+                "digest": None,
+            },
+            {
+                "backend": "local",
+                "provider": "ollama",
+                "model": "tensile-qwen35:9b",
+                "base_url": "http://localhost:11434/v1",
+                "reasoning_effort": "invalid",
+                "digest": "digest",
+            },
+        ],
+    )
+    def test_incomplete_or_invalid_snapshot_fails_closed(
+        self, tmp_runtime, monkeypatch, snapshot
+    ):
+        monkeypatch.setattr(
+            web_api, "_current_model_snapshot", lambda: snapshot.copy()
+        )
+        with pytest.raises(web_api.HTTPException) as exc:
+            web_api._validated_model_snapshot()
+        assert exc.value.status_code == 503
+
+    def test_complete_remote_snapshot_is_accepted(self, tmp_runtime, monkeypatch):
+        snapshot = {
+            "backend": "remote",
+            "provider": "dashscope",
+            "model": "qwen3.7-max",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "reasoning_effort": "none",
+            "digest": None,
+        }
+        monkeypatch.setattr(
+            web_api, "_current_model_snapshot", lambda: snapshot.copy()
+        )
+        assert web_api._validated_model_snapshot() == snapshot
+
+    def test_single_and_batch_creation_propagate_snapshot_failure(
+        self, client, tmp_runtime, monkeypatch
+    ):
+        def reject_snapshot():
+            raise web_api.HTTPException(503, "missing digest")
+
+        monkeypatch.setattr(web_api, "_validated_model_snapshot", reject_snapshot)
+        video = tmp_runtime / "uploads" / "missing-digest.mp4"
+        video.write_text("fake video")
+
+        single = client.post("/api/tasks", data={"video_path": str(video)})
+        batch = client.post(
+            "/api/tasks/batch",
+            files=[("files", ("missing-digest.mp4", b"fake", "video/mp4"))],
+        )
+
+        assert single.status_code == 503
+        assert batch.status_code == 503
+
+    def test_lists_local_models(self, client):
+        result = {"ok": True, "models": [{"id": "tensile-qwen35:9b", "digest": "abc"}]}
+        with patch.object(web_api, "list_local_models", return_value=result):
+            response = client.get("/api/config/models?backend=local")
+        assert response.status_code == 200
+        assert response.json()["models"][0]["id"] == "tensile-qwen35:9b"
+
+    def test_switch_fails_closed_while_task_is_queued(self, client):
+        web_api.tasks["queued"] = TaskModel(id="queued", status=web_api.TASK_STATUS_QUEUED, created_at="now")
+        response = client.put(
+            "/api/config/active",
+            json={"backend": "local", "model": "tensile-qwen35:9b", "reasoning_effort": "none"},
+        )
+        assert response.status_code == 409
+
+    def test_legacy_setup_cannot_bypass_queue_switch_lock(self, client):
+        web_api.tasks["running"] = TaskModel(
+            id="running", status=web_api.TASK_STATUS_RUNNING, created_at="now"
+        )
+        with patch.object(
+            web_api,
+            "list_available_models",
+            return_value={"ok": True, "models": ["qwen3.7-max"]},
+        ):
+            response = client.post(
+                "/api/config/setup",
+                json={"api_key": "sk-test", "model": "qwen3.7-max", "action": "setup"},
+            )
+        assert response.status_code == 409
+
+    def test_legacy_model_cannot_bypass_queue_switch_lock(self, client):
+        web_api.tasks["queued"] = TaskModel(
+            id="queued", status=web_api.TASK_STATUS_QUEUED, created_at="now"
+        )
+        with patch.object(web_api, "get_api_key", return_value="sk-test"), patch.object(
+            web_api,
+            "list_available_models",
+            return_value={"ok": True, "models": ["qwen3.7-max"]},
+        ):
+            response = client.put(
+                "/api/config/model", json={"model": "qwen3.7-max"}
+            )
+        assert response.status_code == 409
+
+    def test_switch_persists_after_successful_local_test(self, client):
+        local = {"ok": True, "models": [{"id": "tensile-qwen35:9b", "digest": "abc"}]}
+        with patch.object(web_api, "list_local_models", return_value=local), patch.object(web_api, "save_active_config") as save:
+            response = client.put(
+                "/api/config/active",
+                json={"backend": "local", "model": "tensile-qwen35:9b", "reasoning_effort": "none"},
+            )
+        assert response.status_code == 200
+        save.assert_called_once_with("local", "tensile-qwen35:9b", reasoning_effort="none")
+
+    def test_trace_endpoint_returns_redacted_runtime_trace(self, client):
+        task_id = "trace-task"
+        web_api.tasks[task_id] = TaskModel(id=task_id, status=web_api.TASK_STATUS_COMPLETED, created_at="now")
+        directory = web_api.LLM_TRACES_DIR / task_id
+        directory.mkdir(parents=True)
+        (directory / "round-0001.json").write_text(
+            json.dumps({"task_id": task_id, "round": 1, "request": {"messages": []}}),
+            encoding="utf-8",
+        )
+        response = client.get(f"/api/tasks/{task_id}/llm-traces")
+        assert response.status_code == 200
+        assert response.json()[0]["round"] == 1

@@ -1,11 +1,14 @@
 """Agent 本地 Web 工作台 API"""
+import argparse
 import asyncio
 import csv
 import io
 import json
 import os
+import shutil
 import re
 import uuid
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -20,14 +23,20 @@ from sse_starlette.sse import EventSourceResponse
 
 from agent.runner import run_one
 from agent.config_util import (
+    get_active_model_config,
     get_active_backend,
     get_api_key,
     get_configured_model,
+    get_local_model_digest,
+    has_session_overrides,
+    list_local_models,
     list_available_models,
     load_config,
     save_api_key,
+    save_active_config,
     save_model,
     save_remote_model,
+    set_session_overrides,
 )
 
 # ── 路径常量 ──────────────────────────────────────────────
@@ -36,6 +45,7 @@ RUNTIME_DIR = PROJECT_ROOT / "data" / "08_runtime" / "web_workbench"
 UPLOADS_DIR = RUNTIME_DIR / "uploads"
 HISTORY_DIR = RUNTIME_DIR / "history"
 EVENTS_DIR = RUNTIME_DIR / "events"
+LLM_TRACES_DIR = PROJECT_ROOT / "data" / "08_runtime" / "llm_traces"
 RUNTIME_INDEX_PATH = RUNTIME_DIR / "private_runtime_index.json"
 CONFIG_PATH = PROJECT_ROOT / "agent" / "config.yaml"
 
@@ -61,6 +71,7 @@ class TaskModel(BaseModel):
     response: Optional[dict] = None
     error: Optional[dict] = None
     event_summary: Optional[dict] = None
+    decision_model: Optional[dict] = None
 
 
 class PublicTask(BaseModel):
@@ -78,6 +89,7 @@ class PublicTask(BaseModel):
     response: Optional[dict] = None
     error: Optional[dict] = None
     event_summary: Optional[dict] = None
+    decision_model: Optional[dict] = None
 
 
 # ── 全局状态 ──────────────────────────────────────────────
@@ -87,8 +99,28 @@ _queue_worker_task: Optional[asyncio.Task] = None
 sse_connections: dict[str, list[asyncio.Queue]] = {}
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Initialize runtime state and own the queue worker lifecycle."""
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    EVENTS_DIR.mkdir(parents=True, exist_ok=True)
+    _restore_history()
+    global _queue_worker_task
+    _queue_worker_task = asyncio.create_task(_queue_worker())
+    try:
+        yield
+    finally:
+        if _queue_worker_task is not None:
+            _queue_worker_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await _queue_worker_task
+        _queue_worker_task = None
+
+
 # ── FastAPI 应用 ─────────────────────────────────────────
-app = FastAPI(title="Agent Web Workbench API", version="1.0.0")
+app = FastAPI(title="Agent Web Workbench API", version="1.0.0", lifespan=lifespan)
 
 
 # ── 脱敏规则 ──────────────────────────────────────────────
@@ -167,6 +199,7 @@ def _save_task(task: TaskModel):
         response=_sanitize_event_data(task.response),
         error=_sanitize_event_data(task.error),
         event_summary=_sanitize_event_data(task.event_summary),
+        decision_model=_sanitize_event_data(task.decision_model),
     )
     d = public.model_dump()
     d["_schema_version"] = 2
@@ -227,6 +260,7 @@ def _restore_history():
                 response=public.response,
                 error=public.error,
                 event_summary=public.event_summary,
+                decision_model=public.decision_model,
                 video_path=paths.get("video_path", ""),
                 config_path=paths.get("config_path", ""),
             )
@@ -420,6 +454,9 @@ async def _queue_worker():
                     video_id=task.video_id,
                     event_callback=_event_callback_factory(task_id),
                     question=task.question,
+                    agent_config_snapshot=task.decision_model,
+                    trace_task_id=task.id,
+                    work_dir=PROJECT_ROOT,
                 )
             )
 
@@ -547,6 +584,7 @@ def _to_public_task(task: TaskModel) -> dict:
         status=task.status,
         video_id=task.video_id,
         video_name=task.video_name,
+        question=task.question,
         created_at=task.created_at,
         started_at=task.started_at,
         finished_at=task.finished_at,
@@ -554,20 +592,46 @@ def _to_public_task(task: TaskModel) -> dict:
         response=_sanitize_event_data(task.response),
         error=_sanitize_event_data(task.error),
         event_summary=_sanitize_event_data(task.event_summary),
+        decision_model=_sanitize_event_data(task.decision_model),
     ).model_dump()
 
 
-# ── 启动/关闭事件 ────────────────────────────────────────
-@app.on_event("startup")
-async def startup():
-    """初始化目录、加载历史、启动队列 worker"""
-    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-    EVENTS_DIR.mkdir(parents=True, exist_ok=True)
-    _restore_history()
-    global _queue_worker_task
-    _queue_worker_task = asyncio.create_task(_queue_worker())
+def _current_model_snapshot() -> dict[str, Any]:
+    snapshot = get_active_model_config()
+    if snapshot.get("backend") == "local" and snapshot.get("model"):
+        snapshot["digest"] = get_local_model_digest(
+            snapshot["model"], snapshot.get("base_url") or "http://localhost:11434/v1"
+        )
+    else:
+        snapshot["digest"] = None
+    return snapshot
+
+
+def _validated_model_snapshot() -> dict[str, Any]:
+    """Return a complete task snapshot or fail before queueing the task."""
+    snapshot = _current_model_snapshot()
+    backend = snapshot.get("backend")
+    if backend not in {"local", "remote"}:
+        raise HTTPException(503, "决策模型 backend 配置无效")
+    missing = [
+        field
+        for field in ("provider", "model", "base_url", "reasoning_effort")
+        if not isinstance(snapshot.get(field), str) or not snapshot[field].strip()
+    ]
+    if missing:
+        raise HTTPException(503, f"决策模型快照字段不完整: {', '.join(missing)}")
+    if snapshot["reasoning_effort"] not in {"none", "low", "medium", "high"}:
+        raise HTTPException(503, "决策模型 reasoning_effort 配置无效")
+    if backend == "local" and not snapshot.get("digest"):
+        raise HTTPException(
+            503,
+            "本地决策模型不可用、未安装或缺少 digest；请启动 Ollama 并确认模型后重试",
+        )
+    return snapshot
+
+
+def _configuration_switch_blocked() -> bool:
+    return any(task.status in {TASK_STATUS_QUEUED, TASK_STATUS_RUNNING} for task in tasks.values())
 
 
 # ── API 端点 ─────────────────────────────────────────────
@@ -580,12 +644,7 @@ async def health():
 @app.get("/api/config")
 async def get_config():
     """返回当前配置摘要（不包含密钥）"""
-    cfg = {}
-    if CONFIG_PATH.exists():
-        try:
-            cfg = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
-        except Exception:
-            cfg = {}
+    cfg = load_config()
     active_backend = get_active_backend()
     agent_cfg = cfg.get("agent", {})
     if active_backend == "remote":
@@ -594,12 +653,25 @@ async def get_config():
         active_model = agent_cfg.get("local", {}).get("model")
     else:
         active_model = None
+    local_cfg = agent_cfg.get("local", {})
+    local_status = list_local_models(local_cfg.get("base_url", "http://localhost:11434/v1"))
+    active_digest = None
+    if active_backend == "local" and active_model:
+        active_digest = next(
+            (item.get("digest") for item in local_status.get("models", []) if item.get("id") == active_model),
+            None,
+        )
     return {
         "active_backend": active_backend,
         "active_model": active_model,
         "mock": cfg.get("mock", False),
         "runtime_dir": "<redacted>",
         "max_rounds": agent_cfg.get("max_rounds", 10),
+        "active_digest": active_digest,
+        "ollama_ok": local_status.get("ok", False),
+        "reasoning_effort": local_cfg.get("reasoning_effort", "none"),
+        "switch_allowed": not _configuration_switch_blocked() and not has_session_overrides(),
+        "session_override": has_session_overrides(),
     }
 
 
@@ -615,6 +687,7 @@ async def create_task(
     if not file and not video_path:
         raise HTTPException(400, "必须提供视频文件或视频路径")
 
+    decision_model = _validated_model_snapshot()
     task_id = str(uuid.uuid4())
     vid = video_id or f"task_{task_id[:8]}"
 
@@ -639,6 +712,7 @@ async def create_task(
         config_path=config_path or "",
         question=(question or "请完整分析这段拉伸试验视频").strip(),
         created_at=_now(),
+        decision_model=decision_model,
     )
     tasks[task_id] = task
     _save_task(task)
@@ -675,6 +749,8 @@ async def delete_task(task_id: str):
     """删除任务及其数据"""
     if task_id not in tasks:
         raise HTTPException(404, "task not found")
+    if tasks[task_id].status in {TASK_STATUS_QUEUED, TASK_STATUS_RUNNING}:
+        raise HTTPException(409, "排队或运行中任务不能删除")
     # 清理文件
     for p in [HISTORY_DIR / f"{task_id}.json", EVENTS_DIR / f"{task_id}.jsonl"]:
         if p.exists():
@@ -686,6 +762,9 @@ async def delete_task(task_id: str):
         if p.exists():
             p.unlink()
     _remove_runtime_index_entry(task_id)
+    trace_dir = LLM_TRACES_DIR / task_id
+    if trace_dir.exists():
+        shutil.rmtree(trace_dir)
     del tasks[task_id]
     return {"ok": True}
 
@@ -716,8 +795,40 @@ async def replay_events(task_id: str):
     return events
 
 
+def _load_llm_traces(task_id: str) -> list[dict[str, Any]]:
+    trace_dir = LLM_TRACES_DIR / task_id
+    traces: list[dict[str, Any]] = []
+    if not trace_dir.exists():
+        return traces
+    for path in sorted(trace_dir.glob("round-*.json")):
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(value, dict):
+            traces.append(_sanitize_event_data(value))
+    return traces
+
+
+@app.get("/api/tasks/{task_id}/llm-traces")
+async def get_llm_traces(task_id: str):
+    if task_id not in tasks:
+        raise HTTPException(404, "task not found")
+    return _load_llm_traces(task_id)
+
+
+@app.get("/api/tasks/{task_id}/llm-traces/export")
+async def export_llm_traces(task_id: str):
+    if task_id not in tasks:
+        raise HTTPException(404, "task not found")
+    return JSONResponse(
+        _load_llm_traces(task_id),
+        headers={"Content-Disposition": f'attachment; filename="{task_id}-llm-traces.json"'},
+    )
+
+
 @app.get("/api/tasks/{task_id}/export")
-async def export_result(task_id: str, fmt: str = Query("json", regex="^(json|jsonl|csv)$")):
+async def export_result(task_id: str, fmt: str = Query("json", pattern="^(json|jsonl|csv)$")):
     """导出分析结果"""
     if task_id not in tasks:
         raise HTTPException(404, "task not found")
@@ -771,6 +882,7 @@ async def create_batch_tasks(
     question: Optional[str] = Form(None),
 ):
     """批量上传并创建任务（每个任务同样进入队列，由统一 worker 处理）"""
+    decision_model = _validated_model_snapshot()
     results = []
     for f in files:
         task_id = str(uuid.uuid4())
@@ -787,6 +899,7 @@ async def create_batch_tasks(
             config_path=config_path or "",
             question=(question or "请完整分析这段拉伸试验视频").strip(),
             created_at=_now(),
+            decision_model=decision_model.copy(),
         )
         tasks[task_id] = task
         _save_task(task)
@@ -812,15 +925,18 @@ async def get_config_status():
     api_key = get_api_key()
     remote_model = get_configured_model()
 
-    # 本地模型信息
     config = load_config()
-    local_model = config.get("agent", {}).get("local", {}).get("model")
+    agent_cfg = config.get("agent", {})
+    local_cfg = agent_cfg.get("local", {})
+    local_model = local_cfg.get("model")
+    local_result = list_local_models(local_cfg.get("base_url", "http://localhost:11434/v1"))
+    installed_ids = [item.get("id") for item in local_result.get("models", [])]
 
     # 按当前 backend 判断是否已配置
     if active_backend == "remote":
         configured = bool(api_key) and bool(remote_model)
     elif active_backend == "local":
-        configured = bool(local_model)
+        configured = bool(local_result.get("ok")) and local_model in installed_ids
     else:
         configured = False
 
@@ -838,8 +954,77 @@ async def get_config_status():
         },
         "local": {
             "current_model": local_model,
+            "service_ok": local_result.get("ok", False),
+            "installed": local_model in installed_ids,
+            "digest": next(
+                (item.get("digest") for item in local_result.get("models", []) if item.get("id") == local_model),
+                None,
+            ),
+            "warning": local_result.get("warning"),
+            "reasoning_effort": local_cfg.get("reasoning_effort", "none"),
         },
+        "switch_allowed": not _configuration_switch_blocked() and not has_session_overrides(),
+        "session_override": has_session_overrides(),
     }
+
+
+@app.get("/api/config/models")
+async def get_config_models(backend: str = Query(..., pattern="^(local|remote)$")):
+    config = load_config()
+    if backend == "local":
+        local_cfg = config.get("agent", {}).get("local", {})
+        result = list_local_models(local_cfg.get("base_url", "http://localhost:11434/v1"))
+        return result
+    remote_cfg = config.get("agent", {}).get("remote", {})
+    result = list_available_models(
+        base_url=remote_cfg.get("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+        api_key=get_api_key(),
+    )
+    return {**result, "models": [{"id": model} for model in result.get("models", [])]}
+
+
+@app.post("/api/config/test")
+async def test_config_backend(body: dict):
+    backend = str(body.get("backend", "")).strip()
+    model = str(body.get("model", "")).strip()
+    config = load_config()
+    if backend == "local":
+        local_cfg = config.get("agent", {}).get("local", {})
+        result = list_local_models(local_cfg.get("base_url", "http://localhost:11434/v1"))
+        installed = {item.get("id") for item in result.get("models", [])}
+        if not result.get("ok"):
+            raise HTTPException(503, result.get("warning", "Ollama 不可用"))
+        if model not in installed:
+            raise HTTPException(400, f"本地模型未安装: {model}")
+        return {"ok": True, "backend": backend, "model": model}
+    if backend == "remote":
+        if not get_api_key():
+            raise HTTPException(400, "远程后端尚未配置 API Key")
+        result = list_available_models(
+            base_url=config.get("agent", {}).get("remote", {}).get("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+            api_key=get_api_key(),
+        )
+        if not result.get("ok"):
+            raise HTTPException(503, result.get("warning", "远程后端不可用"))
+        return {"ok": True, "backend": backend, "model": model}
+    raise HTTPException(400, "backend 必须为 local 或 remote")
+
+
+@app.put("/api/config/active")
+async def update_active_config(body: dict):
+    if has_session_overrides():
+        raise HTTPException(409, "当前进程由启动参数锁定模型；请重启时移除覆盖参数")
+    if _configuration_switch_blocked():
+        raise HTTPException(409, "存在运行中或排队任务，暂不能切换决策模型")
+    backend = str(body.get("backend", "")).strip()
+    model = str(body.get("model", "")).strip()
+    reasoning_effort = str(body.get("reasoning_effort", "none")).strip()
+    await test_config_backend({"backend": backend, "model": model})
+    try:
+        save_active_config(backend, model, reasoning_effort=reasoning_effort)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, "backend": backend, "model": model, "reasoning_effort": reasoning_effort}
 
 
 @app.post("/api/config/setup")
@@ -888,6 +1073,12 @@ async def setup_config(body: dict):
             "models_source": "platform" if result["ok"] else "manual",
         }
 
+    # Legacy write endpoints obey the same lock as the new active-config API.
+    if has_session_overrides():
+        raise HTTPException(409, "当前进程由启动参数锁定模型；请重启时移除覆盖参数")
+    if _configuration_switch_blocked():
+        raise HTTPException(409, "存在运行中或排队任务，暂不能切换决策模型")
+
     # 保存配置 — /models 成功时做推荐，失败时跳过校验
     if result["ok"] and model not in available_models:
         # 模型不在列表中，但仍允许保存
@@ -935,6 +1126,11 @@ async def update_model(body: dict):
             "warning": result.get("warning"),
         }
 
+    if has_session_overrides():
+        raise HTTPException(409, "当前进程由启动参数锁定模型；请重启时移除覆盖参数")
+    if _configuration_switch_blocked():
+        raise HTTPException(409, "存在运行中或排队任务，暂不能切换决策模型")
+
     # 保存 — /models 成功时做推荐，失败时跳过校验
     if result["ok"] and model not in available_models:
         save_remote_model(model, activate=False)
@@ -963,7 +1159,16 @@ if frontend_dir.exists():
 
 def main():
     """启动 API 服务"""
-    uvicorn.run("agent.web_api:app", host="127.0.0.1", port=8765, reload=True)
+    parser = argparse.ArgumentParser(description="TensileAgent local Web workbench")
+    parser.add_argument("--agent-backend", choices=["local", "remote"], default=None)
+    parser.add_argument("--agent-model", default=None)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    args = parser.parse_args()
+    if args.agent_model and not args.agent_backend:
+        parser.error("--agent-model requires --agent-backend")
+    set_session_overrides(backend=args.agent_backend, model=args.agent_model)
+    uvicorn.run(app, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

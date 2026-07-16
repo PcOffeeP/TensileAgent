@@ -201,11 +201,29 @@ class ToolTerminate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    status: str
-    fracture_type: str | None = None
-    location: str | None = None
-    unrecognized_reason: str | None = None
-    evidence_rounds: list[int] | None = None
+    status: str = Field(
+        description="只能是 fracture、no_fracture 或 unrecognized",
+        json_schema_extra={"enum": ["fracture", "no_fracture", "unrecognized"]},
+    )
+    fracture_type: str | None = Field(
+        default=None,
+        description="status=fracture 时必填，且只能是七种中文断裂类别；其他 status 省略此字段",
+        json_schema_extra={"enum": [str(item) for item in sorted(FRACTURE_CLASSES)] + [None]},
+    )
+    location: str | None = Field(
+        default=None,
+        description="status=fracture 时只能是 inside_gauge 或 outside_gauge；其他 status 省略此字段",
+        json_schema_extra={"enum": ["inside_gauge", "outside_gauge", None]},
+    )
+    unrecognized_reason: str | None = Field(
+        default=None,
+        description="status=unrecognized 时必填合法原因；其他 status 省略此字段",
+        json_schema_extra={"enum": sorted(UNRECOGNIZED_REASONS) + [None]},
+    )
+    evidence_rounds: list[int] | None = Field(
+        default=None,
+        description="仅 fracture 结论传入，值为引用的 evidence_index；其他 status 省略此字段",
+    )
 
     @model_validator(mode="before")
     @classmethod

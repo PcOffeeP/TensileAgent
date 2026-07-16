@@ -6,6 +6,7 @@ import FinalResultPanel from "./FinalResultPanel";
 import IntervalConvergenceBar from "./IntervalConvergenceBar";
 import AgentProgressTimeline from "./AgentProgressTimeline";
 import RawEventLog from "./RawEventLog";
+import LlmTransportTrace from "./LlmTransportTrace";
 
 interface ActiveAnalysisWorkspaceProps {
   task: Task;
@@ -93,6 +94,7 @@ export default function ActiveAnalysisWorkspace({ task, onClose, onDelete, isHis
           </div>
           <div className="w-full md:w-[380px] flex flex-col gap-4">
             <RawEventLog events={trace.rawEvents} />
+            <LlmTransportTrace taskId={task.id} />
           </div>
         </div>
       </div>

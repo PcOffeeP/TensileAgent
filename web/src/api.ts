@@ -47,6 +47,35 @@ export interface Task {
     error: { code: string; message: string } | null;
   } | null;
   error: { stage: string; code: string; message: string } | null;
+  decision_model?: ModelSnapshot | null;
+}
+
+export interface ModelSnapshot {
+  backend: "local" | "remote" | string;
+  provider: string | null;
+  model: string | null;
+  base_url: string | null;
+  reasoning_effort: string;
+  digest?: string | null;
+}
+
+export interface ModelOption {
+  id: string;
+  digest?: string | null;
+  size?: number | null;
+  modified_at?: string | null;
+}
+
+export interface LlmTrace {
+  schema_version: number;
+  task_id: string;
+  round: number;
+  request_id: string;
+  model: ModelSnapshot;
+  request: Record<string, unknown>;
+  response: Record<string, unknown> | null;
+  elapsed_seconds: number;
+  error: { type: string; message: string } | null;
 }
 
 export interface AgentEvent {
@@ -106,6 +135,11 @@ export interface AppConfig {
   mock: boolean;
   runtime_dir: string;
   max_rounds: number;
+  active_digest?: string | null;
+  ollama_ok?: boolean;
+  reasoning_effort?: string;
+  switch_allowed?: boolean;
+  session_override?: boolean;
 }
 
 export async function createTask(file?: File, videoPath?: string, videoId?: string, question?: string): Promise<Task & { task_id: string }> {
@@ -190,7 +224,14 @@ export interface ConfigStatus {
   };
   local: {
     current_model: string | null;
+    service_ok?: boolean;
+    installed?: boolean;
+    digest?: string | null;
+    warning?: string | null;
+    reasoning_effort?: string;
   };
+  switch_allowed?: boolean;
+  session_override?: boolean;
 }
 
 export interface AvailableModel {
@@ -238,4 +279,41 @@ export async function updateModel(model: string): Promise<{ ok?: boolean; model?
     throw new Error(data.detail || "更新模型失败");
   }
   return data;
+}
+
+export async function listDecisionModels(backend: "local" | "remote"): Promise<{ ok: boolean; models: ModelOption[]; warning?: string }> {
+  const res = await fetch(`/api/config/models?backend=${backend}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "获取模型列表失败");
+  return data;
+}
+
+export async function testDecisionModel(backend: "local" | "remote", model: string): Promise<void> {
+  const res = await fetch("/api/config/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ backend, model }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "模型连接测试失败");
+}
+
+export async function activateDecisionModel(backend: "local" | "remote", model: string, reasoningEffort = "none"): Promise<void> {
+  const res = await fetch("/api/config/active", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ backend, model, reasoning_effort: reasoningEffort }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "切换模型失败");
+}
+
+export async function getLlmTraces(taskId: string): Promise<LlmTrace[]> {
+  const res = await fetch(`/api/tasks/${taskId}/llm-traces`);
+  if (!res.ok) throw new Error("获取模型传输记录失败");
+  return res.json();
+}
+
+export function getLlmTraceExportUrl(taskId: string): string {
+  return `/api/tasks/${taskId}/llm-traces/export`;
 }

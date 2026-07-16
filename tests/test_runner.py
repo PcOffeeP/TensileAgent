@@ -243,6 +243,89 @@ class TestRunOne:
     @patch("agent.runner.create_inference_client")
     @patch("agent.runner.create_llm_client")
     @patch("agent.runner.build_video_meta")
+    def test_run_one_pins_complete_agent_config_snapshot(
+        self,
+        mock_build_video_meta: MagicMock,
+        mock_create_llm_client: MagicMock,
+        mock_create_inference_client: MagicMock,
+        mock_create_clip_builder: MagicMock,
+        mock_iterative_agent: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        video_path = tmp_path / "sample.mp4"
+        video_path.write_text("fake video content", encoding="utf-8")
+        mock_build_video_meta.return_value = {
+            "video_id": "sample",
+            "video_path": str(video_path),
+            "duration_sec": 8.0,
+        }
+        mock_iterative_agent.return_value = MagicMock()
+        config = {
+            "agent": {
+                "backend": "remote",
+                "local": {"model": "changed-after-queue"},
+                "remote": {"model": "qwen3.7-max"},
+            }
+        }
+        snapshot = {
+            "backend": "local",
+            "provider": "ollama",
+            "model": "tensile-qwen35:9b",
+            "base_url": "http://localhost:11434/v1",
+            "reasoning_effort": "none",
+            "digest": "not-forwarded",
+        }
+
+        with patch("agent.runner.load_config", return_value=config):
+            runner.run_one(video_path, agent_config_snapshot=snapshot)
+
+        effective = mock_create_llm_client.call_args.args[0]
+        assert effective["agent"]["backend"] == "local"
+        assert effective["agent"]["local"] == {
+            "provider": "ollama",
+            "model": "tensile-qwen35:9b",
+            "base_url": "http://localhost:11434/v1",
+            "reasoning_effort": "none",
+        }
+
+    def test_run_one_rejects_incomplete_snapshot_instead_of_inheriting_config(
+        self, tmp_path: Path
+    ) -> None:
+        video_path = tmp_path / "sample.mp4"
+        video_path.write_text("fake video content", encoding="utf-8")
+        config = {
+            "agent": {
+                "backend": "local",
+                "local": {
+                    "provider": "ollama",
+                    "model": "changed-after-queue",
+                    "base_url": "http://localhost:11434/v1",
+                    "reasoning_effort": "none",
+                },
+                "remote": {},
+            }
+        }
+        incomplete = {
+            "backend": "local",
+            "provider": None,
+            "model": "tensile-qwen35:9b",
+            "base_url": "http://localhost:11434/v1",
+            "reasoning_effort": "none",
+            "digest": "pinned",
+        }
+
+        with patch("agent.runner.load_config", return_value=config):
+            result = runner.run_one(video_path, agent_config_snapshot=incomplete)
+
+        assert result["ok"] is False
+        assert result["error"]["stage"] == "configuration"
+        assert "provider" in result["error"]["message"]
+
+    @patch("agent.iterative_agent.IterativeAgent")
+    @patch("agent.runner.create_clip_builder")
+    @patch("agent.runner.create_inference_client")
+    @patch("agent.runner.create_llm_client")
+    @patch("agent.runner.build_video_meta")
     def test_run_one_propagates_runner_failure_envelope(
         self,
         mock_build_video_meta: MagicMock,

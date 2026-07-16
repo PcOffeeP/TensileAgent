@@ -27,7 +27,7 @@ TensileAgent/
 │       └── components/     ← UI 组件（上传、配置、任务详情、导航）
 ├── tests/                  ← pytest 测试（25+ 文件）
 ├── docs/                   ← 设计文档
-│   └── PROJECT_PLAN.md     ← Agent-only 项目计划 v10.0
+│   └── PROJECT_PLAN.md     ← Agent-only 项目计划 v13.0
 ├── data/08_runtime/        ← 运行时产物（gitignored）
 ├── pyproject.toml          ← Python 项目配置
 ├── .gitignore
@@ -177,11 +177,40 @@ uv sync
 uv sync --dev
 ```
 
-### 配置远程模型
+### 准备本地决策模型（默认）
 
-**推荐 Web 方式**：启动 Web 服务后，浏览器打开 http://127.0.0.1:8765，首次访问会自动弹出 SetupDialog，在界面中输入百炼 API Key 并选择决策模型即可完成配置。（需先构建前端，见下一步）
+模型由 Ollama 管理，不要把权重下载到仓库。首次使用执行：
 
-**备选 CLI 方式**：
+```bash
+brew install ollama
+
+# 终端 1：手动启动，不注册登录常驻服务
+OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 ollama serve
+
+# 终端 2：拉取并创建固定 16K 上下文别名
+ollama pull qwen3.5:9b
+ollama pull qwen3:8b
+ollama create tensile-qwen35:9b -f deployment/ollama/Modelfile.qwen35
+ollama create tensile-qwen3:8b -f deployment/ollama/Modelfile.qwen3
+```
+
+Web 默认使用 `tensile-qwen35:9b`。配置页可以手动切换到 `tensile-qwen3:8b` 或远程 `qwen3.7-max`；本地失败时不会自动调用远程服务。
+
+运行固定 Agent-only A/B（每个模型 20 个场景，5 个关键场景各3次）：
+
+```bash
+uv run python scripts/run_local_model_ab.py
+```
+
+报告和逐轮脱敏 trace 保存到 `data/08_runtime/local_model_ab/`。若要删除本地权重，先停止任务，再执行：
+
+```bash
+ollama rm tensile-qwen35:9b tensile-qwen3:8b qwen3.5:9b qwen3:8b
+```
+
+### 配置远程模型（可选）
+
+只有手动选择远程后端时才需要百炼 API Key。CLI 配置方式：
 
 ```bash
 # 交互式配置向导
@@ -191,7 +220,7 @@ python3 -m agent.setup
 python3 -m agent.setup --api-key sk-xxx --model qwen-max
 ```
 
-配置信息存储在 `agent/.env` 中（已 gitignored），不会提交到仓库。
+API Key 存储在 `agent/.env` 中（已 gitignored），不会提交到仓库；模型选择保存在同样已忽略的 `agent/config.local.yaml`。
 
 ### 运行分析
 
@@ -219,13 +248,15 @@ npm install
 npm run build
 cd ..
 
-# 2. 启动后端（同时托管 API 和前端页面）
+# 2. 确保另一个终端已运行 ollama serve，然后启动后端
 python3 -m agent.web_api
 
+# 启动参数可临时覆盖当前进程，不修改本机持久配置
+python3 -m agent.web_api --agent-backend local --agent-model tensile-qwen35:9b
+
 # 3. 浏览器打开 http://127.0.0.1:8765
-#    首次访问会自动弹出配置向导 (SetupDialog)
-#    输入百炼 API Key → 测试连接 → 选择决策模型 → 完成
-#    之后即可上传视频开始分析
+#    配置页可查看 Ollama 状态、已安装模型和当前模型 digest
+#    任务详情的“模型传输”区域可回放逐轮请求、工具调用和响应
 ```
 
 开发模式（前后端分离，支持热更新）：
@@ -257,14 +288,14 @@ cd web && npm run dev
 ### 模型切换示例
 
 ```bash
-# 使用远程千问 Max
-python3 -m agent.run --video xxx.mp4 --agent-model qwen-max
+# 使用远程千问 Max（必须显式指定后端）
+python3 -m agent.run --video xxx.mp4 --agent-backend remote --agent-model qwen3.7-max
 
 # 切换到本地模型
 python3 -m agent.run --video xxx.mp4 --agent-backend local
 
 # 本地指定具体模型
-python3 -m agent.run --video xxx.mp4 --agent-backend local --agent-model qwen3.5:9b
+python3 -m agent.run --video xxx.mp4 --agent-backend local --agent-model tensile-qwen3:8b
 ```
 
 ## 配置
@@ -273,24 +304,28 @@ python3 -m agent.run --video xxx.mp4 --agent-backend local --agent-model qwen3.5
 
 ```yaml
 agent:
-  backend: "remote"              # remote 或 local
+  backend: "local"               # 默认本地；远程必须手动选择
+  temperature: 0.2
   tolerance_seconds: 1.0         # 断裂时间窗口
   max_rounds: 10                 # 最大决策轮次
   remote:
     provider: "dashscope"
-    model: "qwen2.5-14b-instruct"
+    model: "qwen3.7-max"
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   local:
     provider: "ollama"
-    model: "qwen3.5:9b"
+    model: "tensile-qwen35:9b"
     base_url: "http://localhost:11434/v1"
+    reasoning_effort: "none"
 
 backend:                         # 微调模型推理服务
   api_url: "http://localhost:8000/v1"
   model: "minicpmv4_5"
 ```
 
-API Key 可通过 Web UI 的 SetupDialog 或 `agent/setup.py` 写入 `agent/.env`，不直接存储在配置文件中。`config.yaml` 的 `agent.remote.model` 同样可通过 Web 的 ConfigView → 修改决策模型来修改。
+API Key 可通过 Web UI 或 `agent/setup.py` 写入 `agent/.env`。Web 的持久选择写入被 Git 忽略的 `agent/config.local.yaml`；启动参数优先级最高但只影响当前进程。存在运行中或排队任务时禁止切换模型。
+
+决策模型的脱敏传输记录保存在 `data/08_runtime/llm_traces/<task-id>/`，包含实际 messages、tools、tool calls、usage 和耗时，不包含 API Key、Base64 或绝对路径。
 
 ## 测试
 
@@ -320,7 +355,7 @@ pytest tests/test_schema.py -v
 | 层 | 技术 |
 |---|---|
 | 语言 | Python 3.11 + TypeScript |
-| 决策模型 | Qwen2.5-14b（远程）/ Qwen3.5:7b（本地） |
+| 决策模型 | Qwen3.5-9B（本地默认）/ Qwen3-8B（本地对照）/ qwen3.7-max（远程可选） |
 | 视觉模型 | MiniCPM-V 4.5（HTTP API 调用） |
 | Agent 框架 | Native Function Calling + Pydantic v2 契约 |
 | 后端 | FastAPI + Uvicorn + SSE |

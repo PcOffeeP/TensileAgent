@@ -19,7 +19,12 @@ from agent.schema import FinalOutput, RunnerError, RunnerResult
 
 def load_config(config_path: str | Path = "agent/config.yaml") -> dict[str, Any]:
     """Load and return the YAML configuration at ``config_path``."""
-    with open(config_path, "r", encoding="utf-8") as f:
+    path = Path(config_path)
+    if path.resolve() == (Path(__file__).parent / "config.yaml").resolve():
+        from agent.config_util import load_config as load_effective_config
+
+        return load_effective_config()
+    with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
@@ -144,6 +149,8 @@ def run_one(
     agent_backend: str | None = None,
     agent_model: str | None = None,
     question: str | None = None,
+    trace_task_id: str | None = None,
+    agent_config_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the agent on a single video and return a ``RunnerResult`` dict.
 
@@ -181,12 +188,47 @@ def run_one(
         config["agent"].setdefault("remote", {})
         config["agent"].setdefault("local", {})
 
+        # Web tasks pin the complete decision-backend selection at creation
+        # time.  This prevents a later config file edit from changing an
+        # already queued task.  ``digest`` is provenance metadata and is not
+        # forwarded to the OpenAI-compatible client.
+        if agent_config_snapshot is not None:
+            snapshot_backend = agent_config_snapshot.get("backend")
+            if snapshot_backend not in {"local", "remote"}:
+                raise ValueError("agent_config_snapshot backend must be local or remote")
+            required_fields = ("provider", "model", "base_url", "reasoning_effort")
+            missing = [
+                field
+                for field in required_fields
+                if not isinstance(agent_config_snapshot.get(field), str)
+                or not agent_config_snapshot[field].strip()
+            ]
+            if missing:
+                raise ValueError(
+                    f"agent_config_snapshot missing fields: {', '.join(missing)}"
+                )
+            reasoning_effort = agent_config_snapshot["reasoning_effort"]
+            if reasoning_effort not in {"none", "low", "medium", "high"}:
+                raise ValueError("agent_config_snapshot has invalid reasoning_effort")
+            if snapshot_backend == "local" and not agent_config_snapshot.get("digest"):
+                raise ValueError("local agent_config_snapshot requires digest")
+            config["agent"]["backend"] = snapshot_backend
+            config["agent"][snapshot_backend] = {
+                field: agent_config_snapshot[field] for field in required_fields
+            }
+
         # 允许 CLI 参数覆盖 agent 后端和模型
         if agent_backend is not None:
             config["agent"]["backend"] = agent_backend
         if agent_model is not None:
             backend = agent_backend or config["agent"]["backend"]
             config["agent"][backend]["model"] = agent_model
+
+        config["_runtime"] = {
+            "task_id": trace_task_id or resolved_id,
+            "llm_trace_root": str(_runtime_dir(work_dir, "llm_traces")),
+            "model_digest": (agent_config_snapshot or {}).get("digest"),
+        }
 
         stage = "input"
         video_meta = build_video_meta(path, video_id=resolved_id)
