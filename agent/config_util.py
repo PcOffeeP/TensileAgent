@@ -120,7 +120,6 @@ _MINIMAL_CONFIG: dict[str, Any] = {
         "backend": "remote",
         "tolerance_seconds": 1.0,
         "max_rounds": 10,
-        "confidence_threshold": 0.5,
         "max_low_conf_rounds": 2,
         "temperature": 0.7,
         "remote": {

@@ -72,20 +72,6 @@ TOOLS_SCHEMA: list[dict[str, Any]] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Internal confidence helpers
-# ---------------------------------------------------------------------------
-def _confidence_to_level(confidence: float) -> str:
-    """Map a numeric confidence to the four-level scale."""
-    if confidence >= 0.90:
-        return "高"
-    if confidence >= 0.70:
-        return "中"
-    if confidence >= 0.50:
-        return "低"
-    return "不可信"
-
-
-# ---------------------------------------------------------------------------
 # IterativeAgent
 # ---------------------------------------------------------------------------
 class IterativeAgent:
@@ -105,6 +91,7 @@ class IterativeAgent:
         inference_client: InferenceClient | None = None,
         event_callback: Callable[[dict], None] | None = None,
         work_dir: str | Path | None = None,
+        request_evidence: bool = False,
     ) -> None:
         self.llm = llm_client
         self.video_meta = video_meta
@@ -114,7 +101,6 @@ class IterativeAgent:
         agent_cfg = config.get("agent", {})
         self.max_rounds = agent_cfg.get("max_rounds", 10)
         self.tolerance = agent_cfg.get("tolerance_seconds", 1.0)
-        self.confidence_threshold = agent_cfg.get("confidence_threshold", 0.5)
         self.max_low_conf_rounds = agent_cfg.get("max_low_conf_rounds", 2)
         self.temperature = agent_cfg.get("temperature", 0.7)
 
@@ -131,12 +117,12 @@ class IterativeAgent:
         self.best_positive_round: dict[str, Any] | None = None
         self.coverage_index = 0
         self.pending_recheck_range: list[float] | None = None
-        self.direct_no_fracture: bool = False
 
         self.clip_builder = clip_builder or FfmpegVideoClipBuilder()
         self.inference_client = inference_client or self._default_inference_client()
         self.event_callback = event_callback
         self.work_dir = work_dir
+        self.request_evidence = request_evidence
 
     # ------------------------------------------------------------------
     # Event emission
@@ -198,6 +184,7 @@ class IterativeAgent:
                 "fracture_type",
                 "location",
                 "confidence",
+                "visual_evidence",
                 "unrecognized_reason",
                 "rounds",
                 "history",
@@ -619,10 +606,8 @@ class IterativeAgent:
             return True, "模型明确报告无法识别"
 
         if status == "no_fracture":
-            if self.direct_no_fracture:
-                return True, "INITIAL 全量扫描高置信度无断裂，直接结束"
             if self._has_complete_no_fracture_coverage():
-                return True, "五个固定重叠区间均得到高于门槛的未断裂结果"
+                return True, "五个固定重叠区间均得到合法的未断裂结果"
             return False, "尚未完成五个固定重叠区间的未断裂覆盖检查"
 
         # -- fracture: check evidence threshold and convergence --
@@ -754,11 +739,9 @@ class IterativeAgent:
 
             if self.state == "COVERAGE":
                 expected = self._coverage_ranges()[self.coverage_index]
-                confidence = float(model_output.get("confidence", 0.0))
                 if (
                     self._same_range(result.get("sample_range"), expected)
                     and model_output.get("type") == FractureType.NO_FRACTURE
-                    and confidence >= self.confidence_threshold
                 ):
                     self.coverage_index += 1
                     self.no_fracture_count = self.coverage_index
@@ -775,20 +758,8 @@ class IterativeAgent:
             )
 
             if is_global_scope:
-                confidence = float(model_output.get("confidence", 0.0))
-                fracture_type = model_output.get("type")
-
-                # 明确无断裂 + 高置信度 → 直接结束
-                if (
-                    fracture_type == FractureType.NO_FRACTURE
-                    and confidence >= self.confidence_threshold
-                ):
-                    self.state = "NO_FRACTURE"
-                    self.direct_no_fracture = True
-                    self.no_fracture_count = 0
-                    return
-
-                # 不明确（低置信度或异常类型）→ 进入 COVERAGE 进一步验证
+                # A single global negative only starts deterministic coverage;
+                # it can never terminate the whole-video analysis directly.
                 self.state = "COVERAGE"
                 self.coverage_index = 0
                 self.no_fracture_count = 0
@@ -824,14 +795,9 @@ class IterativeAgent:
                 self.low_conf_count = 0
                 self.focus_miss_count = 0
             else:
-                confidence = model_output.get("confidence", 0.5)
-                if self._is_low_confidence(confidence):
-                    self.low_conf_count += 1
-                    result["conflict_handled"] = "discarded_low_confidence"
-                else:
-                    self.candidate = [min(c0, n0), max(c1, n1)]
-                    self.conflict_count += 1
-                    result["conflict_handled"] = "expanded_candidate"
+                self.candidate = [min(c0, n0), max(c1, n1)]
+                self.conflict_count += 1
+                result["conflict_handled"] = "expanded_candidate"
 
                 if self.low_conf_count >= self.max_low_conf_rounds:
                     self.candidate = self._expand_candidate(self.candidate)
@@ -927,7 +893,6 @@ class IterativeAgent:
                     and self._same_range(result.get("sample_range"), expected)
                     and output.get("has_fracture") is False
                     and output.get("type") == FractureType.NO_FRACTURE
-                    and float(output.get("confidence", 0.0)) >= self.confidence_threshold
                 ):
                     matched = True
                     break
@@ -1007,7 +972,7 @@ class IterativeAgent:
             # No positive evidence – downgrade.
             return self._build_non_fracture_args({
                 "status": "no_fracture",
-                "confidence": tool_args.get("confidence", 0.5),
+                "confidence": None,
                 "downgrade_reason": "no_positive_evidence_for_fracture_status",
             })
 
@@ -1015,7 +980,7 @@ class IterativeAgent:
         logger.warning("Unknown terminate status %s; falling back to no_fracture", status)
         return self._build_non_fracture_args({
             "status": "no_fracture",
-            "confidence": 0.0,
+            "confidence": None,
             "downgrade_reason": f"unknown_terminate_status_{status}",
         })
 
@@ -1086,7 +1051,7 @@ class IterativeAgent:
                     )
                     return self._build_non_fracture_args({
                         "status": "no_fracture",
-                        "confidence": 0.0,
+                        "confidence": None,
                         "downgrade_reason": reason,
                     })
 
@@ -1105,13 +1070,12 @@ class IterativeAgent:
                 else:
                     voted_location = "unknown"
 
-        final_confidence = self._aggregate_confidence(positive_rounds)
         return {
             "status": "fracture",
             "time_range": best_time_range,
             "fracture_type": voted_type,
             "location": voted_location,
-            "confidence": final_confidence,
+            "confidence": self._build_confidence_breakdown("fracture", positive_rounds),
             "unrecognized_reason": None,
             # Internal metadata for frame_range fallback in _finalize
             "_frame_range": best_frame_range,
@@ -1129,7 +1093,7 @@ class IterativeAgent:
             "time_range": None,
             "fracture_type": None,
             "location": None,
-            "confidence": tool_args.get("confidence", 0.5),
+            "confidence": self._build_confidence_breakdown("no_fracture", []),
             "unrecognized_reason": None,
         }
         if "downgrade_reason" in tool_args:
@@ -1162,7 +1126,7 @@ class IterativeAgent:
                 )
             return self._finalize(self._build_non_fracture_args({
                 "status": "no_fracture",
-                "confidence": 0.0,
+                "confidence": self._build_confidence_breakdown("no_fracture", []),
             }))
 
         # Exhaustion cannot manufacture a fracture from insufficient or wide
@@ -1195,6 +1159,7 @@ class IterativeAgent:
             "fracture_type": args.get("fracture_type") if status == "fracture" else None,
             "location": args.get("location") if status == "fracture" else None,
             "confidence": args.get("confidence"),
+            "visual_evidence": self._build_visual_evidence(),
             "unrecognized_reason": args.get("unrecognized_reason"),
         }
         # Validate against the contract schema; on failure, downgrade to unrecognized.
@@ -1208,6 +1173,7 @@ class IterativeAgent:
             output["fracture_type"] = None
             output["location"] = None
             output["confidence"] = None
+            output["visual_evidence"] = self._build_visual_evidence()
             output["unrecognized_reason"] = "invalid_model_output"
             output["downgrade_reason"] = reason
 
@@ -1266,19 +1232,75 @@ class IterativeAgent:
             return [start_frame, end_frame]
         return None
 
-    def _aggregate_confidence(self, positive_rounds: list[dict[str, Any]]) -> float:
-        """Average model confidence across positive rounds."""
-        if not positive_rounds:
-            return 0.0
-        values = [
-            r["result"]["model_output"].get("confidence", 0.0)
-            for r in positive_rounds
-        ]
-        return round(sum(values) / len(values), 4)
+    def _build_confidence_breakdown(
+        self, status: str, positive_rounds: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Build Agent-level confidence without inventing probabilities.
 
-    def _is_low_confidence(self, confidence: float) -> bool:
-        """Return whether ``confidence`` is below the configured threshold."""
-        return confidence < self.confidence_threshold
+        Numeric values remain null until a source-isolated calibrator has been
+        fitted. ``evidence_level`` is a deterministic diagnostic category.
+        """
+        if status == "fracture":
+            level = "high" if len(positive_rounds) >= 2 else "low"
+        elif status == "no_fracture":
+            level = "high" if self._has_complete_no_fracture_coverage() else "insufficient"
+        else:
+            level = "insufficient"
+        return {
+            "decision": None,
+            "localization": None,
+            "classification": None,
+            "overall": None,
+            "evidence_level": level,
+            "calibration_version": None,
+        }
+
+    def _build_visual_evidence(self) -> dict[str, Any]:
+        summaries: list[str] = []
+        references: list[dict[str, Any]] = []
+        for index, entry in enumerate(self.history):
+            result = entry.get("result", {}) or {}
+            summary = result.get("visual_evidence_summary")
+            if isinstance(summary, str) and summary.strip():
+                diagnostics = result.get("diagnostics") or {}
+                evidence_reference = result.get("visual_evidence_reference") or {}
+                frames = evidence_reference.get("frames") or []
+                frame_timestamps = [
+                    float(frame["timestamp"])
+                    for frame in frames
+                    if isinstance(frame, dict) and isinstance(frame.get("timestamp"), (int, float))
+                ]
+                sample_range = list(result.get("sample_range") or entry.get("sample_range") or [])
+                clip_hash = diagnostics.get("temp_video_hash")
+                request_id = evidence_reference.get("request_id")
+                if (
+                    len(sample_range) != 2
+                    or not frame_timestamps
+                    or not isinstance(clip_hash, str)
+                    or not clip_hash
+                    or not isinstance(request_id, str)
+                    or not request_id
+                ):
+                    continue
+                summaries.append(summary.strip())
+                references.append({
+                    "round": index,
+                    "sample_range": sample_range,
+                    "frame_timestamps": frame_timestamps,
+                    "clip_hash": clip_hash,
+                    "request_id": request_id,
+                })
+        if summaries:
+            return {
+                "status": "available",
+                "summary": " ".join(dict.fromkeys(summaries)),
+                "references": references,
+            }
+        return {
+            "status": "unavailable" if self.request_evidence else "not_requested",
+            "summary": None,
+            "references": [],
+        }
 
     # ------------------------------------------------------------------
     # Tool execution
@@ -1300,6 +1322,37 @@ class IterativeAgent:
         inference_result: InferenceResult | None = None
 
         def _finalize(result: dict[str, Any]) -> dict[str, Any]:
+            if (
+                self.request_evidence
+                and result.get("ok") is True
+                and result.get("validation_error") is None
+                and clip_result is not None
+                and "visual_evidence_summary" not in result
+                and hasattr(self.inference_client, "infer_evidence")
+            ):
+                evidence_result = self.inference_client.infer_evidence(clip_result)  # type: ignore[attr-defined]
+                if evidence_result.ok:
+                    evidence_pp = evidence_result.preprocessing or {}
+                    evidence_frames = evidence_pp.get("frames") or []
+                    main_frames = (
+                        (inference_result.preprocessing or {}).get("frames")
+                        if inference_result is not None
+                        else []
+                    ) or []
+                    evidence_timestamps = [frame.get("timestamp") for frame in evidence_frames]
+                    main_timestamps = [frame.get("timestamp") for frame in main_frames]
+                    if evidence_timestamps != main_timestamps:
+                        result["visual_evidence_error"] = (
+                            "evidence preprocessing frames differ from the main analysis frames"
+                        )
+                    else:
+                        result["visual_evidence_summary"] = evidence_result.summary
+                        result["visual_evidence_reference"] = {
+                            "request_id": evidence_pp.get("request_id"),
+                            "frames": evidence_frames,
+                        }
+                else:
+                    result["visual_evidence_error"] = evidence_result.error
             elapsed = time.perf_counter() - round_start
             diagnostics = self._build_round_diagnostics(
                 result=result,
@@ -1327,10 +1380,9 @@ class IterativeAgent:
                 )
             )
 
-        prompt = args.get("prompt") or build_sample_and_infer_prompt(
+        prompt = build_sample_and_infer_prompt(
             sample_range=sample_range,
             config=self.config,
-            previous_context=f"当前候选区间为 {self.candidate}",
         )
 
         # Runtime length re-check against configurable limit (default 4096).
@@ -1427,10 +1479,10 @@ class IterativeAgent:
             )
         server_frames: list[dict[str, Any]] = preprocessing["frames"]
 
-        # Derive confidence level.
+        # Structurally valid output with authoritative frame metadata is usable
+        # evidence. This category is code-derived, not model self-confidence.
         model_output = result["model_output"] or {}
-        confidence = model_output.get("confidence", 0.5)
-        result["round_confidence_level"] = _confidence_to_level(confidence)
+        result["round_confidence_level"] = "高"
 
         has_fracture = (
             model_output.get("has_fracture") is True
@@ -1596,7 +1648,6 @@ class IterativeAgent:
                 "fracture_between": None,
                 "type": "未断裂",
                 "location": None,
-                "confidence": 0.5,
             })
         return LlamaFactoryInferenceClient(
             model=self.config.get("backend", {}).get("name", "minicpmv4_5"),

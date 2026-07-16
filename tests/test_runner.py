@@ -157,7 +157,7 @@ class TestRunOne:
         assert result["error"] is None
         assert result["result"]["video_id"] == "sample"
         assert result["result"]["status"] == "no_fracture"
-        assert result["result"]["confidence"] == 0.95
+        assert result["result"]["confidence"] is None
         mock_load_config.assert_called_once_with("agent/config.yaml")
         mock_build_video_meta.assert_called_once_with(video_path, video_id="sample")
         mock_create_llm_client.assert_called_once_with(config)

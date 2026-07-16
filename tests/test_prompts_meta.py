@@ -62,12 +62,11 @@ def test_build_sample_and_infer_prompt_has_required_elements():
     prompt = build_sample_and_infer_prompt(sample_range=[10.0, 20.0], config=config)
     # Contract: runtime user prompt does NOT contain <video> literal
     assert "<video>" not in prompt
-    # Sample range is still present
-    assert "[10.0, 20.0]" in prompt
-    # v2 prompt reports max frames via this wording
-    assert "最多选择 8 帧" in prompt
+    # Production prompt is fixed; range and runtime sampling details stay out.
+    assert "[10.0, 20.0]" not in prompt
     # v2 prompt does not expose FPS or video_maxlen as key=value
     assert "video_fps" not in prompt
     assert "video_maxlen=" not in prompt
     # v2 prompt does not use the old "实际采样" phrasing
     assert "实际采样" not in prompt
+    assert prompt == build_sample_and_infer_prompt(sample_range=[0.0, 5.0], config={})

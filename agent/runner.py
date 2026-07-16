@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 import yaml
 
+from agent.interaction import parse_user_intent, project_result
 from agent.schema import FinalOutput, RunnerError, RunnerResult
 
 
@@ -142,6 +143,7 @@ def run_one(
     work_dir: str | Path | None = None,
     agent_backend: str | None = None,
     agent_model: str | None = None,
+    question: str | None = None,
 ) -> dict[str, Any]:
     """Run the agent on a single video and return a ``RunnerResult`` dict.
 
@@ -161,6 +163,18 @@ def run_one(
 
     stage = "configuration"
     try:
+        intent = parse_user_intent(question)
+        if intent.action == "unsupported":
+            return {
+                "ok": False,
+                "result": None,
+                "error": {
+                    "stage": "input",
+                    "code": "unsupported_intent",
+                    "message": intent.ambiguity or "未识别到视频分析需求",
+                },
+                "response": project_result({}, intent),
+            }
         config = load_config(config_path)
         config.setdefault("agent", {})
         config["agent"].setdefault("backend", "remote")
@@ -197,6 +211,7 @@ def run_one(
             inference_client=inference_client,
             event_callback=event_callback,
             work_dir=work_dir,
+            request_evidence=intent.wants_evidence,
         )
         raw_result = agent.run()
         # ``IterativeAgent.run()`` returns either a dict of public final-output
@@ -219,11 +234,17 @@ def run_one(
 
         # Normal success path: filter to the public FinalOutput contract fields.
         _FO_FIELDS = {"video_id", "status", "time_range", "fracture_type",
-                       "location", "confidence", "unrecognized_reason"}
+                       "location", "confidence", "visual_evidence", "unrecognized_reason"}
         fo_dict = {k: v for k, v in raw_result.items() if k in _FO_FIELDS}
-        return RunnerResult(
+        # Historical agents returned a model-supplied scalar. It is not a
+        # calibrated Agent confidence and must not be re-labelled as one.
+        if isinstance(fo_dict.get("confidence"), (int, float)):
+            fo_dict["confidence"] = None
+        envelope = RunnerResult(
             ok=True, result=FinalOutput(**fo_dict)
         ).model_dump()
+        envelope["response"] = project_result(envelope["result"], intent)
+        return envelope
     except Exception as exc:
         exc._stage = stage  # type: ignore[attr-defined]
         if event_callback is not None:
@@ -252,6 +273,7 @@ def run_batch(
     work_dir: str | Path | None = None,
     agent_backend: str | None = None,
     agent_model: str | None = None,
+    question: str | None = None,
 ) -> list[dict[str, Any]]:
     """Run the agent sequentially on multiple videos.
 
@@ -273,6 +295,7 @@ def run_batch(
                 work_dir=work_dir,
                 agent_backend=agent_backend,
                 agent_model=agent_model,
+                question=question,
             )
         )
     return results

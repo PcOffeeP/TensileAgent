@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import pytest
 
-from agent.prompts import SYSTEM_PROMPT, build_user_prompt
+from agent.prompts import PRODUCTION_USER_PROMPT, PROMPT_CONTRACT_HASH, SYSTEM_PROMPT, build_user_prompt
 
 
-def test_system_prompt_contains_five_fields():
+def test_system_prompt_contains_exact_four_field_contract():
     assert "has_fracture" in SYSTEM_PROMPT
     assert "fracture_between" in SYSTEM_PROMPT
     assert "type" in SYSTEM_PROMPT
     assert "location" in SYSTEM_PROMPT
-    assert "confidence" in SYSTEM_PROMPT
+    assert "confidence" not in SYSTEM_PROMPT
+    assert "四个字段" in SYSTEM_PROMPT
 
 
-def test_system_prompt_contains_eight_frames():
-    assert "8 帧" in SYSTEM_PROMPT or "8帧" in SYSTEM_PROMPT
-    assert "VIDEO_MAXLEN=8" in SYSTEM_PROMPT or "最多选择 8 帧" in SYSTEM_PROMPT
+def test_contract_hash_is_sha256():
+    assert len(PROMPT_CONTRACT_HASH) == 64
 
 
 def test_system_prompt_does_not_contain_fps_or_thirty_six():
@@ -25,24 +25,12 @@ def test_system_prompt_does_not_contain_fps_or_thirty_six():
     assert "实际采样" not in SYSTEM_PROMPT
 
 
-def test_system_prompt_covers_five_legal_combinations():
-    assert "正常断裂且可定位" in SYSTEM_PROMPT
-    assert "确认未断裂" in SYSTEM_PROMPT
-    assert "未夹紧" in SYSTEM_PROMPT
-    assert "无法确定是否断裂" in SYSTEM_PROMPT
-    assert "确认断裂但时间不可靠" in SYSTEM_PROMPT
-
-
-def test_build_user_prompt_contains_range_but_no_video_placeholder():
-    prompt = build_user_prompt(sample_range=[143.9, 146.9])
-    assert "<video>" not in prompt
-    assert "[143.9, 146.9]" in prompt
-
-
-def test_build_user_prompt_contains_eight_frames():
-    prompt = build_user_prompt(sample_range=[143.9, 146.9])
-    assert "8" in prompt
-    assert "视频处理器" in prompt
+def test_build_user_prompt_is_fixed_across_ranges():
+    first = build_user_prompt(sample_range=[143.9, 146.9])
+    second = build_user_prompt(sample_range=[0.0, 10.0])
+    assert first == second == PRODUCTION_USER_PROMPT
+    assert "<video>" not in first
+    assert "143.9" not in first
 
 
 def test_build_user_prompt_does_not_contain_fps_or_thirty_six():

@@ -19,6 +19,8 @@ from agent.inference import (
     _redact_data_url,
     create_inference_client,
 )
+from agent.contract import visual_contract_hash
+from agent.prompts import PRODUCTION_USER_PROMPT
 from agent.sampling import ClipBuildResult
 
 
@@ -42,7 +44,6 @@ def test_mock_inference_client_returns_dict():
         "fracture_between": [17, 18],
         "type": "韧性断裂",
         "location": "inside_gauge",
-        "confidence": 0.92,
     })
     result = client.infer("any.mp4", "prompt")
     assert result.ok
@@ -54,14 +55,14 @@ def test_mock_inference_client_returns_dict():
 def test_mock_inference_client_parses_json_string():
     client = MockInferenceClient(
         '{"has_fracture": false, "fracture_between": null, "type": "未断裂", '
-        '"location": null, "confidence": 0.6}'
+        '"location": null}'
     )
     result = client.infer("any.mp4", "prompt")
     assert result.ok
     assert result.model_output is not None
     assert result.model_output["has_fracture"] is False
     assert result.model_output["location"] is None
-    assert result.model_output["confidence"] == pytest.approx(0.6)
+    assert set(result.model_output) == {"has_fracture", "fracture_between", "type", "location"}
 
 
 def test_mock_inference_client_callable_response():
@@ -72,7 +73,6 @@ def test_mock_inference_client_callable_response():
             "fracture_between": [0, 1],
             "type": "脆性断裂",
             "location": "outside_gauge",
-            "confidence": 0.8,
         }
 
     client = MockInferenceClient(responder)
@@ -92,7 +92,6 @@ def test_mock_inference_client_accepts_clip_build_result():
             "fracture_between": None,
             "type": "未断裂",
             "location": None,
-            "confidence": 0.7,
         }
 
     client = MockInferenceClient(responder)
@@ -191,7 +190,7 @@ def test_llama_factory_inference_client_sends_base64(tmp_path: Path):
         mock_completion.choices = [MagicMock()]
         mock_completion.choices[0].message.content = (
             '{"has_fracture": true, "fracture_between": [2, 3], '
-            '"type": "韧性断裂", "location": "inside_gauge", "confidence": 0.95}'
+            '"type": "韧性断裂", "location": "inside_gauge"}'
         )
         return mock_completion
 
@@ -206,7 +205,7 @@ def test_llama_factory_inference_client_sends_base64(tmp_path: Path):
     assert result.ok
     assert result.model_output is not None
     assert result.model_output["has_fracture"] is True
-    assert result.model_output["confidence"] == pytest.approx(0.95)
+    assert set(result.model_output) == {"has_fracture", "fracture_between", "type", "location"}
     assert captured["model"] == "minicpm-test"
 
     # Message ordering: system first, then user with video_url before text.
@@ -215,14 +214,38 @@ def test_llama_factory_inference_client_sends_base64(tmp_path: Path):
     user_content = captured["messages"][1]["content"]
     assert user_content[0]["type"] == "video_url"
     assert user_content[1]["type"] == "text"
-    assert user_content[1]["text"] == "analyze this"
-
+    assert user_content[1]["text"] == PRODUCTION_USER_PROMPT
+    assert user_content[1]["text"] != "analyze this"
     url = user_content[0]["video_url"]["url"]
     assert url.startswith("data:video/mp4;base64,")
     encoded = url.split(",", 1)[1]
     assert base64.b64decode(encoded) == _FAKE_MP4_HEADER + raw_content
     assert captured["extra_body"] is None
 
+
+def test_evidence_inference_requires_and_returns_actual_frame_metadata(tmp_path: Path):
+    video = tmp_path / "clip.mp4"
+    _write_fake_mp4(video)
+    preprocessing = {
+        "request_id": "evidence-request",
+        "processor_version": "minicpmv4.5/0.1",
+        "max_frames": 8,
+        "frames": [{"index": i, "timestamp": float(i)} for i in range(8)],
+        "deployment_manifest": TEST_DEPLOYMENT_MANIFEST,
+    }
+    response = MagicMock()
+    response.choices = [MagicMock()]
+    response.choices[0].message.content = "试样逐渐伸长后发生分离。"
+    response.model_dump.return_value = {"preprocessing": preprocessing}
+
+    with patch("agent.inference.OpenAI") as mock_openai:
+        mock_openai.return_value.chat.completions.create.return_value = response
+        result = LlamaFactoryInferenceClient(model="minicpm-test").infer_evidence(str(video))
+
+    assert result.ok is True
+    assert result.preprocessing is not None
+    assert result.preprocessing["request_id"] == "evidence-request"
+    assert len(result.preprocessing["frames"]) == 8
 
 def test_llama_factory_inference_client_clip_build_result_sends_manifest(
     tmp_path: Path,
@@ -242,7 +265,7 @@ def test_llama_factory_inference_client_clip_build_result_sends_manifest(
         mock_completion.choices = [MagicMock()]
         mock_completion.choices[0].message.content = (
             '{"has_fracture": false, "fracture_between": null, '
-            '"type": "未断裂", "location": null, "confidence": 0.8}'
+            '"type": "未断裂", "location": null}'
         )
         return mock_completion
 
@@ -279,7 +302,7 @@ def test_llama_factory_inference_client_transport_retry(tmp_path: Path, monkeypa
     mock_completion.choices = [MagicMock()]
     mock_completion.choices[0].message.content = (
         '{"has_fracture": false, "fracture_between": null, '
-        '"type": "未断裂", "location": null, "confidence": 0.8}'
+        '"type": "未断裂", "location": null}'
     )
 
     mock_client = MagicMock()
@@ -367,7 +390,7 @@ def test_llama_factory_inference_client_correction_then_success(
         else:
             completion.choices[0].message.content = (
                 '{"has_fracture": false, "fracture_between": null, '
-                '"type": "未断裂", "location": null, "confidence": 0.7}'
+                '"type": "未断裂", "location": null}'
             )
         return completion
 
@@ -664,7 +687,7 @@ def test_llama_factory_inference_client_extracts_preprocessing(tmp_path: Path):
         mock_completion.choices = [MagicMock()]
         mock_completion.choices[0].message.content = (
             '{"has_fracture": false, "fracture_between": null, '
-            '"type": "未断裂", "location": null, "confidence": 0.8}'
+            '"type": "未断裂", "location": null}'
         )
         # Inject preprocessing via model_extra
         mock_completion.model_extra = {"preprocessing": preprocessing_payload}
@@ -709,7 +732,7 @@ def test_llama_factory_inference_client_extracts_invalid_preprocessing(
         mock_completion.choices = [MagicMock()]
         mock_completion.choices[0].message.content = (
             '{"has_fracture": false, "fracture_between": null, '
-            '"type": "未断裂", "location": null, "confidence": 0.8}'
+            '"type": "未断裂", "location": null}'
         )
         mock_completion.model_extra = {"preprocessing": preprocessing_payload}
 
@@ -744,7 +767,7 @@ def test_llama_factory_inference_client_no_preprocessing_is_graceful(
             class _Message:
                 content = (
                     '{"has_fracture": false, "fracture_between": null, '
-                    '"type": "未断裂", "location": null, "confidence": 0.8}'
+                    '"type": "未断裂", "location": null}'
                 )
             message = _Message()
 
@@ -795,7 +818,7 @@ def test_inference_result_includes_diagnostics(tmp_path: Path):
         mock_completion.choices = [MagicMock()]
         mock_completion.choices[0].message.content = (
             '{"has_fracture": false, "fracture_between": null, '
-            '"type": "未断裂", "location": null, "confidence": 0.8}'
+            '"type": "未断裂", "location": null}'
         )
         return mock_completion
 
@@ -837,7 +860,7 @@ def test_diagnostics_transport_retries(tmp_path: Path, monkeypatch):
     mock_completion.choices = [MagicMock()]
     mock_completion.choices[0].message.content = (
         '{"has_fracture": false, "fracture_between": null, '
-        '"type": "未断裂", "location": null, "confidence": 0.8}'
+        '"type": "未断裂", "location": null}'
     )
 
     mock_client = MagicMock()
@@ -873,7 +896,7 @@ def test_diagnostics_do_not_leak_base64(tmp_path: Path):
         mock_completion.choices = [MagicMock()]
         mock_completion.choices[0].message.content = (
             '{"has_fracture": false, "fracture_between": null, '
-            '"type": "未断裂", "location": null, "confidence": 0.8}'
+            '"type": "未断裂", "location": null}'
         )
         return mock_completion
 
@@ -908,4 +931,6 @@ TEST_DEPLOYMENT_MANIFEST = {
     "config_fingerprint": "sha256:test",
     "runtime_device": "cpu",
     "runtime_dtype": "float32",
+    "contract_version": "tensile-vlm/v1",
+    "prompt_contract_hash": visual_contract_hash(),
 }

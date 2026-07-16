@@ -48,14 +48,14 @@ TensileAgent 的核心是一个**两阶段迭代收敛**过程：
 │                    Meta-Agent 决策层                              │
 │                    (Qwen 系列 LLM)                               │
 │                                                                  │
-│  第 1 轮 ──── sample_and_infer([0, 60s], "检查是否断裂")          │
-│  第 2 轮 ──── sample_and_infer([20s, 40s], "检查这个区间")       │
-│  第 3 轮 ──── sample_and_infer([28s, 32s], "精确定位")          │
+│  第 1 轮 ──── sample_and_infer([0, 60s], task_mode="analyze")    │
+│  第 2 轮 ──── sample_and_infer([20s, 40s], task_mode="analyze") │
+│  第 3 轮 ──── sample_and_infer([28s, 32s], task_mode="analyze") │
 │  ...        （最多 10 轮，逐步收敛）                              │
 │                                                                  │
 │  每轮 Meta-Agent 决定：                                           │
 │  ① 裁剪哪段视频                                                 │
-│  ② 用什么措辞提问                                               │
+│  ② 是否继续缩小、扩展或覆盖检查                                  │
 │  ③ 是否已经有足够证据可以下结论                                  │
 └──────────────────────┬───────────────────────────────────────────┘
                        │ 每轮：裁剪视频片段 → 编码 → HTTP 调用
@@ -65,8 +65,8 @@ TensileAgent 的核心是一个**两阶段迭代收敛**过程：
 │                    (HTTP API 调用远程推理服务)                     │
 │                                                                  │
 │  输入：视频片段（最多 8 帧）+ 文本提示                            │
-│  输出：五字段 JSON                                               │
-│    { has_fracture, fracture_between, type, location, confidence }│
+│  输出：训练一致的严格四字段 JSON                                  │
+│    { has_fracture, fracture_between, type, location }            │
 │                                                                  │
 │  将帧索引 [i, j] 映射为真实时间戳 [t0, t1]                       │
 └──────────────────────────────────────────────────────────────────┘
@@ -112,7 +112,7 @@ Meta-Agent 由一个有限状态机驱动，管理从开始到结论的完整生
 Meta-Agent 每轮调用 `sample_and_infer` 工具，内部依次执行：
 
 ```
-Meta-Agent 决定要检查的区间 [start, end] 和提示词
+Meta-Agent 只决定要检查的区间 [start, end]；视觉 Prompt 由程序固定
       │
       ▼
   ① 视频裁剪 ──  ffmpeg 裁剪出 [start, end] 的连续片段
@@ -121,7 +121,7 @@ Meta-Agent 决定要检查的区间 [start, end] 和提示词
   ② 编码传输 ──  片段编码为 data:video/mp4;base64
       │             POST 到推理服务（OpenAI-compatible 接口）
       ▼
-  ③ 模型推理 ──  MiniCPM-V 4.5 分析视频，返回五字段 JSON
+  ③ 模型推理 ──  MiniCPM-V 4.5 分析视频，返回四字段 JSON
       │             例如：{has_fracture:true, fracture_between:[42,43], ...}
       ▼
   ④ 时间映射 ──  帧索引 [42,43] → 真实时间戳 [t0, t1]
@@ -137,7 +137,7 @@ Meta-Agent 决定要检查的区间 [start, end] 和提示词
 
 | 方面 | 说明 |
 |------|------|
-| **分层解耦** | Agent 和视觉模型只通过 HTTP API + 五字段 JSON 契约交互，可独立开发部署 |
+| **分层解耦** | Agent 和视觉模型通过 HTTP API + 版本化四字段 JSON 契约交互；用户原话和 Planner Prompt 不进入视觉调用 |
 | **收敛保证** | 每次 fracture 结果会缩小候选区间；冲突或漏检会主动扩展区间 |
 | **终止条件** | 候选窗口 ≤1s（fracture）、5 个覆盖全通过（no_fracture）、超 10 轮（unrecognized） |
 | **错误隔离** | 基础设施故障连续 2 次 → 强制终止，不伪装为 unrecognized |
@@ -198,6 +198,10 @@ python3 -m agent.setup --api-key sk-xxx --model qwen-max
 ```bash
 # CLI 单视频分析
 python3 -m agent.run --video data/01_videos/video_0001.mp4
+
+# 使用自然语言指定所需回答；仅请求原因时会额外运行固定 Evidence Prompt
+python3 -m agent.run --video data/01_videos/video_0001.mp4 \
+  --question "这个试样什么时候断的？为什么这样判断？"
 
 # CLI 批量分析
 python3 -m agent.run --videos-dir data/01_videos
@@ -307,7 +311,9 @@ pytest tests/test_schema.py -v
 |------|------|
 | **[mVllm_2](../mVllm_2)** | MiniCPM-V 4.5 微调流水线（数据准备、训练、评估） |
 
-`mVllm_2` 包含完整的数据流水线和训练配置。TensileAgent 通过 HTTP API 调用 `mVllm_2` 部署的推理服务，两者通过严格的五字段 JSON 契约解耦。
+`mVllm_2` 包含完整的数据流水线和训练配置，并维护 `tensile-vlm/v1` 权威契约。MiniCPM 单轮只返回四字段；TensileAgent 在多轮证据基础上形成业务结果：`has_fracture`、`time_range`、`type`、`location`、分项 `confidence` 和按需 `visual_evidence`。confidence 未完成源视频隔离校准前只显示证据等级，数值保持 `null`。
+
+生产服务的 `deployment_manifest` 必须同时携带 `contract_version` 和 `prompt_contract_hash`。Agent 会将它们与本地固定契约比较；缺失或不一致时拒绝使用该轮结果，避免 Prompt、模型服务和客户端静默漂移。
 
 ## 技术栈
 

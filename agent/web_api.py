@@ -53,10 +53,12 @@ class TaskModel(BaseModel):
     video_name: str = ""
     video_path: str = ""
     config_path: str = ""
+    question: str = "请完整分析这段拉伸试验视频"
     created_at: str = ""
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
     result: Optional[dict] = None
+    response: Optional[dict] = None
     error: Optional[dict] = None
     event_summary: Optional[dict] = None
 
@@ -68,10 +70,12 @@ class PublicTask(BaseModel):
     status: str
     video_id: str
     video_name: str = ""
+    question: str = "请完整分析这段拉伸试验视频"
     created_at: str
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
     result: Optional[dict] = None
+    response: Optional[dict] = None
     error: Optional[dict] = None
     event_summary: Optional[dict] = None
 
@@ -155,10 +159,12 @@ def _save_task(task: TaskModel):
         status=task.status,
         video_id=task.video_id,
         video_name=task.video_name,
+        question=task.question,
         created_at=task.created_at,
         started_at=task.started_at,
         finished_at=task.finished_at,
         result=_sanitize_event_data(task.result),
+        response=_sanitize_event_data(task.response),
         error=_sanitize_event_data(task.error),
         event_summary=_sanitize_event_data(task.event_summary),
     )
@@ -213,10 +219,12 @@ def _restore_history():
                 status=public.status,
                 video_id=public.video_id,
                 video_name=public.video_name,
+                question=public.question,
                 created_at=public.created_at,
                 started_at=public.started_at,
                 finished_at=public.finished_at,
                 result=public.result,
+                response=public.response,
                 error=public.error,
                 event_summary=public.event_summary,
                 video_path=paths.get("video_path", ""),
@@ -411,6 +419,7 @@ async def _queue_worker():
                     config_path=config_path,
                     video_id=task.video_id,
                     event_callback=_event_callback_factory(task_id),
+                    question=task.question,
                 )
             )
 
@@ -454,6 +463,7 @@ def _normalize_result(result: Any) -> dict:
                 "fracture_type": res.get("fracture_type"),
                 "location": res.get("location"),
                 "confidence": res.get("confidence"),
+                "visual_evidence": res.get("visual_evidence"),
                 "unrecognized_reason": res.get("unrecognized_reason"),
                 "rounds": result.get("rounds", result.get("total_rounds")),
             }.items()
@@ -472,6 +482,7 @@ def _normalize_result(result: Any) -> dict:
         "fracture_type": output.get("type", result.get("fracture_type")),
         "location": output.get("location", result.get("location")),
         "confidence": output.get("confidence", result.get("confidence")),
+        "visual_evidence": output.get("visual_evidence", result.get("visual_evidence")),
         "time_range": output.get("fracture_between", result.get("time_range")),
         "unrecognized_reason": result.get("unrecognized_reason"),
         "rounds": result.get("rounds", result.get("total_rounds")),
@@ -519,10 +530,12 @@ def _apply_runner_result_to_task(task: TaskModel, runner_result: Any):
 
     task.status = TASK_STATUS_COMPLETED
     task.result = _normalize_result(runner_result)
+    if isinstance(runner_result, dict):
+        task.response = _sanitize_event_data(runner_result.get("response"))
     _append_event(task.id, {
         "task_id": task.id,
         "event": "task_completed",
-        "data": {"result": task.result},
+        "data": {"result": task.result, "response": task.response},
         "timestamp": _now(),
     })
 
@@ -538,6 +551,7 @@ def _to_public_task(task: TaskModel) -> dict:
         started_at=task.started_at,
         finished_at=task.finished_at,
         result=_sanitize_event_data(task.result),
+        response=_sanitize_event_data(task.response),
         error=_sanitize_event_data(task.error),
         event_summary=_sanitize_event_data(task.event_summary),
     ).model_dump()
@@ -595,6 +609,7 @@ async def create_task(
     video_path: Optional[str] = Form(None),
     video_id: Optional[str] = Form(None),
     config_path: Optional[str] = Form(None),
+    question: Optional[str] = Form(None),
 ):
     """创建分析任务：支持上传文件、本地路径"""
     if not file and not video_path:
@@ -622,6 +637,7 @@ async def create_task(
         video_name=video_name,
         video_path=vpath,
         config_path=config_path or "",
+        question=(question or "请完整分析这段拉伸试验视频").strip(),
         created_at=_now(),
     )
     tasks[task_id] = task
@@ -752,6 +768,7 @@ async def export_result(task_id: str, fmt: str = Query("json", regex="^(json|jso
 async def create_batch_tasks(
     files: list[UploadFile] = File(...),
     config_path: Optional[str] = Form(None),
+    question: Optional[str] = Form(None),
 ):
     """批量上传并创建任务（每个任务同样进入队列，由统一 worker 处理）"""
     results = []
@@ -768,6 +785,7 @@ async def create_batch_tasks(
             video_name=video_name,
             video_path=str(upload_path),
             config_path=config_path or "",
+            question=(question or "请完整分析这段拉伸试验视频").strip(),
             created_at=_now(),
         )
         tasks[task_id] = task

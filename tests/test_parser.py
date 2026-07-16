@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import pytest
-
 from agent.parser import ParseError, ParseResult, ResultParser
 
 
 def test_parse_plain_json():
-    raw = '{"has_fracture": true, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92}'
+    raw = '{"has_fracture": true, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge"}'
     result = ResultParser.parse(raw)
     assert result.ok is True
     assert result.error is None
@@ -15,12 +13,11 @@ def test_parse_plain_json():
         "fracture_between": [17, 18],
         "type": "韧性断裂",
         "location": "inside_gauge",
-        "confidence": pytest.approx(0.92),
     }
 
 
 def test_parse_rejects_markdown_fence():
-    raw = '```json\n{"has_fracture": false, "fracture_between": null, "type": "未断裂", "location": null, "confidence": 0.88}\n```'
+    raw = '```json\n{"has_fracture": false, "fracture_between": null, "type": "未断裂", "location": null}\n```'
     result = ResultParser.parse(raw)
     assert result.ok is False
     assert result.error is not None
@@ -28,7 +25,7 @@ def test_parse_rejects_markdown_fence():
 
 
 def test_parse_rejects_markdown_fence_plain():
-    raw = '```\n{"has_fracture": false, "fracture_between": null, "type": "未断裂", "location": null, "confidence": 0.88}\n```'
+    raw = '```\n{"has_fracture": false, "fracture_between": null, "type": "未断裂", "location": null}\n```'
     result = ResultParser.parse(raw)
     assert result.ok is False
     assert result.error.code == ResultParser.ERROR_MARKDOWN_NOT_ALLOWED
@@ -53,28 +50,22 @@ def test_parse_empty_and_none_input():
 
 def test_parse_rejects_schema_violations():
     # has_fracture=true but type is a non-fracture class.
-    raw = '{"has_fracture": true, "fracture_between": [17, 18], "type": "未断裂", "location": "inside_gauge", "confidence": 0.92}'
+    raw = '{"has_fracture": true, "fracture_between": [17, 18], "type": "未断裂", "location": "inside_gauge"}'
     result = ResultParser.parse(raw)
     assert result.ok is False
     assert result.error is not None
 
 
-def test_parse_rejects_confidence_out_of_range():
-    raw = '{"has_fracture": true, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 1.5}'
+def test_parse_rejects_legacy_confidence_field():
+    raw = '{"has_fracture": true, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.9}'
     result = ResultParser.parse(raw)
     assert result.ok is False
-    assert result.error.code == ResultParser.ERROR_INVALID_CONFIDENCE
-
-
-def test_parse_rejects_boolean_confidence():
-    raw = '{"has_fracture": true, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": true}'
-    result = ResultParser.parse(raw)
-    assert result.ok is False
-    assert result.error.code == ResultParser.ERROR_INVALID_CONFIDENCE
+    assert result.error.code == ResultParser.ERROR_EXTRA_FIELD
+    assert result.error.field == "confidence"
 
 
 def test_parse_rejects_extra_fields():
-    raw = '{"has_fracture": true, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92, "reasoning": "some extra"}'
+    raw = '{"has_fracture": true, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "reasoning": "some extra"}'
     result = ResultParser.parse(raw)
     assert result.ok is False
     assert result.error.code == ResultParser.ERROR_EXTRA_FIELD
@@ -82,7 +73,7 @@ def test_parse_rejects_extra_fields():
 
 
 def test_parse_rejects_missing_fields():
-    raw = '{"has_fracture": true, "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92}'
+    raw = '{"has_fracture": true, "type": "韧性断裂", "location": "inside_gauge"}'
     result = ResultParser.parse(raw)
     assert result.ok is False
     assert result.error.code == ResultParser.ERROR_MISSING_FIELD
@@ -96,7 +87,7 @@ def test_parse_rejects_noise_extraction():
 
 
 def test_parse_null_has_fracture_semantics():
-    raw = '{"has_fracture": null, "fracture_between": null, "type": "视频异常", "location": null, "confidence": 0.7}'
+    raw = '{"has_fracture": null, "fracture_between": null, "type": "视频异常", "location": null}'
     result = ResultParser.parse(raw)
     assert result.ok is True
     assert result.data["has_fracture"] is None
@@ -104,7 +95,7 @@ def test_parse_null_has_fracture_semantics():
 
 
 def test_parse_video_anomaly_with_confirmed_fracture():
-    raw = '{"has_fracture": true, "fracture_between": null, "type": "视频异常", "location": null, "confidence": 0.65}'
+    raw = '{"has_fracture": true, "fracture_between": null, "type": "视频异常", "location": null}'
     result = ResultParser.parse(raw)
     assert result.ok is True
     assert result.data["has_fracture"] is True
@@ -112,7 +103,7 @@ def test_parse_video_anomaly_with_confirmed_fracture():
 
 
 def test_parse_rejects_non_adjacent_indexes():
-    raw = '{"has_fracture": true, "fracture_between": [17, 19], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92}'
+    raw = '{"has_fracture": true, "fracture_between": [17, 19], "type": "韧性断裂", "location": "inside_gauge"}'
     result = ResultParser.parse(raw)
     assert result.ok is False
     assert result.error.code == ResultParser.ERROR_INVALID_INDEX
@@ -126,8 +117,8 @@ def test_parse_rejects_not_a_json_object():
 
 def test_parse_with_retries_succeeds_on_second_attempt():
     responses = [
-        '{"has_fracture": true, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 1.5}',
-        '{"has_fracture": true, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92}',
+        '{"has_fracture": true, "type": "韧性断裂", "location": "inside_gauge"}',
+        '{"has_fracture": true, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge"}',
     ]
 
     def fetch_fn(_error: ParseError | None) -> str:
@@ -140,7 +131,7 @@ def test_parse_with_retries_succeeds_on_second_attempt():
 
 
 def test_parse_with_retries_exhausted():
-    bad = '{"has_fracture": true, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 1.5}'
+    bad = '{"has_fracture": true, "type": "韧性断裂", "location": "inside_gauge"}'
 
     call_count = 0
 

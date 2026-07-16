@@ -15,10 +15,16 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol, runtime_checkable
 
+from agent.contract import load_visual_contract, visual_contract_hash
 from agent.parser import ParseError, ResultParser
-from agent.prompts import SYSTEM_PROMPT
+from agent.prompts import (
+    EVIDENCE_SYSTEM_PROMPT,
+    EVIDENCE_USER_PROMPT,
+    PRODUCTION_USER_PROMPT,
+    SYSTEM_PROMPT,
+)
 from agent.sampling import ClipBuildResult
-from agent.schema import SampleAndInferDiagnostics, ValidationErrorInfo
+from agent.schema import ModelOutput, SampleAndInferDiagnostics, ValidationErrorInfo
 
 try:
     from openai import OpenAI
@@ -39,6 +45,9 @@ DEFAULT_MAX_REQUEST_SIZE = 32 * 1024 * 1024  # 32 MiB
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BACKOFF = 2.0
 DEFAULT_MIME_TYPE = "video/mp4"
+_VISUAL_CONTRACT = load_visual_contract()
+_GENERATION_CONFIG = _VISUAL_CONTRACT["generation"]
+_CONTRACT_MAX_FRAMES = int(_VISUAL_CONTRACT["video"]["max_frames"])
 
 
 @dataclass
@@ -61,6 +70,16 @@ class InferenceResult:
     attempts: int = 1
     preprocessing: dict[str, Any] | None = None
     diagnostics: SampleAndInferDiagnostics | None = None
+
+
+@dataclass
+class EvidenceInferenceResult:
+    """Free-text visual observation generated from the same clip/frames."""
+
+    ok: bool
+    summary: str | None = None
+    error: str | None = None
+    preprocessing: dict[str, Any] | None = None
 
 
 @runtime_checkable
@@ -278,13 +297,13 @@ def _validate_preprocessing_meta(meta: dict[str, Any] | None) -> str | None:
     max_frames = meta.get("max_frames")
     if not isinstance(max_frames, int) or max_frames <= 0:
         return "max_frames_not_positive_integer"
-    if max_frames != 8:
-        return "max_frames_not_8"
+    if max_frames != _CONTRACT_MAX_FRAMES:
+        return f"max_frames_not_{_CONTRACT_MAX_FRAMES}"
 
     frames = meta.get("frames")
     if not isinstance(frames, list) or not frames:
         return "missing_or_invalid_frames"
-    if len(frames) > 8:
+    if len(frames) > _CONTRACT_MAX_FRAMES:
         logger.warning(
             "Preprocessing frames count %d exceeds max_frames %d",
             len(frames), max_frames,
@@ -328,12 +347,20 @@ def _validate_preprocessing_meta(meta: dict[str, Any] | None) -> str | None:
         "config_fingerprint",
         "runtime_device",
         "runtime_dtype",
+        "contract_version",
+        "prompt_contract_hash",
     }
     if not isinstance(deployment, dict) or any(
         not isinstance(deployment.get(key), str) or not deployment[key].strip()
         for key in required_deployment
     ):
         return "missing_or_invalid_deployment_manifest"
+
+    contract = load_visual_contract()
+    if deployment["contract_version"] != contract["contract_version"]:
+        return "contract_version_mismatch"
+    if deployment["prompt_contract_hash"] != visual_contract_hash():
+        return "prompt_contract_hash_mismatch"
 
     return None
 
@@ -346,7 +373,6 @@ class LlamaFactoryInferenceClient:
         model: str,
         base_url: str = "http://localhost:8000/v1",
         api_key: str = "EMPTY",
-        system_prompt: str = SYSTEM_PROMPT,
         max_request_size: int = DEFAULT_MAX_REQUEST_SIZE,
         timeout: Any = _DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
@@ -354,7 +380,7 @@ class LlamaFactoryInferenceClient:
         self.model = model
         self.base_url = base_url
         self.api_key = api_key
-        self.system_prompt = system_prompt
+        self.system_prompt = SYSTEM_PROMPT
         self.max_request_size = max_request_size
         self.timeout = timeout
         self.max_retries = max_retries
@@ -380,6 +406,10 @@ class LlamaFactoryInferenceClient:
         self, video_input: str | ClipBuildResult, prompt: str
     ) -> InferenceResult:
         """Call the model and return the parsed JSON output plus diagnostics."""
+        # ``prompt`` is retained only for transport-interface compatibility.
+        # Production visual text is program-owned and cannot be overridden by
+        # a caller, Planner, or natural-language user request.
+        del prompt
         video_path, manifest = _resolve_video_input(video_input)
 
         if not os.path.exists(video_path):
@@ -402,7 +432,7 @@ class LlamaFactoryInferenceClient:
                 "role": "user",
                 "content": [
                     {"type": "video_url", "video_url": {"url": data_url}},
-                    {"type": "text", "text": prompt},
+                        {"type": "text", "text": PRODUCTION_USER_PROMPT},
                 ],
             },
         ]
@@ -434,8 +464,8 @@ class LlamaFactoryInferenceClient:
                     kwargs: dict[str, Any] = {
                         "model": self.model,
                         "messages": current_messages,
-                        "temperature": 0.2,
-                        "max_tokens": 512,
+                        "temperature": float(_GENERATION_CONFIG["temperature"]),
+                        "max_tokens": int(_GENERATION_CONFIG["max_new_tokens"]),
                     }
                     if extra_body is not None:
                         kwargs["extra_body"] = extra_body
@@ -470,7 +500,7 @@ class LlamaFactoryInferenceClient:
                 correction = (
                     f"Your previous response failed validation ({last_error.code}): "
                     f"{last_error.message}. Output only the complete valid JSON "
-                    "object with exactly the five required fields and no Markdown "
+                    "object with exactly the four required fields and no Markdown "
                     "fences or surrounding text."
                 )
                 if _last_assistant_content[0] is not None:
@@ -537,8 +567,8 @@ class LlamaFactoryInferenceClient:
             "request": {
                 "model": self.model,
                 "messages": _redact_messages(messages),
-                "temperature": 0.2,
-                "max_tokens": 512,
+                "temperature": float(_GENERATION_CONFIG["temperature"]),
+                "max_tokens": int(_GENERATION_CONFIG["max_new_tokens"]),
                 "extra_body": extra_body,
             },
             "response": _redact_dict_values(raw_response_dump),
@@ -593,6 +623,53 @@ class LlamaFactoryInferenceClient:
             diagnostics=diagnostics,
         )
 
+    def infer_evidence(
+        self, video_input: str | ClipBuildResult
+    ) -> EvidenceInferenceResult:
+        """Describe visible changes without receiving the four-field prediction."""
+        video_path, manifest = _resolve_video_input(video_input)
+        if not os.path.exists(video_path):
+            return EvidenceInferenceResult(ok=False, error="inference video not found")
+        if not _is_mp4_file(video_path):
+            return EvidenceInferenceResult(ok=False, error="invalid or non-MP4 video")
+        data_url = _encode_video_to_data_url(video_path)
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": EVIDENCE_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "video_url", "video_url": {"url": data_url}},
+                        {"type": "text", "text": EVIDENCE_USER_PROMPT},
+                    ],
+                },
+            ],
+            "temperature": float(_GENERATION_CONFIG["temperature"]),
+            "max_tokens": int(_GENERATION_CONFIG["max_new_tokens"]),
+        }
+        if manifest is not None:
+            kwargs["extra_body"] = {"preprocessing": {"temp_video_manifest": manifest}}
+        try:
+            response = self.client.chat.completions.create(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            return EvidenceInferenceResult(ok=False, error=str(exc))
+        summary = (response.choices[0].message.content or "").strip()
+        if not summary:
+            return EvidenceInferenceResult(ok=False, error="empty visual evidence")
+        preprocessing = _extract_preprocessing_from_response(response)
+        metadata_error = _validate_preprocessing_meta(preprocessing)
+        if metadata_error is not None:
+            return EvidenceInferenceResult(
+                ok=False,
+                error=f"evidence preprocessing metadata invalid: {metadata_error}",
+            )
+        return EvidenceInferenceResult(
+            ok=True,
+            summary=summary,
+            preprocessing=preprocessing,
+        )
+
 
 class MockInferenceClient:
     """Test-friendly inference client that returns a canned response.
@@ -616,7 +693,18 @@ class MockInferenceClient:
             raw = self._response
 
         if isinstance(raw, dict):
-            return InferenceResult(ok=True, model_output=raw, attempts=1)
+            try:
+                validated = ModelOutput(**raw).model_dump(mode="json")
+            except Exception as exc:
+                return InferenceResult(
+                    ok=False,
+                    error=ParseError(
+                        code=ResultParser.ERROR_INVALID_MODEL_OUTPUT,
+                        message=str(exc),
+                    ),
+                    attempts=1,
+                )
+            return InferenceResult(ok=True, model_output=validated, attempts=1)
 
         parsed = ResultParser.parse(raw)
         if parsed.ok:
@@ -637,7 +725,6 @@ def create_inference_client(config: dict[str, Any] | None = None) -> InferenceCl
             "fracture_between": None,
             "type": "未断裂",
             "location": None,
-            "confidence": 0.5,
         })
 
     cfg = config or {}

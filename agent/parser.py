@@ -2,7 +2,7 @@
 
 The parser implements the v2 contract:
 
-* The assistant content must be a single JSON object with exactly the five
+* The assistant content must be a single JSON object with exactly the four
   contract fields.
 * Markdown fences, surrounding prose, JSON extraction from noise, missing
   fields, extra fields and illegal value combinations are all rejected.
@@ -60,7 +60,6 @@ class ResultParser:
         "fracture_between",
         "type",
         "location",
-        "confidence",
     }
 
     @classmethod
@@ -194,8 +193,6 @@ class ResultParser:
     @classmethod
     def _map_field_error(cls, field: str, message: str) -> ParseResult:
         """Map a field-level validation error to a stable code."""
-        if field == "confidence":
-            return cls._error(cls.ERROR_INVALID_CONFIDENCE, message, field=field)
         if field == "fracture_between":
             return cls._error(cls.ERROR_INVALID_INDEX, message, field=field)
         if field == "location":

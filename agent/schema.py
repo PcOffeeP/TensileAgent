@@ -66,13 +66,12 @@ class LocationType(StrEnum):
 
 
 # ---------------------------------------------------------------------------
-# v2 model output
+# v3 model output: exactly the four fields used during fine-tuning
 # ---------------------------------------------------------------------------
 class ModelOutput(BaseModel):
     """Single-round fine-tuned model output JSON schema.
 
-    The object always contains exactly the five fields below and must belong
-    to one of the five legal combinations described in the contract.
+    The object always contains exactly the four trained fields below.
     """
 
     model_config = ConfigDict(extra="forbid", use_enum_values=False)
@@ -81,22 +80,12 @@ class ModelOutput(BaseModel):
     fracture_between: list[int] | None = None
     type: FractureType
     location: str | None = None
-    confidence: float = Field(..., ge=0.0, le=1.0)
 
     @field_validator("has_fracture", mode="before")
     @classmethod
     def _validate_has_fracture(cls, value: Any) -> Any:
         if value is not None and not isinstance(value, bool):
             raise ValueError("has_fracture must be a JSON boolean or null")
-        return value
-
-    @field_validator("confidence", mode="before")
-    @classmethod
-    def _reject_bool_confidence(cls, value: Any) -> Any:
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ValueError("confidence must be a JSON number, not a boolean or string")
-        if not math.isfinite(value):
-            raise ValueError("confidence must be finite")
         return value
 
     @field_validator("fracture_between", mode="before")
@@ -168,17 +157,21 @@ class ModelOutput(BaseModel):
 # Tool schemas
 # ---------------------------------------------------------------------------
 class ToolSampleAndInfer(BaseModel):
-    """Schema for the ``sample_and_infer`` tool (v2).
-
-    The decision model may only provide the inspection interval and the
-    complete user prompt. All sampling hyperparameters are removed from the
-    public tool contract.
-    """
+    """Planner contract for a fixed, program-owned visual prompt."""
 
     model_config = ConfigDict(extra="forbid")
 
     sample_range: list[float] = Field(..., min_length=2, max_length=2)
-    prompt: str = Field(..., min_length=1, max_length=4096)
+    task_mode: Literal["analyze"] = "analyze"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _discard_legacy_prompt(cls, value: Any) -> Any:
+        """Accept old recorded tool calls without forwarding their prompt."""
+        if isinstance(value, dict) and "prompt" in value:
+            value = dict(value)
+            value.pop("prompt", None)
+        return value
 
     @field_validator("sample_range", mode="before")
     @classmethod
@@ -197,14 +190,6 @@ class ToolSampleAndInfer(BaseModel):
             raise ValueError("sample_range must satisfy start < end")
         return value
 
-    @field_validator("prompt")
-    @classmethod
-    def _reject_literal_video_marker(cls, value: str) -> str:
-        if "<video>" in value:
-            raise ValueError("prompt must not contain the literal <video> marker")
-        return value
-
-
 class ToolTerminate(BaseModel):
     """Schema for the ``terminate`` tool (v3).
 
@@ -219,21 +204,16 @@ class ToolTerminate(BaseModel):
     status: str
     fracture_type: str | None = None
     location: str | None = None
-    confidence: float | None = None
     unrecognized_reason: str | None = None
     evidence_rounds: list[int] | None = None
 
-    @field_validator("confidence", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def _validate_confidence(cls, value: Any) -> Any:
-        if value is None:
-            return value
-        if isinstance(value, bool):
-            raise ValueError("confidence must be a JSON number, not a boolean")
-        if not isinstance(value, (int, float)) or not math.isfinite(value):
-            raise ValueError("confidence must be a finite JSON number")
-        if not 0.0 <= float(value) <= 1.0:
-            raise ValueError("confidence must be between 0 and 1")
+    def _discard_legacy_confidence(cls, value: Any) -> Any:
+        """Accept recorded v2 tool calls without trusting Planner confidence."""
+        if isinstance(value, dict) and "confidence" in value:
+            value = dict(value)
+            value.pop("confidence", None)
         return value
 
     @field_validator("evidence_rounds", mode="before")
@@ -261,8 +241,6 @@ class ToolTerminate(BaseModel):
                 raise ValueError("fracture_type must be one of the 7 fracture classes")
             if self.location not in {LocationType.INSIDE, LocationType.OUTSIDE}:
                 raise ValueError("location must be inside_gauge or outside_gauge for fracture status")
-            if self.confidence is None:
-                raise ValueError("confidence is required for fracture status")
             if self.unrecognized_reason is not None:
                 raise ValueError("unrecognized_reason must be null for fracture status")
             if not self.evidence_rounds:
@@ -273,8 +251,6 @@ class ToolTerminate(BaseModel):
                 raise ValueError("fracture_type must be null for no_fracture status")
             if self.location is not None:
                 raise ValueError("location must be null for no_fracture status")
-            if self.confidence is None:
-                raise ValueError("confidence is required for no_fracture status")
             if self.unrecognized_reason is not None:
                 raise ValueError("unrecognized_reason must be null for no_fracture status")
 
@@ -287,8 +263,6 @@ class ToolTerminate(BaseModel):
                 raise ValueError("fracture_type must be null for unrecognized status")
             if self.location is not None:
                 raise ValueError("location must be null for unrecognized status")
-            if self.confidence is not None:
-                raise ValueError("confidence must be null for unrecognized status")
             if self.evidence_rounds is not None:
                 raise ValueError("evidence_rounds must be null for unrecognized status")
 
@@ -391,11 +365,106 @@ class SampleAndInferDiagnostics(BaseModel):
     video_anomaly_kind: str | None = None
 
 
+class UserIntent(BaseModel):
+    """Validated interpretation of a user's natural-language request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["analyze_video", "explain_previous", "unsupported"] = "analyze_video"
+    requested_fields: list[
+        Literal[
+            "has_fracture",
+            "time_range",
+            "type",
+            "location",
+            "confidence",
+            "visual_evidence",
+        ]
+    ] = Field(default_factory=lambda: ["has_fracture"])
+    wants_evidence: bool = False
+    wants_confidence: bool = False
+    response_detail: Literal["concise", "detailed"] = "concise"
+    language: Literal["zh", "en"] = "zh"
+    ambiguity: str | None = None
+
+    @field_validator("requested_fields")
+    @classmethod
+    def _unique_requested_fields(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("requested_fields must not be empty")
+        if len(value) != len(set(value)):
+            raise ValueError("requested_fields must not contain duplicates")
+        return value
+
+
+class ConfidenceBreakdown(BaseModel):
+    """Agent-level confidence values; never copied from MiniCPM output."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    decision: float | None = Field(None, ge=0.0, le=1.0)
+    localization: float | None = Field(None, ge=0.0, le=1.0)
+    classification: float | None = Field(None, ge=0.0, le=1.0)
+    overall: float | None = Field(None, ge=0.0, le=1.0)
+    evidence_level: Literal["high", "medium", "low", "insufficient"] = "insufficient"
+    calibration_version: str | None = None
+
+
+class VisualEvidenceReference(BaseModel):
+    """Trace pointer proving which clip and frames support an observation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    round: int = Field(..., ge=0)
+    sample_range: list[float] = Field(..., min_length=2, max_length=2)
+    frame_timestamps: list[float] = Field(default_factory=list)
+    clip_hash: str = Field(..., min_length=1)
+    request_id: str = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_trace(self) -> Self:
+        start, end = self.sample_range
+        if not math.isfinite(start) or not math.isfinite(end) or not start < end:
+            raise ValueError("sample_range must contain finite increasing seconds")
+        if not self.frame_timestamps:
+            raise ValueError("frame_timestamps must not be empty")
+        if any(not math.isfinite(value) for value in self.frame_timestamps):
+            raise ValueError("frame_timestamps must be finite")
+        if any(
+            current <= previous
+            for previous, current in zip(self.frame_timestamps, self.frame_timestamps[1:])
+        ):
+            raise ValueError("frame_timestamps must be strictly increasing")
+        return self
+
+
+class VisualEvidence(BaseModel):
+    """User-safe evidence summary plus trace references."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["not_requested", "available", "unavailable"] = "not_requested"
+    summary: str | None = None
+    references: list[VisualEvidenceReference] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_evidence_state(self) -> Self:
+        if self.status == "available" and not (self.summary and self.summary.strip()):
+            raise ValueError("summary is required when visual evidence is available")
+        if self.status == "available" and not self.references:
+            raise ValueError("references are required when visual evidence is available")
+        if self.status != "available" and self.summary is not None:
+            raise ValueError("summary must be null unless visual evidence is available")
+        if self.status != "available" and self.references:
+            raise ValueError("references must be empty unless visual evidence is available")
+        return self
+
+
 # ---------------------------------------------------------------------------
 # Final public result and Runner envelope
 # ---------------------------------------------------------------------------
 class FinalOutput(BaseModel):
-    """Final public result delivered to downstream consumers (v3)."""
+    """Complete Agent conclusion before user-request projection (v4)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -404,7 +473,8 @@ class FinalOutput(BaseModel):
     time_range: list[float] | None = Field(None, min_length=2, max_length=2)
     fracture_type: str | None = None
     location: str | None = None
-    confidence: float | None = None
+    confidence: ConfidenceBreakdown | None = None
+    visual_evidence: VisualEvidence = Field(default_factory=VisualEvidence)
     unrecognized_reason: str | None = None
 
     @field_validator("time_range", mode="before")
@@ -421,19 +491,6 @@ class FinalOutput(BaseModel):
             for item in value
         ):
             raise ValueError("time_range values must be finite JSON numbers")
-        return value
-
-    @field_validator("confidence", mode="before")
-    @classmethod
-    def _validate_confidence(cls, value: Any) -> Any:
-        if value is None:
-            return value
-        if isinstance(value, bool):
-            raise ValueError("confidence must be a JSON number, not a boolean")
-        if not isinstance(value, (int, float)) or not math.isfinite(value):
-            raise ValueError("confidence must be a finite JSON number")
-        if not 0.0 <= float(value) <= 1.0:
-            raise ValueError("confidence must be between 0 and 1")
         return value
 
     @model_validator(mode="after")
@@ -458,8 +515,6 @@ class FinalOutput(BaseModel):
                 raise ValueError("fracture_type must be one of the 7 fracture classes")
             if self.location not in {LocationType.INSIDE, LocationType.OUTSIDE, "unknown"}:
                 raise ValueError("location must be inside_gauge, outside_gauge or unknown")
-            if self.confidence is None:
-                raise ValueError("confidence is required for fracture status")
             if self.unrecognized_reason is not None:
                 raise ValueError("unrecognized_reason must be null for fracture status")
 
@@ -470,8 +525,6 @@ class FinalOutput(BaseModel):
                 raise ValueError("fracture_type must be null for no_fracture status")
             if self.location is not None:
                 raise ValueError("location must be null for no_fracture status")
-            if self.confidence is None:
-                raise ValueError("confidence is required for no_fracture status")
             if self.unrecognized_reason is not None:
                 raise ValueError("unrecognized_reason must be null for no_fracture status")
 
@@ -488,7 +541,6 @@ class FinalOutput(BaseModel):
                 raise ValueError("location must be null for unrecognized status")
             if self.confidence is not None:
                 raise ValueError("confidence must be null for unrecognized status")
-
         return self
 
 

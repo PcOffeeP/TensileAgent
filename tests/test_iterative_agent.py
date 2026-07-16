@@ -10,6 +10,7 @@ import json
 import pytest
 
 from agent.inference import InferenceResult
+from agent.contract import visual_contract_hash
 from agent.iterative_agent import IterativeAgent
 from agent.llm import BaseAgentLLM
 from agent.sampling import ClipBuildResult
@@ -24,6 +25,8 @@ TEST_DEPLOYMENT_MANIFEST = {
     "config_fingerprint": "sha256:test",
     "runtime_device": "cpu",
     "runtime_dtype": "float32",
+    "contract_version": "tensile-vlm/v1",
+    "prompt_contract_hash": visual_contract_hash(),
 }
 
 
@@ -569,8 +572,8 @@ def test_iterative_agent_conflict_expands_candidate():
     assert result["history"][1]["result"].get("conflict_handled") == "expanded_candidate"
 
 
-def test_iterative_agent_low_confidence_fallback():
-    """Repeated low-confidence conflicts are discarded until fallback expansion."""
+def test_iterative_agent_does_not_trust_legacy_model_confidence():
+    """Legacy confidence numbers never decide whether conflicting evidence is kept."""
     video_meta = {"video_id": "v008", "duration": 100.0, "video_path": "v008.mp4"}
     config = make_config()
     config["agent"]["max_rounds"] = 5
@@ -606,10 +609,11 @@ def test_iterative_agent_low_confidence_fallback():
     )
 
     result = agent.run()
-    assert result["status"] == "fracture"
-    assert result["fracture_type"] == "韧性断裂"
-    assert result["history"][2]["result"].get("conflict_handled") == "discarded_low_confidence"
-    assert result["history"][2]["result"].get("fallback") == "expanded_to_parent_range"
+    assert result["status"] == "unrecognized"
+    assert all(
+        entry["result"].get("conflict_handled") != "discarded_low_confidence"
+        for entry in result["history"]
+    )
 
 
 def test_iterative_agent_out_of_bounds_fracture_between():
@@ -1842,7 +1846,7 @@ def test_diagnostics_persisted_to_runtime_dir(tmp_path: Path):
     result = agent.run()
     assert result["status"] == "no_fracture"
 
-    diag_dir = tmp_path / "data" / "runtime" / "diagnostics"
+    diag_dir = tmp_path / "data" / "08_runtime" / "diagnostics"
     assert diag_dir.exists()
     round_files = sorted(diag_dir.glob("v800_round_*_diagnostics.json"))
     assert len(round_files) == 2
@@ -1898,7 +1902,7 @@ def test_summary_redacts_model_video_path(tmp_path: Path):
 
     agent._persist_summary(result)
 
-    summary_file = tmp_path / "data" / "runtime" / "diagnostics" / "v800r_diagnostics_summary.json"
+    summary_file = tmp_path / "data" / "08_runtime" / "diagnostics" / "v800r_diagnostics_summary.json"
     assert summary_file.exists()
     summary = json.loads(summary_file.read_text(encoding="utf-8"))
     assert summary["history"][0]["result"]["model_video_path"] == "[REDACTED]"
@@ -2107,7 +2111,7 @@ def test_persist_diagnostics_oserror_isolated(monkeypatch, tmp_path: Path):
     assert result["diagnostics"] is not None
 
     # No per-round diagnostics file should have been created.
-    diag_dir = tmp_path / "data" / "runtime" / "diagnostics"
+    diag_dir = tmp_path / "data" / "08_runtime" / "diagnostics"
     assert not any(diag_dir.glob("v920_round_*_diagnostics.json"))
 
 
@@ -2150,7 +2154,7 @@ def test_persist_summary_oserror_isolated(monkeypatch, tmp_path: Path):
     assert result["status"] == "no_fracture"
     assert result["rounds"] == 2
 
-    diag_dir = tmp_path / "data" / "runtime" / "diagnostics"
+    diag_dir = tmp_path / "data" / "08_runtime" / "diagnostics"
     # Per-round diagnostics should have been written successfully.
     round_files = list(diag_dir.glob("v921_round_*_diagnostics.json"))
     assert len(round_files) == 2

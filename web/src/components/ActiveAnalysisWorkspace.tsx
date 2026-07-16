@@ -79,7 +79,11 @@ export default function ActiveAnalysisWorkspace({ task, onClose, onDelete, isHis
       <div className="flex flex-col gap-4 flex-1 overflow-hidden">
         {/* Top Summary & Result */}
         <VideoInputSummary task={task} />
-        <FinalResultPanel result={trace.finalResult ?? task.result} error={trace.taskError ?? task.error} />
+        <FinalResultPanel
+          result={trace.finalResult ?? task.result}
+          error={trace.taskError ?? task.error}
+          response={task.response}
+        />
         <IntervalConvergenceBar trace={trace} fallbackResult={task.result} />
         
         {/* Main Work Area */}

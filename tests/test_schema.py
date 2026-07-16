@@ -27,14 +27,13 @@ def test_model_output_normal_fracture():
         fracture_between=[17, 18],
         type=FractureType.TOUGH,
         location=LocationType.INSIDE,
-        confidence=0.92,
     )
     data = output.model_dump()
     assert data["has_fracture"] is True
     assert data["fracture_between"] == [17, 18]
     assert data["type"] == "韧性断裂"
     assert data["location"] == "inside_gauge"
-    assert data["confidence"] == pytest.approx(0.92)
+    assert set(data) == {"has_fracture", "fracture_between", "type", "location"}
 
 
 @pytest.mark.parametrize("value", [1, 0, "true", "false"])
@@ -45,7 +44,6 @@ def test_model_output_rejects_non_boolean_has_fracture(value):
             fracture_between=None,
             type=FractureType.NO_FRACTURE,
             location=None,
-            confidence=0.8,
         )
 
 
@@ -55,7 +53,6 @@ def test_model_output_no_fracture():
         fracture_between=None,
         type=FractureType.NO_FRACTURE,
         location=None,
-        confidence=0.95,
     )
     assert output.type == FractureType.NO_FRACTURE
     assert output.location is None
@@ -67,7 +64,6 @@ def test_model_output_not_clamped():
         fracture_between=None,
         type=FractureType.NOT_CLAMPED,
         location=None,
-        confidence=0.88,
     )
     assert output.type == FractureType.NOT_CLAMPED
 
@@ -78,7 +74,6 @@ def test_model_output_video_anomaly_unknown_presence():
         fracture_between=None,
         type=FractureType.VIDEO_ABNORMAL,
         location=None,
-        confidence=0.70,
     )
     assert output.has_fracture is None
     assert output.type == FractureType.VIDEO_ABNORMAL
@@ -90,7 +85,6 @@ def test_model_output_video_anomaly_unreliable_time():
         fracture_between=None,
         type=FractureType.VIDEO_ABNORMAL,
         location=None,
-        confidence=0.65,
     )
     assert output.has_fracture is True
     assert output.fracture_between is None
@@ -105,7 +99,6 @@ def test_model_output_accepts_string_enums():
         fracture_between=None,
         type="未断裂",
         location=None,
-        confidence=0.95,
     )
     assert output.type == FractureType.NO_FRACTURE
 
@@ -117,7 +110,6 @@ def test_model_output_rejects_invalid_type_for_fracture():
             fracture_between=[17, 18],
             type="未断裂",
             location=LocationType.INSIDE,
-            confidence=0.92,
         )
 
 
@@ -128,7 +120,6 @@ def test_model_output_rejects_video_anomaly_with_fracture_between():
             fracture_between=[0, 1],
             type=FractureType.VIDEO_ABNORMAL,
             location=None,
-            confidence=0.65,
         )
 
 
@@ -139,7 +130,6 @@ def test_model_output_rejects_no_fracture_with_location():
             fracture_between=None,
             type=FractureType.NO_FRACTURE,
             location="outside_gauge",
-            confidence=0.88,
         )
 
 
@@ -150,32 +140,20 @@ def test_model_output_rejects_null_has_fracture_with_non_video_anomaly():
             fracture_between=None,
             type=FractureType.NO_FRACTURE,
             location=None,
-            confidence=0.88,
         )
 
 
 # ---------------------------------------------------------------------------
 # ModelOutput: numeric and index validation
 # ---------------------------------------------------------------------------
-def test_model_output_rejects_confidence_out_of_range():
+def test_model_output_rejects_legacy_confidence_field():
     with pytest.raises(ValidationError):
         ModelOutput(
             has_fracture=True,
             fracture_between=[17, 18],
             type=FractureType.TOUGH,
             location=LocationType.INSIDE,
-            confidence=1.5,
-        )
-
-
-def test_model_output_rejects_boolean_confidence():
-    with pytest.raises(ValidationError):
-        ModelOutput(
-            has_fracture=True,
-            fracture_between=[17, 18],
-            type=FractureType.TOUGH,
-            location=LocationType.INSIDE,
-            confidence=True,  # type: ignore[arg-type]
+            confidence=0.92,  # type: ignore[call-arg]
         )
 
 
@@ -186,7 +164,6 @@ def test_model_output_rejects_non_adjacent_fracture_between():
             fracture_between=[17, 19],
             type=FractureType.TOUGH,
             location=LocationType.INSIDE,
-            confidence=0.92,
         )
 
 
@@ -197,7 +174,6 @@ def test_model_output_rejects_equal_fracture_between():
             fracture_between=[17, 17],
             type=FractureType.TOUGH,
             location=LocationType.INSIDE,
-            confidence=0.92,
         )
 
 
@@ -208,7 +184,6 @@ def test_model_output_rejects_negative_fracture_between():
             fracture_between=[-1, 0],
             type=FractureType.TOUGH,
             location=LocationType.INSIDE,
-            confidence=0.92,
         )
 
 
@@ -219,22 +194,20 @@ def test_model_output_rejects_boolean_indexes():
             fracture_between=[True, False],  # type: ignore[list-item]
             type=FractureType.TOUGH,
             location=LocationType.INSIDE,
-            confidence=0.92,
         )
 
 
 # ---------------------------------------------------------------------------
 # Tool schemas
 # ---------------------------------------------------------------------------
-def test_tool_sample_and_infer_only_two_fields():
+def test_tool_sample_and_infer_discards_legacy_prompt():
     tool = ToolSampleAndInfer(
         sample_range=[0.0, 500.0],
         prompt="请分析视频",
     )
     assert tool.sample_range == [0.0, 500.0]
-    assert tool.prompt == "请分析视频"
     data = tool.model_dump()
-    assert set(data.keys()) == {"sample_range", "prompt"}
+    assert data == {"sample_range": [0.0, 500.0], "task_mode": "analyze"}
 
 
 def test_tool_sample_and_infer_rejects_extra_fields():
@@ -246,20 +219,14 @@ def test_tool_sample_and_infer_rejects_extra_fields():
         )
 
 
-def test_tool_sample_and_infer_rejects_prompt_over_4096():
-    with pytest.raises(ValidationError):
-        ToolSampleAndInfer(
-            sample_range=[0.0, 500.0],
-            prompt="x" * 4097,
-        )
+def test_tool_sample_and_infer_never_exposes_legacy_prompt():
+    tool = ToolSampleAndInfer(sample_range=[0.0, 500.0], prompt="x" * 4097)
+    assert "prompt" not in tool.model_dump()
 
 
-def test_tool_sample_and_infer_rejects_literal_video_marker():
-    with pytest.raises(ValidationError):
-        ToolSampleAndInfer(
-            sample_range=[0.0, 500.0],
-            prompt="请分析<video>视频",
-        )
+def test_tool_sample_and_infer_discards_literal_video_marker():
+    tool = ToolSampleAndInfer(sample_range=[0.0, 500.0], prompt="请分析<video>视频")
+    assert "prompt" not in tool.model_dump()
 
 
 @pytest.mark.parametrize(
@@ -284,7 +251,6 @@ def test_tool_terminate_fracture_status():
         status="fracture",
         fracture_type=FractureType.TOUGH,
         location=LocationType.INSIDE,
-        confidence=0.79,
         evidence_rounds=[0, 1],
     )
     assert tool.status == "fracture"
@@ -297,13 +263,12 @@ def test_tool_terminate_unrecognized_status():
         unrecognized_reason="video_anomaly",
     )
     assert tool.status == "unrecognized"
-    assert tool.confidence is None
+    assert "confidence" not in tool.model_dump()
 
 
 def test_tool_terminate_no_fracture_status():
     tool = ToolTerminate(
         status="no_fracture",
-        confidence=0.85,
     )
     assert tool.status == "no_fracture"
 
@@ -319,7 +284,6 @@ def test_tool_terminate_fracture_requires_evidence():
             status="fracture",
             fracture_type=FractureType.TOUGH,
             location=LocationType.INSIDE,
-            confidence=0.79,
         )
 
 
@@ -371,7 +335,6 @@ def test_final_output_fracture():
         time_range=[1.0, 2.0],
         fracture_type=FractureType.TOUGH,
         location=LocationType.INSIDE,
-        confidence=0.92,
     )
     assert output.status == "fracture"
 
@@ -380,7 +343,6 @@ def test_final_output_no_fracture():
     output = FinalOutput(
         video_id="v001",
         status="no_fracture",
-        confidence=0.95,
     )
     assert output.time_range is None
     assert output.fracture_type is None
@@ -429,7 +391,6 @@ def test_final_output_rejects_invalid_status():
         FinalOutput(
             video_id="v001",
             status="unknown",
-            confidence=0.5,
         )
 
 
@@ -439,7 +400,6 @@ def test_runner_result_success():
         result=FinalOutput(
             video_id="v001",
             status="no_fracture",
-            confidence=0.95,
         ),
     )
     assert result.ok is True

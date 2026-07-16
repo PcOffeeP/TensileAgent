@@ -4,9 +4,40 @@ import type { FinalResult } from "../api";
 interface FinalResultPanelProps {
   result: FinalResult | null;
   error: { stage?: string; code?: string; message: string } | null;
+  response?: {
+    status: "answered" | "unrecognized" | "failed";
+    answer: Record<string, unknown> | null;
+    evidence_available: boolean;
+    error: { code: string; message: string } | null;
+  } | null;
 }
 
-export default function FinalResultPanel({ result, error }: FinalResultPanelProps) {
+const FIELD_LABELS: Record<string, string> = {
+  has_fracture: "是否断裂",
+  time_range: "断裂时间",
+  type: "断裂类型",
+  location: "断裂位置",
+  confidence: "置信度",
+  visual_evidence: "视觉依据",
+};
+
+function formatAnswerValue(key: string, value: unknown): string {
+  if (key === "has_fracture") return value === true ? "是" : value === false ? "否" : "无法判断";
+  if (key === "time_range" && Array.isArray(value)) return `${value[0]}s - ${value[1]}s`;
+  if (key === "visual_evidence" && value && typeof value === "object") {
+    return String((value as { summary?: string | null }).summary ?? "视觉依据暂不可用");
+  }
+  if (key === "confidence" && value && typeof value === "object") {
+    const confidence = value as { overall?: number | null; evidence_level?: string };
+    return confidence.overall != null
+      ? `${(confidence.overall * 100).toFixed(0)}%`
+      : `尚未校准（证据等级：${confidence.evidence_level ?? "insufficient"}）`;
+  }
+  return value == null ? "不适用或无法确定" : String(value);
+}
+
+export default function FinalResultPanel({ result, error, response }: FinalResultPanelProps) {
+  const overallConfidence = result?.confidence?.overall ?? null;
   if (error) {
     return (
       <div className="bg-rose-50 border-2 border-rose-200 rounded-xl p-5 shadow-sm">
@@ -30,6 +61,22 @@ export default function FinalResultPanel({ result, error }: FinalResultPanelProp
 
   if (!result) return null;
 
+  if (response?.status === "answered" && response.answer) {
+    return (
+      <div className="bg-white border-2 border-blue-100 rounded-xl p-5 shadow-sm">
+        <h3 className="text-xl font-bold text-slate-900 mb-4">分析回答</h3>
+        <div className="space-y-3">
+          {Object.entries(response.answer).map(([key, value]) => (
+            <div key={key} className="flex gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+              <span className="w-24 shrink-0 text-sm font-semibold text-slate-500">{FIELD_LABELS[key] ?? key}</span>
+              <span className="text-sm text-slate-900">{formatAnswerValue(key, value)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   if (result.status === "fracture") {
     return (
       <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-5 shadow-sm relative overflow-hidden">
@@ -41,9 +88,9 @@ export default function FinalResultPanel({ result, error }: FinalResultPanelProp
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <h3 className="text-xl font-bold text-emerald-800">发现断裂 (Fracture)</h3>
-              {result.confidence != null && (
+              {overallConfidence != null && (
                 <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full border border-emerald-200">
-                  置信度: {(result.confidence * 100).toFixed(0)}%
+                  置信度: {(overallConfidence * 100).toFixed(0)}%
                 </span>
               )}
             </div>
@@ -86,9 +133,9 @@ export default function FinalResultPanel({ result, error }: FinalResultPanelProp
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h3 className="text-xl font-bold text-amber-800">未发生断裂 (No Fracture)</h3>
-              {result.confidence != null && (
+              {overallConfidence != null && (
                 <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full border border-amber-200">
-                  置信度: {(result.confidence * 100).toFixed(0)}%
+                  置信度: {(overallConfidence * 100).toFixed(0)}%
                 </span>
               )}
             </div>

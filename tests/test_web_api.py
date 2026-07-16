@@ -77,6 +77,11 @@ class TestNormalizeResult:
                 "fracture_type": "韧性断裂",
                 "location": "inside_gauge",
                 "confidence": 0.91,
+                "visual_evidence": {
+                    "status": "available",
+                    "summary": "试样分离。",
+                    "references": [],
+                },
                 "unrecognized_reason": None,
             },
         }
@@ -87,6 +92,7 @@ class TestNormalizeResult:
         assert normalized["fracture_type"] == "韧性断裂"
         assert normalized["location"] == "inside_gauge"
         assert normalized["confidence"] == 0.91
+        assert normalized["visual_evidence"]["summary"] == "试样分离。"
 
     def test_ok_false_maps_to_failed(self):
         runner_result = {
@@ -755,6 +761,7 @@ class TestHistoryPersistence:
             video_name="demo.mp4",
             video_path=str(tmp_runtime / "uploads" / "demo.mp4"),
             config_path=str(tmp_runtime / "config.yaml"),
+            question="什么时候断的，为什么？",
             created_at="2024-01-01T00:00:00",
             status=web_api.TASK_STATUS_COMPLETED,
             result={"status": "fracture", "note": "/secret/result.txt"},
@@ -770,6 +777,7 @@ class TestHistoryPersistence:
         # 内部绝对路径已被脱敏，不会直接写入历史 JSON
         assert data["result"]["note"] == "result.txt"
         assert data["status"] == web_api.TASK_STATUS_COMPLETED
+        assert data["question"] == "什么时候断的，为什么？"
 
         index = web_api._load_runtime_index()
         assert index["t_pub"]["video_path"] == str(tmp_runtime / "uploads" / "demo.mp4")
@@ -786,6 +794,7 @@ class TestHistoryPersistence:
                     "status": web_api.TASK_STATUS_COMPLETED,
                     "video_id": "demo",
                     "video_name": "demo.mp4",
+                    "question": "只告诉我是否断裂",
                     "created_at": "2024-01-01T00:00:00",
                     "result": {"status": "fracture"},
                 },
@@ -808,6 +817,7 @@ class TestHistoryPersistence:
         assert task.video_path == runtime_path
         assert task.config_path == config_path
         assert task.status == web_api.TASK_STATUS_COMPLETED
+        assert task.question == "只告诉我是否断裂"
         assert web_api.task_queue.empty()
 
     def test_restore_history_public_format_missing_optional_video_name(self, tmp_runtime):

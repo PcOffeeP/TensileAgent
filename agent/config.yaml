@@ -1,6 +1,5 @@
 agent:
   backend: remote
-  confidence_threshold: 0.5
   local:
     base_url: http://localhost:11434/v1
     provider: ollama
@@ -8,7 +7,7 @@ agent:
   max_rounds: 10
   remote:
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    model: glm-5
+    model: MiniMax/speech-2.8-hd
     provider: dashscope
   temperature: 0.7
   tolerance_seconds: 1.0

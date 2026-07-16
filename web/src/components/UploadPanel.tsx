@@ -10,6 +10,7 @@ export default function UploadPanel({ onTaskCreated }: UploadPanelProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [videoPath, setVideoPath] = useState("");
+  const [question, setQuestion] = useState("这个拉伸试验视频是否发生断裂？");
   const [loading, setLoading] = useState(false);
   const [showBatch, setShowBatch] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -54,17 +55,17 @@ export default function UploadPanel({ onTaskCreated }: UploadPanelProps) {
     try {
       if (files.length > 0) {
         if (files.length === 1) {
-          const r = await createTask(files[0]);
+          const r = await createTask(files[0], undefined, undefined, question);
           onTaskCreated([r]);
         } else {
-          const r = await createBatchTasks(files);
+          const r = await createBatchTasks(files, question);
           if (r.tasks.length > 0) {
             onTaskCreated(r.tasks);
           }
         }
         setFiles([]);
       } else if (videoPath.trim()) {
-        const r = await createTask(undefined, videoPath.trim());
+        const r = await createTask(undefined, videoPath.trim(), undefined, question);
         onTaskCreated([r]);
         setVideoPath("");
       }
@@ -72,7 +73,7 @@ export default function UploadPanel({ onTaskCreated }: UploadPanelProps) {
       alert("创建任务失败: " + (e as Error).message);
     }
     setLoading(false);
-  }, [files, videoPath, onTaskCreated]);
+  }, [files, videoPath, question, onTaskCreated]);
 
   return (
     <div className="h-full flex flex-col justify-center items-center gap-6 max-w-4xl mx-auto w-full pb-10">
@@ -87,6 +88,17 @@ export default function UploadPanel({ onTaskCreated }: UploadPanelProps) {
       <div className="glass-panel rounded-2xl p-8 shadow-2xl flex flex-col md:flex-row gap-8 w-full border border-white/50 bg-white/70">
         {/* Left: Upload Controls */}
         <div className="flex-1 flex flex-col gap-5">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-2">你想了解什么？</label>
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              rows={2}
+              className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-[#002FA7]/50 focus:ring-2 focus:ring-[#002FA7]/20 transition-all resize-none"
+              placeholder="例如：这个视频是否断裂？为什么？"
+            />
+            <p className="mt-1 text-[11px] text-slate-400">问题用于决定最终回答内容，不会传给视觉模型。</p>
+          </div>
           <div className="flex flex-col gap-3">
             <button 
               onClick={handleUpload} 

@@ -5,8 +5,7 @@
       "has_fracture": true,
       "fracture_between": [17, 18],
       "type": "韧性断裂",
-      "location": "inside_gauge",
-      "confidence": 0.92
+      "location": "inside_gauge"
     }
   },
   {
@@ -15,8 +14,7 @@
       "has_fracture": false,
       "fracture_between": null,
       "type": "未断裂",
-      "location": null,
-      "confidence": 0.95
+      "location": null
     }
   },
   {
@@ -25,8 +23,7 @@
       "has_fracture": false,
       "fracture_between": null,
       "type": "未夹紧",
-      "location": null,
-      "confidence": 0.90
+      "location": null
     }
   },
   {
@@ -35,8 +32,7 @@
       "has_fracture": null,
       "fracture_between": null,
       "type": "视频异常",
-      "location": null,
-      "confidence": 0.70
+      "location": null
     }
   },
   {
@@ -45,8 +41,7 @@
       "has_fracture": true,
       "fracture_between": null,
       "type": "视频异常",
-      "location": null,
-      "confidence": 0.65
+      "location": null
     }
   }
 ]

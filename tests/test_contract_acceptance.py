@@ -70,6 +70,15 @@ FRACTURE_TYPES_TUPLE = (
     FractureType.INTERFACE_DEBOND_AND_ROOT,
 )
 
+UNCALIBRATED_CONFIDENCE = {
+    "decision": None,
+    "localization": None,
+    "classification": None,
+    "overall": None,
+    "evidence_level": "high",
+    "calibration_version": None,
+}
+
 
 class TestFinalOutputFractureValid:
     """All valid fracture field combinations pass FinalOutput validation."""
@@ -86,7 +95,7 @@ class TestFinalOutputFractureValid:
             time_range=[10.0, 11.0],
             fracture_type=FractureType.TOUGH,
             location=location,
-            confidence=0.92,
+            confidence=UNCALIBRATED_CONFIDENCE,
         )
         assert output.status == "fracture"
         assert output.unrecognized_reason is None
@@ -99,7 +108,7 @@ class TestFinalOutputFractureValid:
             time_range=[143.9, 144.9],
             fracture_type=FractureType.BRITTLE,
             location="inside_gauge",
-            confidence=0.85,
+            confidence=UNCALIBRATED_CONFIDENCE,
         )
         assert output.status == "fracture"
         assert output.time_range == [143.9, 144.9]
@@ -113,22 +122,22 @@ class TestFinalOutputFractureValid:
             time_range=[5.0, 6.0],
             fracture_type=ft,
             location="inside_gauge",
-            confidence=0.90,
+            confidence=UNCALIBRATED_CONFIDENCE,
         )
         assert output.fracture_type == ft
 
-    @pytest.mark.parametrize("conf", [0.0, 0.001, 0.5, 0.999, 1.0])
-    def test_confidence_range_boundary(self, conf: float) -> None:
-        """Confidence at edges of [0.0, 1.0] is accepted for fracture."""
+    def test_uncalibrated_confidence_keeps_numeric_values_null(self) -> None:
         output = FinalOutput(
             video_id="v004",
             status="fracture",
             time_range=[2.0, 3.0],
             fracture_type=FractureType.MIXED,
             location="inside_gauge",
-            confidence=conf,
+            confidence=UNCALIBRATED_CONFIDENCE,
         )
-        assert output.confidence == conf
+        assert output.confidence is not None
+        assert output.confidence.overall is None
+        assert output.confidence.evidence_level == "high"
 
 
 class TestFinalOutputFractureInvalid:
@@ -146,7 +155,7 @@ class TestFinalOutputFractureInvalid:
                 time_range=time_range,
                 fracture_type=FractureType.TOUGH,
                 location="inside_gauge",
-                confidence=0.92,
+                confidence=UNCALIBRATED_CONFIDENCE,
             )
 
     def test_missing_time_range_is_rejected(self) -> None:
@@ -156,7 +165,7 @@ class TestFinalOutputFractureInvalid:
                 status="fracture",
                 fracture_type=FractureType.TOUGH,
                 location="inside_gauge",
-                confidence=0.92,
+                confidence=UNCALIBRATED_CONFIDENCE,
             )
 
     def test_unrecognized_reason_must_be_null(self) -> None:
@@ -167,19 +176,19 @@ class TestFinalOutputFractureInvalid:
                 time_range=[10.0, 11.0],
                 fracture_type=FractureType.TOUGH,
                 location="inside_gauge",
-                confidence=0.92,
+                confidence=UNCALIBRATED_CONFIDENCE,
                 unrecognized_reason="video_anomaly",
             )
 
-    def test_missing_confidence_is_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            FinalOutput(
-                video_id="v007",
-                status="fracture",
-                time_range=[10.0, 11.0],
-                fracture_type=FractureType.TOUGH,
-                location="inside_gauge",
-            )
+    def test_missing_confidence_is_allowed_until_calibrated(self) -> None:
+        output = FinalOutput(
+            video_id="v007",
+            status="fracture",
+            time_range=[10.0, 11.0],
+            fracture_type=FractureType.TOUGH,
+            location="inside_gauge",
+        )
+        assert output.confidence is None
 
     def test_invalid_fracture_type_rejected(self) -> None:
         """Non-fracture type (e.g. 未断裂) is invalid for fracture status."""
@@ -190,7 +199,7 @@ class TestFinalOutputFractureInvalid:
                 time_range=[10.0, 11.0],
                 fracture_type="未断裂",
                 location="inside_gauge",
-                confidence=0.92,
+                confidence=UNCALIBRATED_CONFIDENCE,
             )
 
     @pytest.mark.parametrize(
@@ -207,7 +216,7 @@ class TestFinalOutputFractureInvalid:
                     time_range=[10.0, 11.0],
                     fracture_type=FractureType.TOUGH,
                     location=None,
-                    confidence=0.92,
+                    confidence=UNCALIBRATED_CONFIDENCE,
                 )
         else:
             with pytest.raises(ValidationError):
@@ -217,7 +226,7 @@ class TestFinalOutputFractureInvalid:
                     time_range=[10.0, 11.0],
                     fracture_type=FractureType.TOUGH,
                     location=bad_location,
-                    confidence=0.92,
+                    confidence=UNCALIBRATED_CONFIDENCE,
                 )
 
 
@@ -232,7 +241,7 @@ class TestFinalOutputNoFractureValid:
         output = FinalOutput(
             video_id="v010",
             status="no_fracture",
-            confidence=0.95,
+            confidence=UNCALIBRATED_CONFIDENCE,
         )
         assert output.status == "no_fracture"
         assert output.time_range is None
@@ -240,14 +249,14 @@ class TestFinalOutputNoFractureValid:
         assert output.location is None
         assert output.unrecognized_reason is None
 
-    def test_no_fracture_with_zero_confidence(self) -> None:
-        """Confidence can be any value in [0.0, 1.0] for no_fracture."""
+    def test_no_fracture_with_uncalibrated_confidence(self) -> None:
         output = FinalOutput(
             video_id="v011",
             status="no_fracture",
-            confidence=0.0,
+            confidence=UNCALIBRATED_CONFIDENCE,
         )
-        assert output.confidence == 0.0
+        assert output.confidence is not None
+        assert output.confidence.overall is None
 
 
 class TestFinalOutputNoFractureInvalid:
@@ -259,7 +268,7 @@ class TestFinalOutputNoFractureInvalid:
                 video_id="v012",
                 status="no_fracture",
                 time_range=[10.0, 11.0],
-                confidence=0.95,
+                confidence=UNCALIBRATED_CONFIDENCE,
             )
 
     def test_fracture_type_must_be_null(self) -> None:
@@ -268,7 +277,7 @@ class TestFinalOutputNoFractureInvalid:
                 video_id="v013",
                 status="no_fracture",
                 fracture_type=FractureType.TOUGH,
-                confidence=0.95,
+                confidence=UNCALIBRATED_CONFIDENCE,
             )
 
     def test_location_must_be_null(self) -> None:
@@ -277,7 +286,7 @@ class TestFinalOutputNoFractureInvalid:
                 video_id="v014",
                 status="no_fracture",
                 location="inside_gauge",
-                confidence=0.95,
+                confidence=UNCALIBRATED_CONFIDENCE,
             )
 
     def test_unrecognized_reason_must_be_null(self) -> None:
@@ -286,15 +295,12 @@ class TestFinalOutputNoFractureInvalid:
                 video_id="v015",
                 status="no_fracture",
                 unrecognized_reason="max_rounds",
-                confidence=0.95,
+                confidence=UNCALIBRATED_CONFIDENCE,
             )
 
-    def test_missing_confidence_is_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            FinalOutput(
-                video_id="v016",
-                status="no_fracture",
-            )
+    def test_missing_confidence_is_allowed_until_calibrated(self) -> None:
+        output = FinalOutput(video_id="v016", status="no_fracture")
+        assert output.confidence is None
 
 
 # -------------------------------------------------------------------------
@@ -326,7 +332,7 @@ class TestFinalOutputUnrecognizedInvalid:
                 video_id="v018",
                 status="unrecognized",
                 unrecognized_reason="video_anomaly",
-                confidence=0.5,
+                confidence=UNCALIBRATED_CONFIDENCE,
             )
 
     def test_fracture_type_must_be_null(self) -> None:
@@ -378,7 +384,7 @@ class TestToolTerminateConditionFields:
                 status="fracture",
                 fracture_type=FractureType.TOUGH,
                 location="unknown",
-                confidence=0.92,
+                confidence=UNCALIBRATED_CONFIDENCE,
                 evidence_rounds=[0, 1],
             )
 
@@ -388,7 +394,7 @@ class TestToolTerminateConditionFields:
                 status="fracture",
                 fracture_type=FractureType.TOUGH,
                 location=None,
-                confidence=0.92,
+                confidence=UNCALIBRATED_CONFIDENCE,
                 evidence_rounds=[0, 1],
             )
 
@@ -396,7 +402,7 @@ class TestToolTerminateConditionFields:
         """no_fracture has no evidence_rounds requirement (but null is fine)."""
         tool = ToolTerminate(
             status="no_fracture",
-            confidence=0.85,
+            confidence=UNCALIBRATED_CONFIDENCE,
         )
         assert tool.evidence_rounds is None
 
@@ -804,7 +810,7 @@ class TestEdgeCases:
             "time_range": [10.0, 10.5],
             "fracture_type": "韧性断裂",
             "location": "unknown",
-            "confidence": 0.92,
+            "confidence": UNCALIBRATED_CONFIDENCE,
             "unrecognized_reason": None,
         })
         assert result["status"] == "fracture"
@@ -817,7 +823,7 @@ class TestEdgeCases:
                 status="fracture",
                 fracture_type="未断裂",
                 location="inside_gauge",
-                confidence=0.92,
+                confidence=UNCALIBRATED_CONFIDENCE,
                 evidence_rounds=[0, 1],
             )
 
@@ -867,7 +873,7 @@ class TestRunnerResultEnvelope:
             result=FinalOutput(
                 video_id="v_runner_001",
                 status="no_fracture",
-                confidence=0.95,
+                confidence=UNCALIBRATED_CONFIDENCE,
             ),
         )
         assert result.ok is True
@@ -907,7 +913,7 @@ class TestRunnerResultEnvelope:
         with pytest.raises(ValidationError, match="error must be None when ok=True"):
             RunnerResult(
                 ok=True,
-                result=FinalOutput(video_id="v001", status="no_fracture", confidence=0.5),
+                result=FinalOutput(video_id="v001", status="no_fracture", confidence=UNCALIBRATED_CONFIDENCE),
                 error=RunnerError(stage="input", code="E", message="x"),
             )
 
@@ -916,7 +922,7 @@ class TestRunnerResultEnvelope:
         with pytest.raises(ValidationError, match="result must be None when ok=False"):
             RunnerResult(
                 ok=False,
-                result=FinalOutput(video_id="v001", status="no_fracture", confidence=0.5),
+                result=FinalOutput(video_id="v001", status="no_fracture", confidence=UNCALIBRATED_CONFIDENCE),
                 error=RunnerError(stage="input", code="E", message="x"),
             )
 
@@ -937,13 +943,13 @@ class TestRunnerResultEnvelope:
                 time_range=[10.0, 11.0],
                 fracture_type=FractureType.TOUGH,
                 location="inside_gauge",
-                confidence=0.92,
+                confidence=UNCALIBRATED_CONFIDENCE,
             ),
         )
         assert rr["ok"] is True
         assert rr["video_id"] == "v_dict_001"
         assert rr["status"] == "fracture"
-        assert rr.get("confidence") == 0.92
+        assert rr.get("confidence")["overall"] is None
         assert rr.get("nonexistent", "fallback") == "fallback"
 
     def test_dict_access_ok_false_delegates_to_error(self) -> None:
@@ -962,7 +968,7 @@ class TestRunnerResultEnvelope:
         """Accessing an unknown key raises KeyError."""
         rr = RunnerResult(
             ok=True,
-            result=FinalOutput(video_id="v001", status="no_fracture", confidence=0.5),
+            result=FinalOutput(video_id="v001", status="no_fracture", confidence=UNCALIBRATED_CONFIDENCE),
         )
         with pytest.raises(KeyError):
             _ = rr["unknown_key"]
@@ -980,10 +986,9 @@ class TestToolCallValidation:
         with pytest.raises(ValidationError):
             ToolSampleAndInfer(sample_range=[0.0, 50.0, 100.0], prompt="test")
 
-    def test_sample_and_infer_rejects_empty_prompt(self) -> None:
-        """Empty prompt is rejected by ToolSampleAndInfer (min_length=1)."""
-        with pytest.raises(ValidationError):
-            ToolSampleAndInfer(sample_range=[0.0, 100.0], prompt="")
+    def test_sample_and_infer_discards_empty_legacy_prompt(self) -> None:
+        tool = ToolSampleAndInfer(sample_range=[0.0, 100.0], prompt="")
+        assert "prompt" not in tool.model_dump()
 
     def test_terminate_rejects_invalid_status(self) -> None:
         """Invalid status value is rejected by ToolTerminate model_validator."""
@@ -997,7 +1002,7 @@ class TestToolCallValidation:
                 status="fracture",
                 fracture_type="未断裂",
                 location="inside_gauge",
-                confidence=0.92,
+                confidence=UNCALIBRATED_CONFIDENCE,
                 evidence_rounds=[0, 1],
             )
 
@@ -1008,7 +1013,7 @@ class TestToolCallValidation:
                 status="fracture",
                 fracture_type="韧性断裂",
                 location="inside_gauge",
-                confidence=0.92,
+                confidence=UNCALIBRATED_CONFIDENCE,
                 unrecognized_reason="max_rounds",
                 evidence_rounds=[0, 1],
             )
@@ -1019,7 +1024,7 @@ class TestToolCallValidation:
             ToolTerminate(
                 status="no_fracture",
                 fracture_type="韧性断裂",
-                confidence=0.95,
+                confidence=UNCALIBRATED_CONFIDENCE,
             )
 
     def test_terminate_unrecognized_requires_reason(self) -> None:

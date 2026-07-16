@@ -95,6 +95,11 @@ def _parse_args() -> argparse.Namespace:
                         help="Override agent backend (remote or local). Useful for quickly switching between models for comparison.")
     parser.add_argument("--agent-model", type=str, default=None,
                         help="Override agent model name. E.g. 'qwen-max', 'qwen3.5:7b'. Useful for testing different models.")
+    parser.add_argument(
+        "--question", "-q",
+        default="请完整分析这段拉伸试验视频",
+        help="Natural-language question about the video. It is parsed by the Agent and never forwarded to MiniCPM.",
+    )
     return parser.parse_args()
 
 
@@ -118,6 +123,7 @@ def main() -> None:
             work_dir=work_dir,
             agent_backend=args.agent_backend,
             agent_model=args.agent_model,
+            question=args.question,
         )
         if not result["ok"]:
             print(f"Run failed for {args.video}: {result['error']['message']}", file=sys.stderr)
@@ -155,6 +161,7 @@ def main() -> None:
         work_dir=work_dir,
         agent_backend=args.agent_backend,
         agent_model=args.agent_model,
+        question=args.question,
     )
     _write_jsonl(results, output_path)
 

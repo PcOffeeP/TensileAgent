@@ -6,7 +6,25 @@ export interface FinalResult {
   time_range: [number, number] | null;
   fracture_type: string | null;
   location: "inside_gauge" | "outside_gauge" | "unknown" | null;
-  confidence: number | null;
+  confidence: {
+    decision: number | null;
+    localization: number | null;
+    classification: number | null;
+    overall: number | null;
+    evidence_level: "high" | "medium" | "low" | "insufficient";
+    calibration_version: string | null;
+  } | null;
+  visual_evidence?: {
+    status: "not_requested" | "available" | "unavailable";
+    summary: string | null;
+    references: Array<{
+      round: number;
+      sample_range: [number, number];
+      frame_timestamps: number[];
+      clip_hash: string | null;
+      request_id: string | null;
+    }>;
+  };
   unrecognized_reason: string | null;
   rounds?: number;
   frame_range?: [number, number] | null;
@@ -22,6 +40,12 @@ export interface Task {
   started_at: string | null;
   finished_at: string | null;
   result: FinalResult | null;
+  response?: {
+    status: "answered" | "unrecognized" | "failed";
+    answer: Record<string, unknown> | null;
+    evidence_available: boolean;
+    error: { code: string; message: string } | null;
+  } | null;
   error: { stage: string; code: string; message: string } | null;
 }
 
@@ -49,7 +73,6 @@ export interface AnalysisRound {
     fracture_between?: [number, number] | null;
     type?: string;
     location?: string | null;
-    confidence?: number;
   } | null;
   inferredTimeRange?: [number, number] | null;
   inferredFrameRange?: [number, number] | null;
@@ -85,19 +108,21 @@ export interface AppConfig {
   max_rounds: number;
 }
 
-export async function createTask(file?: File, videoPath?: string, videoId?: string): Promise<Task & { task_id: string }> {
+export async function createTask(file?: File, videoPath?: string, videoId?: string, question?: string): Promise<Task & { task_id: string }> {
   const form = new FormData();
   if (file) form.append("file", file);
   if (videoPath) form.append("video_path", videoPath);
   if (videoId) form.append("video_id", videoId);
+  if (question) form.append("question", question);
   const res = await fetch(`${API}/tasks`, { method: "POST", body: form });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
-export async function createBatchTasks(files: File[]): Promise<{ tasks: (Task & { task_id: string })[] }> {
+export async function createBatchTasks(files: File[], question?: string): Promise<{ tasks: (Task & { task_id: string })[] }> {
   const form = new FormData();
   files.forEach((f) => form.append("files", f));
+  if (question) form.append("question", question);
   const res = await fetch(`${API}/tasks/batch`, { method: "POST", body: form });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
