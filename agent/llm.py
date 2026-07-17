@@ -35,7 +35,7 @@ def _record_trace(recorder: TransportTraceRecorder | None, **kwargs: Any) -> Non
 
 
 class BaseAgentLLM(ABC):
-    """Unified interface for the Meta-Agent LLM backend."""
+    """Unified interface for the TensileAgent LLM backend."""
 
     @abstractmethod
     def chat_with_tools(

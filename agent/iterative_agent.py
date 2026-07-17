@@ -1,4 +1,4 @@
-"""Meta-Agent iterative controller.
+"""TensileAgent iterative controller.
 
 Implements the deterministic state machine described in ``docs/PROJECT_PLAN.md``
 using the ``ToolSampleAndInfer`` / ``ToolTerminate`` / ``FinalOutput`` contract.
@@ -27,8 +27,8 @@ from agent.inference import (
 from agent.llm import BaseAgentLLM
 
 from agent.prompts import (
-    META_AGENT_SYSTEM_PROMPT,
-    build_meta_agent_user_context,
+    TENSILE_AGENT_SYSTEM_PROMPT,
+    build_tensile_agent_user_context,
     build_sample_and_infer_prompt,
 )
 from agent.sampling import ClipBuildResult, FfmpegVideoClipBuilder, VideoClipBuilder
@@ -77,7 +77,7 @@ TOOLS_SCHEMA: list[dict[str, Any]] = [
 class IterativeAgent:
     """Iterative frame-interval localization agent.
 
-    The agent drives a Meta-Agent LLM through Native Function Calling.  State
+    The agent drives a TensileAgent LLM through Native Function Calling.  State
     transitions, candidate interval updates, conflict handling and termination
     are enforced by this deterministic code layer, not delegated to the LLM.
     """
@@ -475,7 +475,7 @@ class IterativeAgent:
 
                 messages.append({
                     "role": "user",
-                    "content": build_meta_agent_user_context(
+                    "content": build_tensile_agent_user_context(
                         video_meta=self.video_meta,
                         config=self.config,
                         current_round=min(round_idx + 2, self.max_rounds),
@@ -508,10 +508,10 @@ class IterativeAgent:
     def _build_system_messages(self) -> list[dict[str, Any]]:
         """Return the initial message list with system + first user context."""
         return [
-            {"role": "system", "content": META_AGENT_SYSTEM_PROMPT},
+            {"role": "system", "content": TENSILE_AGENT_SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": build_meta_agent_user_context(
+                "content": build_tensile_agent_user_context(
                     video_meta=self.video_meta,
                     config=self.config,
                     current_round=1,

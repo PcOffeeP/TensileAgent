@@ -29,7 +29,7 @@ def load_config(config_path: str | Path = "agent/config.yaml") -> dict[str, Any]
 
 
 def create_llm_client(config: dict[str, Any]):
-    """Create the Meta-Agent LLM client from ``config``.
+    """Create the TensileAgent LLM client from ``config``.
 
     Delegates to ``agent.llm.AgentLLMFactory``.
     """

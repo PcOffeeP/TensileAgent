@@ -1,23 +1,23 @@
 from __future__ import annotations
 
 from agent.prompts import (
-    META_AGENT_SYSTEM_PROMPT,
-    build_meta_agent_user_context,
+    TENSILE_AGENT_SYSTEM_PROMPT,
+    build_tensile_agent_user_context,
     build_sample_and_infer_prompt,
 )
 
 
-def test_meta_agent_system_prompt_contains_rules():
-    assert "材料拉伸试验视频分析协调者" in META_AGENT_SYSTEM_PROMPT
-    assert "sample_and_infer" in META_AGENT_SYSTEM_PROMPT
-    assert "terminate" in META_AGENT_SYSTEM_PROMPT
-    assert "必须通过 `tool_calls` 输出你的决策" in META_AGENT_SYSTEM_PROMPT
+def test_tensile_agent_system_prompt_contains_rules():
+    assert "材料拉伸试验视频分析协调者" in TENSILE_AGENT_SYSTEM_PROMPT
+    assert "sample_and_infer" in TENSILE_AGENT_SYSTEM_PROMPT
+    assert "terminate" in TENSILE_AGENT_SYSTEM_PROMPT
+    assert "必须通过 `tool_calls` 输出你的决策" in TENSILE_AGENT_SYSTEM_PROMPT
 
 
-def test_build_meta_agent_user_context_contains_video_meta():
+def test_build_tensile_agent_user_context_contains_video_meta():
     video_meta = {"video_id": "v001", "duration": 120.0, "fps": 30.0, "total_frames": 3600}
     config = {"agent": {"tolerance_seconds": 1.0, "max_rounds": 10, "video_fps": 8.0, "video_maxlen": 36}}
-    context = build_meta_agent_user_context(
+    context = build_tensile_agent_user_context(
         video_meta=video_meta,
         config=config,
         current_round=1,
@@ -30,7 +30,7 @@ def test_build_meta_agent_user_context_contains_video_meta():
     assert "当前候选区间: [0.0, 120.0]s" in context
 
 
-def test_build_meta_agent_user_context_includes_history():
+def test_build_tensile_agent_user_context_includes_history():
     video_meta = {"video_id": "v001", "duration": 100.0, "fps": 30.0, "total_frames": 3000}
     config = {"agent": {"tolerance_seconds": 1.0, "max_rounds": 5, "video_fps": 8.0, "video_maxlen": 36}}
     history = [
@@ -43,7 +43,7 @@ def test_build_meta_agent_user_context_includes_history():
             },
         }
     ]
-    context = build_meta_agent_user_context(
+    context = build_tensile_agent_user_context(
         video_meta=video_meta,
         config=config,
         current_round=2,
@@ -51,8 +51,8 @@ def test_build_meta_agent_user_context_includes_history():
         history=history,
     )
     assert "evidence_index=0（Agent轮次1）:" in context
-    assert "evidence_rounds" in META_AGENT_SYSTEM_PROMPT
-    assert "evidence_index" in META_AGENT_SYSTEM_PROMPT
+    assert "evidence_rounds" in TENSILE_AGENT_SYSTEM_PROMPT
+    assert "evidence_index" in TENSILE_AGENT_SYSTEM_PROMPT
     assert "[0.0, 100.0]s" in context
     assert "[48.57, 51.43]s" in context
 

@@ -1,13 +1,13 @@
 # TensileAgent
 
-材料拉伸断裂视频 Agent 分析系统。当前仓库只维护 Agent 端：通过 HTTP 调用外部视觉推理服务，并由 Meta-Agent 迭代定位断裂区间。
+材料拉伸断裂视频 Agent 分析系统。当前仓库只维护 Agent 端：通过 HTTP 调用外部视觉推理服务，并由 TensileAgent 迭代定位断裂区间。
 
 ## 仓库结构
 
 ```
 TensileAgent/
 ├── agent/                  ← 核心 Agent 系统
-│   ├── iterative_agent.py  ← Meta-Agent 状态机（15+ 状态转换）
+│   ├── iterative_agent.py  ← TensileAgent 状态机（15+ 状态转换）
 │   ├── llm.py              ← LLM 双后端（远程 DashScope / 本地 Ollama）
 │   ├── inference.py        ← 推理客户端（HTTP 调用微调模型）
 │   ├── runner.py           ← 共享执行内核（CLI + Web API 共用）
@@ -45,27 +45,27 @@ TensileAgent 的核心是一个**两阶段迭代收敛**过程：
       │
       ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                    Meta-Agent 决策层                              │
+│                    TensileAgent 决策层                           │
 │                    (Qwen 系列 LLM)                               │
 │                                                                  │
 │  第 1 轮 ──── sample_and_infer([0, 60s], task_mode="analyze")    │
-│  第 2 轮 ──── sample_and_infer([20s, 40s], task_mode="analyze") │
-│  第 3 轮 ──── sample_and_infer([28s, 32s], task_mode="analyze") │
-│  ...        （最多 10 轮，逐步收敛）                              │
+│  第 2 轮 ──── sample_and_infer([20s, 40s], task_mode="analyze")  │
+│  第 3 轮 ──── sample_and_infer([28s, 32s], task_mode="analyze")  │
+│  ...        （最多 10 轮，逐步收敛）                             │
 │                                                                  │
-│  每轮 Meta-Agent 决定：                                           │
-│  ① 裁剪哪段视频                                                 │
+│  每轮 TensileAgent 决定：                                        │
+│  ① 裁剪哪段视频                                                  │
 │  ② 是否继续缩小、扩展或覆盖检查                                  │
 │  ③ 是否已经有足够证据可以下结论                                  │
 └──────────────────────┬───────────────────────────────────────────┘
                        │ 每轮：裁剪视频片段 → 编码 → HTTP 调用
                        ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                    MiniCPM-V 4.5 视觉层                           │
-│                    (HTTP API 调用远程推理服务)                     │
+│                    MiniCPM-V 4.5 视觉层                          │
+│                    (HTTP API 调用远程推理服务)                   │
 │                                                                  │
-│  输入：视频片段（最多 8 帧）+ 文本提示                            │
-│  输出：训练一致的严格四字段 JSON                                  │
+│  输入：视频片段（最多 8 帧）+ 文本提示                           │
+│  输出：训练一致的严格四字段 JSON                                 │
 │    { has_fracture, fracture_between, type, location }            │
 │                                                                  │
 │  将帧索引 [i, j] 映射为真实时间戳 [t0, t1]                       │
@@ -74,7 +74,7 @@ TensileAgent 的核心是一个**两阶段迭代收敛**过程：
 
 ### 状态机流程
 
-Meta-Agent 由一个有限状态机驱动，管理从开始到结论的完整生命周期：
+TensileAgent 由一个有限状态机驱动，管理从开始到结论的完整生命周期：
 
 ```
                     ┌──────────┐
@@ -109,10 +109,10 @@ Meta-Agent 由一个有限状态机驱动，管理从开始到结论的完整生
 
 ### 一轮迭代的完整链路
 
-Meta-Agent 每轮调用 `sample_and_infer` 工具，内部依次执行：
+TensileAgent 每轮调用 `sample_and_infer` 工具，内部依次执行：
 
 ```
-Meta-Agent 只决定要检查的区间 [start, end]；视觉 Prompt 由程序固定
+TensileAgent 只决定要检查的区间 [start, end]；视觉 Prompt 由程序固定
       │
       ▼
   ① 视频裁剪 ──  ffmpeg 裁剪出 [start, end] 的连续片段
@@ -130,7 +130,7 @@ Meta-Agent 只决定要检查的区间 [start, end]；视觉 Prompt 由程序固
   ⑤ 状态更新 ──  更新候选区间、轮次计数、置信度统计
       │
       ▼
-  结果返回 Meta-Agent，进入下一轮决策
+  结果返回 TensileAgent，进入下一轮决策
 ```
 
 ### 关键设计要点
@@ -146,7 +146,7 @@ Meta-Agent 只决定要检查的区间 [start, end]；视觉 Prompt 由程序固
 
 | 组件 | 技术 | 说明 |
 |------|------|------|
-| **决策模型** | Qwen2.5-14b（远程）/ Qwen3.5:7b（本地） | Meta-Agent 运行时的推理后端 |
+| **决策模型** | Qwen2.5-14b（远程）/ Qwen3.5:7b（本地） | TensileAgent 运行时的推理后端 |
 | **视觉模型** | MiniCPM-V 4.5（3-fold LoRA SFT） | 分析视频片段，输出断裂判断 |
 | **状态机** | IterativeAgent | 管理候选区间收敛、终止条件判断 |
 | **契约** | Pydantic v2 严格校验 | 3 层校验：模型输出→工具结果→最终结果 |

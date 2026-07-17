@@ -4,7 +4,7 @@ This module contains:
 
 1. The **fine-tuned model** system prompt and per-round user prompt builder,
    used by ``sample_and_infer``.
-2. The **Meta-Agent** system prompt and conversation user prompt builder,
+2. The **TensileAgent** system prompt and conversation user prompt builder,
    used by ``IterativeAgent``.
 
 See ``docs/PROJECT_PLAN.md`` for the authoritative Agent-side contract.
@@ -42,9 +42,9 @@ def build_user_prompt(sample_range: list[float]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Meta-Agent prompts
+# TensileAgent prompts
 # ---------------------------------------------------------------------------
-META_AGENT_SYSTEM_PROMPT = (
+TENSILE_AGENT_SYSTEM_PROMPT = (
     "你是一名\"材料拉伸试验视频分析协调者\"，负责通过多轮工具调用定位材料拉伸试验视频中"
     "试样是否断裂、断裂发生在哪两帧之间、断裂模式和断裂位置。\n\n"
     "## 任务目标\n"
@@ -96,14 +96,14 @@ META_AGENT_SYSTEM_PROMPT = (
 )
 
 
-def build_meta_agent_user_context(
+def build_tensile_agent_user_context(
     video_meta: dict,
     config: dict,
     current_round: int,
     candidate: list[float],
     history: list[dict],
 ) -> str:
-    """Build the per-round user prompt for the Meta-Agent."""
+    """Build the per-round user prompt for the TensileAgent."""
     duration = video_meta.get("duration", 0.0)
     fps = video_meta.get("fps", 0.0)
     total_frames = video_meta.get("total_frames", 0)

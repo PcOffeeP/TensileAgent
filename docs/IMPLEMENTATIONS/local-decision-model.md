@@ -7,7 +7,7 @@
 
 ## 步骤目标与范围
 
-将 Meta-Agent 默认决策后端改为本机 Ollama Qwen3.5-9B，保留 Qwen3-8B 本地对照和 qwen3.7-max 手动远程入口，并提供任务级模型快照、Web 切换和脱敏传输审计。本步骤不修改 MiniCPM 四字段视觉协议、模型训练、confidence 校准或正式 test。
+将 TensileAgent 默认决策后端改为本机 Ollama Qwen3.5-9B，保留 Qwen3-8B 本地对照和 qwen3.7-max 手动远程入口，并提供任务级模型快照、Web 切换和脱敏传输审计。本步骤不修改 MiniCPM 四字段视觉协议、模型训练、confidence 校准或正式 test。
 
 ## 实施方案
 

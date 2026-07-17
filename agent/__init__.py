@@ -7,9 +7,9 @@ from agent.iterative_agent import IterativeAgent, TOOLS_SCHEMA
 from agent.llm import AgentLLMFactory, BaseAgentLLM, LocalClient, RemoteAPIClient
 from agent.parser import ResultParser
 from agent.prompts import (
-    META_AGENT_SYSTEM_PROMPT,
+    TENSILE_AGENT_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
-    build_meta_agent_user_context,
+    build_tensile_agent_user_context,
     build_sample_and_infer_prompt,
     build_user_prompt,
 )
@@ -45,7 +45,7 @@ __all__ = [
     "LocalClient",
     "LlamaFactoryInferenceClient",
     "LocationType",
-    "META_AGENT_SYSTEM_PROMPT",
+    "TENSILE_AGENT_SYSTEM_PROMPT",
     "MockInferenceClient",
     "ModelOutput",
     "RemoteAPIClient",
@@ -56,7 +56,7 @@ __all__ = [
     "ToolTerminate",
     "TOOLS_SCHEMA",
     "VideoClipBuilder",
-    "build_meta_agent_user_context",
+    "build_tensile_agent_user_context",
     "build_sample_and_infer_prompt",
     "build_user_prompt",
     "fracture_between_to_frame_range",

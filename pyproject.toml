@@ -1,11 +1,11 @@
 # ── TensileAgent — 核心 Agent 推理系统依赖声明 ──
-# 本文件为 TensileAgent/agent/ 目录下的 Meta-Agent 推理系统提供依赖声明。
+# 本文件为 TensileAgent/agent/ 目录下的核心推理系统提供依赖声明。
 # mVllm_2/（微调流水线）有自己独立的依赖管理，不在此文件涵盖范围内。
 
 [project]
 name = "tensile-agent"
 version = "0.1.0"
-description = "材料拉伸断裂视频智能分析系统 — Meta-Agent 核心推理系统"
+description = "材料拉伸断裂视频智能分析系统 — TensileAgent 核心推理系统"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.111,<1.0",

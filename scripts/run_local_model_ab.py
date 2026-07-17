@@ -15,7 +15,7 @@ from agent.iterative_agent import TOOLS_SCHEMA
 from agent.config_util import get_local_model_digest
 from agent.llm import LocalClient
 from agent.llm_trace import TransportTraceRecorder
-from agent.prompts import META_AGENT_SYSTEM_PROMPT
+from agent.prompts import TENSILE_AGENT_SYSTEM_PROMPT
 from agent.schema import ToolSampleAndInfer, ToolTerminate
 
 
@@ -91,7 +91,7 @@ def run_model(model: str, critical_repeats: int, trace_root: Path) -> dict[str, 
         try:
             response = client.chat_with_tools(
                 messages=[
-                    {"role": "system", "content": META_AGENT_SYSTEM_PROMPT},
+                    {"role": "system", "content": TENSILE_AGENT_SYSTEM_PROMPT},
                     {"role": "user", "content": scenario["prompt"]},
                 ],
                 tools=TOOLS_SCHEMA,
