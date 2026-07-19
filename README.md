@@ -1,5 +1,23 @@
 # TensileAgent
 
+## 可替换视觉后端 MVP
+
+运行时固定使用 `tensile-vlm/v2`。视觉服务必须提供
+`GET /v1/tensile/contract`，并在每轮响应中返回与任务预检完全一致的
+deployment manifest；旧 v1 服务会被拒绝。
+
+本地联调可以启动协议 Stub：
+
+```bash
+python3 -m agent.http_vlm_stub --scenario fracture --port 8000
+python3 -m agent.doctor
+```
+
+Stub 的 `--scenario` 还支持 `partial`、`no-fracture`、`not-clamped`、
+`unknown`、`invalid`、`drift` 和 `transport-failure`。公共结果统一为
+`tensile-agent/result/v2`；Evidence 始终标记为 `experimental`，confidence
+数值在完成校准前保持 `null`。
+
 材料拉伸断裂视频 Agent 分析系统。当前仓库只维护 Agent 端：通过 HTTP 调用外部视觉推理服务，并由 TensileAgent 迭代定位断裂区间。
 
 ## 仓库结构
@@ -27,7 +45,7 @@ TensileAgent/
 │       └── components/     ← UI 组件（上传、配置、任务详情、导航）
 ├── tests/                  ← pytest 测试（25+ 文件）
 ├── docs/                   ← 设计文档
-│   └── PROJECT_PLAN.md     ← Agent-only 项目计划 v13.0
+│   └── PROJECT_PLAN.md     ← Agent-only 项目计划 v14.0
 ├── data/08_runtime/        ← 运行时产物（gitignored）
 ├── pyproject.toml          ← Python 项目配置
 ├── .gitignore
@@ -355,9 +373,9 @@ pytest tests/test_schema.py -v
 |------|------|
 | **[mVllm_2](../mVllm_2)** | MiniCPM-V 4.5 微调流水线（数据准备、训练、评估） |
 
-`mVllm_2` 包含完整的数据流水线和训练配置，并维护 `tensile-vlm/v1` 权威契约。MiniCPM 单轮只返回四字段；TensileAgent 在多轮证据基础上形成业务结果：`has_fracture`、`time_range`、`type`、`location`、分项 `confidence` 和按需 `visual_evidence`。confidence 未完成源视频隔离校准前只显示证据等级，数值保持 `null`。
+`mVllm_2` 包含完整的数据流水线和训练配置，并维护 `tensile-vlm/v2` 权威契约。视觉模型单轮只返回四字段；TensileAgent 在多轮证据基础上形成 `tensile-agent/result/v2`，支持字段级 partial。confidence 未完成源视频隔离校准前只显示证据等级，数值保持 `null`。
 
-生产服务的 `deployment_manifest` 必须同时携带 `contract_version` 和 `prompt_contract_hash`。Agent 会将它们与本地固定契约比较；缺失或不一致时拒绝使用该轮结果，避免 Prompt、模型服务和客户端静默漂移。
+生产服务的 `deployment_manifest` 必须完整携带模型、adapter、base model、processor、框架、配置、runtime、`contract_version` 和 `contract_hash`。Agent 在任务预检时冻结完整快照；缺失、变化或不一致时拒绝使用该轮结果。
 
 ## 技术栈
 

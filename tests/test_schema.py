@@ -68,22 +68,22 @@ def test_model_output_not_clamped():
     assert output.type == FractureType.NOT_CLAMPED
 
 
-def test_model_output_video_anomaly_unknown_presence():
+def test_model_output_visual_indeterminate():
     output = ModelOutput(
         has_fracture=None,
         fracture_between=None,
-        type=FractureType.VIDEO_ABNORMAL,
+        type=None,
         location=None,
     )
     assert output.has_fracture is None
-    assert output.type == FractureType.VIDEO_ABNORMAL
+    assert output.type is None
 
 
-def test_model_output_video_anomaly_unreliable_time():
+def test_model_output_positive_with_unavailable_secondary_fields():
     output = ModelOutput(
         has_fracture=True,
         fracture_between=None,
-        type=FractureType.VIDEO_ABNORMAL,
+        type=None,
         location=None,
     )
     assert output.has_fracture is True
@@ -113,12 +113,12 @@ def test_model_output_rejects_invalid_type_for_fracture():
         )
 
 
-def test_model_output_rejects_video_anomaly_with_fracture_between():
+def test_model_output_rejects_unknown_type_with_fracture_between():
     with pytest.raises(ValidationError):
         ModelOutput(
             has_fracture=True,
             fracture_between=[0, 1],
-            type=FractureType.VIDEO_ABNORMAL,
+            type="视频异常",
             location=None,
         )
 

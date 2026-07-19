@@ -12,15 +12,16 @@ from agent.schema import ToolSampleAndInfer, ToolTerminate, VisualEvidence
 def _deployment_manifest() -> dict:
     return {
         "model_version": "minicpm-v-4.5",
+        "adapter_version": "adapter-test",
+        "processor_version": "minicpmv4.5/0.1",
         "transformers_version": "4.test",
         "llamafactory_version": "test-rev",
         "base_model_version": "base-test",
-        "artifact_version": "adapter-test",
         "config_fingerprint": "sha256:test",
         "runtime_device": "cpu",
         "runtime_dtype": "float32",
-        "contract_version": "tensile-vlm/v1",
-        "prompt_contract_hash": visual_contract_hash(),
+        "contract_version": "tensile-vlm/v2",
+        "contract_hash": visual_contract_hash(),
     }
 
 
@@ -45,8 +46,8 @@ def test_contract_is_four_field_and_fixed_prompt():
 def test_runtime_accepts_matching_contract_and_rejects_drift():
     metadata = _preprocessing()
     assert _validate_preprocessing_meta(metadata) is None
-    metadata["deployment_manifest"]["prompt_contract_hash"] = "0" * 64
-    assert _validate_preprocessing_meta(metadata) == "prompt_contract_hash_mismatch"
+    metadata["deployment_manifest"]["contract_hash"] = "0" * 64
+    assert _validate_preprocessing_meta(metadata) == "contract_hash_mismatch"
 
 
 def test_tool_schemas_do_not_expose_free_prompt_or_confidence():
@@ -74,4 +75,3 @@ def test_sibling_authoritative_contract_matches_when_available():
     if not sibling.exists():
         pytest.skip("mVllm_2 sibling checkout is not available")
     assert json.loads(sibling.read_text(encoding="utf-8")) == load_visual_contract()
-

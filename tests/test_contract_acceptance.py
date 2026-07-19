@@ -85,10 +85,10 @@ class TestFinalOutputFractureValid:
 
     @pytest.mark.parametrize(
         "location",
-        [LocationType.INSIDE, LocationType.OUTSIDE, "unknown"],
-        ids=["inside_gauge", "outside_gauge", "unknown"],
+        [LocationType.INSIDE, LocationType.OUTSIDE, None],
+        ids=["inside_gauge", "outside_gauge", "unavailable"],
     )
-    def test_location_accepts_all_three(self, location: str) -> None:
+    def test_location_accepts_enum_or_unavailable(self, location: str | None) -> None:
         output = FinalOutput(
             video_id="v001",
             status="fracture",
@@ -158,15 +158,16 @@ class TestFinalOutputFractureInvalid:
                 confidence=UNCALIBRATED_CONFIDENCE,
             )
 
-    def test_missing_time_range_is_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            FinalOutput(
-                video_id="v005",
-                status="fracture",
-                fracture_type=FractureType.TOUGH,
-                location="inside_gauge",
-                confidence=UNCALIBRATED_CONFIDENCE,
-            )
+    def test_missing_time_range_is_field_level_unavailable(self) -> None:
+        output = FinalOutput(
+            video_id="v005",
+            status="fracture",
+            fracture_type=FractureType.TOUGH,
+            location="inside_gauge",
+            confidence=UNCALIBRATED_CONFIDENCE,
+        )
+        assert output.field_status is not None
+        assert output.field_status.time_range == "unavailable"
 
     def test_unrecognized_reason_must_be_null(self) -> None:
         with pytest.raises(ValidationError):
@@ -204,30 +205,19 @@ class TestFinalOutputFractureInvalid:
 
     @pytest.mark.parametrize(
         "bad_location",
-        ["", "invalid", None],
-        ids=["empty_string", "invalid_value", "null"],
+        ["", "invalid"],
+        ids=["empty_string", "invalid_value"],
     )
     def test_invalid_location_rejected(self, bad_location: Any) -> None:
-        if bad_location is None:
-            with pytest.raises(ValidationError):
-                FinalOutput(
-                    video_id="v009",
-                    status="fracture",
-                    time_range=[10.0, 11.0],
-                    fracture_type=FractureType.TOUGH,
-                    location=None,
-                    confidence=UNCALIBRATED_CONFIDENCE,
-                )
-        else:
-            with pytest.raises(ValidationError):
-                FinalOutput(
-                    video_id="v009",
-                    status="fracture",
-                    time_range=[10.0, 11.0],
-                    fracture_type=FractureType.TOUGH,
-                    location=bad_location,
-                    confidence=UNCALIBRATED_CONFIDENCE,
-                )
+        with pytest.raises(ValidationError):
+            FinalOutput(
+                video_id="v009",
+                status="fracture",
+                time_range=[10.0, 11.0],
+                fracture_type=FractureType.TOUGH,
+                location=bad_location,
+                confidence=UNCALIBRATED_CONFIDENCE,
+            )
 
 
 # -------------------------------------------------------------------------
@@ -326,14 +316,15 @@ class TestFinalOutputUnrecognizedValid:
 class TestFinalOutputUnrecognizedInvalid:
     """Invalid unrecognized field combinations are rejected by FinalOutput."""
 
-    def test_confidence_must_be_null(self) -> None:
-        with pytest.raises(ValidationError):
-            FinalOutput(
-                video_id="v018",
-                status="unrecognized",
-                unrecognized_reason="video_anomaly",
-                confidence=UNCALIBRATED_CONFIDENCE,
-            )
+    def test_uncalibrated_confidence_can_preserve_evidence_level(self) -> None:
+        output = FinalOutput(
+            video_id="v018",
+            status="unrecognized",
+            unrecognized_reason="visual_indeterminate",
+            confidence=UNCALIBRATED_CONFIDENCE,
+        )
+        assert output.confidence is not None
+        assert output.confidence.overall is None
 
     def test_fracture_type_must_be_null(self) -> None:
         with pytest.raises(ValidationError):
@@ -388,15 +379,15 @@ class TestToolTerminateConditionFields:
                 evidence_rounds=[0, 1],
             )
 
-    def test_fracture_rejects_null_location(self) -> None:
-        with pytest.raises(ValidationError):
-            ToolTerminate(
-                status="fracture",
-                fracture_type=FractureType.TOUGH,
-                location=None,
-                confidence=UNCALIBRATED_CONFIDENCE,
-                evidence_rounds=[0, 1],
-            )
+    def test_fracture_allows_null_location(self) -> None:
+        tool = ToolTerminate(
+            status="fracture",
+            fracture_type=FractureType.TOUGH,
+            location=None,
+            confidence=UNCALIBRATED_CONFIDENCE,
+            evidence_rounds=[0, 1],
+        )
+        assert tool.location is None
 
     def test_no_fracture_rejects_evidence_rounds(self) -> None:
         """no_fracture has no evidence_rounds requirement (but null is fine)."""
@@ -794,8 +785,7 @@ class TestRunnerOkFalseConfiguration:
 class TestEdgeCases:
     """Additional edge cases to guard against regressions."""
 
-    def test_fracture_with_location_unknown_in_finalize(self) -> None:
-        """The public fracture result accepts the explicit unknown location."""
+    def test_fracture_with_unavailable_location_in_finalize(self) -> None:
         video_meta = {"video_id": "v_edge_001", "duration": 100.0, "video_path": "v_edge_001.mp4"}
         config = make_config()
         agent = IterativeAgent(
@@ -809,12 +799,13 @@ class TestEdgeCases:
             "status": "fracture",
             "time_range": [10.0, 10.5],
             "fracture_type": "韧性断裂",
-            "location": "unknown",
+            "location": None,
             "confidence": UNCALIBRATED_CONFIDENCE,
             "unrecognized_reason": None,
         })
         assert result["status"] == "fracture"
-        assert result["location"] == "unknown"
+        assert result["location"] is None
+        assert result["field_status"]["location"] == "unavailable"
 
     def test_non_fracture_type_in_terminate_rejected_by_schema(self) -> None:
         """Using a non-fracture type like 未断裂 in fracture terminate is rejected."""
@@ -1090,7 +1081,7 @@ class TestMissingPreprocessingContract:
 
         result = agent.run()
         assert result["ok"] is False
-        assert result["error"]["code"] == "missing_or_invalid_preprocessing_metadata"
+        assert result["error"]["code"] == "consecutive_infra_failures"
 
     def test_missing_preprocessing_no_fracture_graceful(self) -> None:
         """When preprocessing is None and has_fracture is False, graceful degrade."""
@@ -1143,7 +1134,7 @@ class TestMissingPreprocessingContract:
 
         result = agent.run()
         assert result["ok"] is False
-        assert result["error"]["code"] == "missing_or_invalid_preprocessing_metadata"
+        assert result["error"]["code"] == "consecutive_infra_failures"
 
 
 # =========================================================================
@@ -1233,5 +1224,5 @@ class TestEvidenceThresholdContract:
             "location": "inside_gauge",
             "confidence": 0.92,
         })
-        assert args["time_range"] == [15.0, 18.0]  # intersection
+        assert args["time_range"] is None  # intersection is wider than tolerance
         assert args["fracture_type"] == "韧性断裂"

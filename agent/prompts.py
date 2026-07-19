@@ -18,10 +18,10 @@ from agent.contract import load_visual_contract, visual_contract_hash
 # Fine-tuned model prompts (v3: trained four-field production contract)
 # ---------------------------------------------------------------------------
 _VISUAL_CONTRACT = load_visual_contract()
-SYSTEM_PROMPT = str(_VISUAL_CONTRACT["system_prompt"])
-PRODUCTION_USER_PROMPT = str(_VISUAL_CONTRACT["user_prompt"])
-EVIDENCE_SYSTEM_PROMPT = str(_VISUAL_CONTRACT["evidence_system_prompt"])
-EVIDENCE_USER_PROMPT = str(_VISUAL_CONTRACT["evidence_user_prompt"])
+SYSTEM_PROMPT = str(_VISUAL_CONTRACT["analysis"]["system_prompt"])
+PRODUCTION_USER_PROMPT = str(_VISUAL_CONTRACT["analysis"]["user_prompt"])
+EVIDENCE_SYSTEM_PROMPT = str(_VISUAL_CONTRACT["evidence"]["system_prompt"])
+EVIDENCE_USER_PROMPT = str(_VISUAL_CONTRACT["evidence"]["user_prompt"])
 PROMPT_CONTRACT_VERSION = str(_VISUAL_CONTRACT["contract_version"])
 PROMPT_CONTRACT_HASH = visual_contract_hash()
 
@@ -66,8 +66,8 @@ TENSILE_AGENT_SYSTEM_PROMPT = (
     "  - `status`：``fracture``、``no_fracture`` 或 ``unrecognized``。\n"
     "  - status=fracture 时，`fracture_type` 必须且只能使用中文枚举："
     "`韧性断裂`、`脆性断裂`、`界面脱粘`、`齐根断裂`、`爆炸性断裂`、"
-    "`半脆半韧断裂`、`界面脱粘、齐根断裂`；不得翻译成英文。"
-    "`location` 必须是 `inside_gauge` 或 `outside_gauge`；"
+    "`半脆半韧断裂`、`界面脱粘、齐根断裂`、`脆性断裂、齐根断裂`；不得翻译成英文。"
+    "`fracture_type` 和 `location` 允许省略，程序会独立验证其可用性；"
     "`evidence_rounds` 必须引用有效证据。\n"
     "  - status=no_fracture 时只传 `status`，省略 `fracture_type`、`location`、"
     "`unrecognized_reason`、`evidence_rounds`。\n"
@@ -80,8 +80,8 @@ TENSILE_AGENT_SYSTEM_PROMPT = (
     "## 决策规则\n"
     "- 初始候选区间为 `[0, duration]`（全视频）。\n"
     "- 每轮根据当前候选区间、历史迭代记录和模型返回结果，决定下一步采样区间或是否终止。\n"
-    "- 只有七种正常断裂类别且存在合法 `inferred_time_range` 时才更新候选区间并继续聚焦；"
-    "`type=视频异常` 即使 `has_fracture=true` 也没有可靠时间证据，只能同范围复查后考虑 unrecognized。\n"
+    "- `has_fracture=true` 即为检测证据；时间、类型和位置由程序分别验证，缺失不得改写成阴性。"
+    "全局正例缺少定位时，程序会强制调度五个局部窗口。\n"
     "- 如果模型在**初始全范围采样或已扩展回全范围**后返回合法的 `has_fracture = false`，"
     "程序会强制执行五个重叠区间的完整覆盖检查；覆盖完成前禁止 terminate 为 no_fracture。"
     "若在聚焦子区间返回 `has_fracture = false`，"

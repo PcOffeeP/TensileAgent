@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import time
+import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol, runtime_checkable
 
@@ -46,8 +47,21 @@ DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BACKOFF = 2.0
 DEFAULT_MIME_TYPE = "video/mp4"
 _VISUAL_CONTRACT = load_visual_contract()
-_GENERATION_CONFIG = _VISUAL_CONTRACT["generation"]
+_GENERATION_CONFIG = _VISUAL_CONTRACT["analysis"]["generation"]
 _CONTRACT_MAX_FRAMES = int(_VISUAL_CONTRACT["video"]["max_frames"])
+_REQUIRED_DEPLOYMENT_FIELDS = {
+    "model_version",
+    "adapter_version",
+    "base_model_version",
+    "processor_version",
+    "llamafactory_version",
+    "transformers_version",
+    "config_fingerprint",
+    "runtime_device",
+    "runtime_dtype",
+    "contract_version",
+    "contract_hash",
+}
 
 
 @dataclass
@@ -100,6 +114,10 @@ class InferenceClient(Protocol):
         are raised as exceptions; an invalid model output is returned with
         ``ok=False`` and a structured parser error.
         """
+        ...
+
+    def preflight(self) -> dict[str, Any]:
+        """Return and pin the visual service deployment snapshot."""
         ...
 
 
@@ -271,7 +289,32 @@ def _extract_preprocessing_from_response(response: Any) -> dict[str, Any] | None
     return None
 
 
-def _validate_preprocessing_meta(meta: dict[str, Any] | None) -> str | None:
+def _validate_deployment_manifest(
+    deployment: Any,
+    expected: dict[str, Any] | None = None,
+) -> str | None:
+    """Validate a complete visual deployment identity and optional task pin."""
+    if not isinstance(deployment, dict) or set(deployment) != _REQUIRED_DEPLOYMENT_FIELDS:
+        return "missing_or_invalid_deployment_manifest"
+    if any(
+        not isinstance(deployment.get(key), str) or not deployment[key].strip()
+        for key in _REQUIRED_DEPLOYMENT_FIELDS
+    ):
+        return "missing_or_invalid_deployment_manifest"
+    contract = load_visual_contract()
+    if deployment["contract_version"] != contract["contract_version"]:
+        return "contract_version_mismatch"
+    if deployment["contract_hash"] != visual_contract_hash():
+        return "contract_hash_mismatch"
+    if expected is not None and deployment != expected:
+        return "deployment_drift"
+    return None
+
+
+def _validate_preprocessing_meta(
+    meta: dict[str, Any] | None,
+    expected_deployment: dict[str, Any] | None = None,
+) -> str | None:
     """Validate server-returned ``preprocessing`` metadata.
 
     Returns ``None`` when the metadata is valid, or an error-code string
@@ -337,32 +380,7 @@ def _validate_preprocessing_meta(meta: dict[str, Any] | None) -> str | None:
             )
             return "non_monotonic_indices"
 
-    deployment = meta.get("deployment_manifest")
-    required_deployment = {
-        "model_version",
-        "transformers_version",
-        "llamafactory_version",
-        "base_model_version",
-        "artifact_version",
-        "config_fingerprint",
-        "runtime_device",
-        "runtime_dtype",
-        "contract_version",
-        "prompt_contract_hash",
-    }
-    if not isinstance(deployment, dict) or any(
-        not isinstance(deployment.get(key), str) or not deployment[key].strip()
-        for key in required_deployment
-    ):
-        return "missing_or_invalid_deployment_manifest"
-
-    contract = load_visual_contract()
-    if deployment["contract_version"] != contract["contract_version"]:
-        return "contract_version_mismatch"
-    if deployment["prompt_contract_hash"] != visual_contract_hash():
-        return "prompt_contract_hash_mismatch"
-
-    return None
+    return _validate_deployment_manifest(meta.get("deployment_manifest"), expected_deployment)
 
 
 class LlamaFactoryInferenceClient:
@@ -384,6 +402,7 @@ class LlamaFactoryInferenceClient:
         self.max_request_size = max_request_size
         self.timeout = timeout
         self.max_retries = max_retries
+        self.deployment_snapshot: dict[str, Any] | None = None
         if OpenAI is None:  # pragma: no cover - dependency guard
             raise ModuleNotFoundError(
                 "LlamaFactoryInferenceClient requires the 'openai' package. "
@@ -401,6 +420,37 @@ class LlamaFactoryInferenceClient:
             f"{self.__class__.__name__}(model={self.model!r}, "
             f"base_url={self.base_url!r}, api_key=***REDACTED***)"
         )
+
+    def preflight(self) -> dict[str, Any]:
+        """Validate ``GET /v1/tensile/contract`` and pin this task's identity."""
+        endpoint = f"{self.base_url.rstrip('/')}/tensile/contract"
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        try:
+            response = httpx.get(endpoint, headers=headers, timeout=10.0)
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"visual contract preflight failed: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError("visual contract preflight returned a non-object")
+        if payload.get("contract_version") != _VISUAL_CONTRACT["contract_version"]:
+            raise RuntimeError("visual contract preflight version mismatch")
+        if payload.get("contract_hash") != visual_contract_hash():
+            raise RuntimeError("visual contract preflight hash mismatch")
+        capabilities = payload.get("capabilities")
+        if capabilities != {"analysis": True, "evidence": True}:
+            raise RuntimeError("visual contract preflight capability mismatch")
+        deployment = payload.get("deployment_manifest")
+        manifest_error = _validate_deployment_manifest(deployment)
+        if manifest_error is not None:
+            raise RuntimeError(f"visual contract preflight invalid: {manifest_error}")
+        self.deployment_snapshot = dict(deployment)
+        return {
+            "contract_version": payload["contract_version"],
+            "contract_hash": payload["contract_hash"],
+            "capabilities": dict(capabilities),
+            "deployment_manifest": dict(deployment),
+        }
 
     def infer(
         self, video_input: str | ClipBuildResult, prompt: str
@@ -526,7 +576,7 @@ class LlamaFactoryInferenceClient:
         if _last_raw_response[0] is not None:
             raw_pp = _extract_preprocessing_from_response(_last_raw_response[0])
             if raw_pp is not None:
-                err_code = _validate_preprocessing_meta(raw_pp)
+                err_code = _validate_preprocessing_meta(raw_pp, self.deployment_snapshot)
                 if err_code is None:
                     logger.info(
                         "Server preprocessing metadata OK: max_frames=%s, "
@@ -658,7 +708,7 @@ class LlamaFactoryInferenceClient:
         if not summary:
             return EvidenceInferenceResult(ok=False, error="empty visual evidence")
         preprocessing = _extract_preprocessing_from_response(response)
-        metadata_error = _validate_preprocessing_meta(preprocessing)
+        metadata_error = _validate_preprocessing_meta(preprocessing, self.deployment_snapshot)
         if metadata_error is not None:
             return EvidenceInferenceResult(
                 ok=False,
@@ -683,6 +733,46 @@ class MockInferenceClient:
 
     def __init__(self, response: dict | str | Callable[..., Any]) -> None:
         self._response = response
+        self.deployment_snapshot = {
+            "model_version": "http-stub-model",
+            "adapter_version": "http-stub-adapter",
+            "base_model_version": "http-stub-base",
+            "processor_version": "http-stub-processor",
+            "llamafactory_version": "http-stub-llamafactory",
+            "transformers_version": "http-stub-transformers",
+            "config_fingerprint": "sha256:http-stub-config",
+            "runtime_device": "cpu",
+            "runtime_dtype": "float32",
+            "contract_version": str(_VISUAL_CONTRACT["contract_version"]),
+            "contract_hash": visual_contract_hash(),
+        }
+
+    def preflight(self) -> dict[str, Any]:
+        return {
+            "contract_version": str(_VISUAL_CONTRACT["contract_version"]),
+            "contract_hash": visual_contract_hash(),
+            "capabilities": {"analysis": True, "evidence": True},
+            "deployment_manifest": dict(self.deployment_snapshot),
+        }
+
+    def _preprocessing(self, video_input: str | ClipBuildResult) -> dict[str, Any]:
+        manifest = video_input.manifest if isinstance(video_input, ClipBuildResult) else []
+        if manifest:
+            stride = max(1, len(manifest) // _CONTRACT_MAX_FRAMES)
+            selected = manifest[::stride][:_CONTRACT_MAX_FRAMES]
+            frames = [
+                {"index": index, "timestamp": float(entry.get("clip_timestamp", index))}
+                for index, entry in enumerate(selected)
+            ]
+        else:
+            frames = [{"index": index, "timestamp": float(index)} for index in range(_CONTRACT_MAX_FRAMES)]
+        return {
+            "request_id": f"mock-{uuid.uuid4()}",
+            "processor_version": self.deployment_snapshot["processor_version"],
+            "max_frames": _CONTRACT_MAX_FRAMES,
+            "frames": frames,
+            "deployment_manifest": dict(self.deployment_snapshot),
+        }
 
     def infer(
         self, video_input: str | ClipBuildResult, prompt: str
@@ -704,11 +794,30 @@ class MockInferenceClient:
                     ),
                     attempts=1,
                 )
-            return InferenceResult(ok=True, model_output=validated, attempts=1)
+            preprocessing = self._preprocessing(video_input)
+            return InferenceResult(
+                ok=True,
+                model_output=validated,
+                attempts=1,
+                preprocessing=preprocessing,
+                diagnostics=SampleAndInferDiagnostics(
+                    request_id=preprocessing["request_id"],
+                    processor_version=preprocessing["processor_version"],
+                    max_frames=preprocessing["max_frames"],
+                    sampled_frames=preprocessing["frames"],
+                    deployment_manifest=preprocessing["deployment_manifest"],
+                ),
+            )
 
         parsed = ResultParser.parse(raw)
         if parsed.ok:
-            return InferenceResult(ok=True, model_output=parsed.data, attempts=1)
+            preprocessing = self._preprocessing(video_input)
+            return InferenceResult(
+                ok=True,
+                model_output=parsed.data,
+                attempts=1,
+                preprocessing=preprocessing,
+            )
         return InferenceResult(ok=False, error=parsed.error, attempts=1)
 
 

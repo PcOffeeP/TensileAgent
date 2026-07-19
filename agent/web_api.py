@@ -477,10 +477,7 @@ async def _queue_worker():
 
 
 def _normalize_result(result: Any) -> dict:
-    """将 runner 结果转为公共 ``FinalOutput`` 格式。
-
-    优先识别 ``ok/result/error`` 新契约；否则保留旧字段兜底并标记迁移兼容。
-    """
+    """Unpack only the public ``tensile-agent/result/v2`` envelope."""
     if not result:
         return {"status": "unrecognized"}
     if isinstance(result, BaseModel):
@@ -494,45 +491,34 @@ def _normalize_result(result: Any) -> dict:
         return {
             k: v
             for k, v in {
+                "schema_version": res.get("schema_version"),
                 "video_id": res.get("video_id", result.get("video_id", "")),
                 "status": res.get("status", "unrecognized"),
+                "has_fracture": res.get("has_fracture"),
                 "time_range": res.get("time_range"),
                 "fracture_type": res.get("fracture_type"),
                 "location": res.get("location"),
                 "confidence": res.get("confidence"),
+                "field_status": res.get("field_status"),
                 "visual_evidence": res.get("visual_evidence"),
                 "unrecognized_reason": res.get("unrecognized_reason"),
+                "warnings": res.get("warnings", []),
                 "rounds": result.get("rounds", result.get("total_rounds")),
             }.items()
-            if v is not None or k in ("video_id", "status")
+            if v is not None or k in ("schema_version", "video_id", "status", "warnings")
         }
 
     if ok is False:
         error = result.get("error") or {}
         return {"status": "failed", **error}
 
-    # 旧字段兜底（迁移兼容）
-    output = result.get("output") or result.get("final_output") or {}
-    normalized = {
-        "status": result.get("status", result.get("final_status", "unrecognized")),
-        "video_id": result.get("video_id", ""),
-        "fracture_type": output.get("type", result.get("fracture_type")),
-        "location": output.get("location", result.get("location")),
-        "confidence": output.get("confidence", result.get("confidence")),
-        "visual_evidence": output.get("visual_evidence", result.get("visual_evidence")),
-        "time_range": output.get("fracture_between", result.get("time_range")),
-        "unrecognized_reason": result.get("unrecognized_reason"),
-        "rounds": result.get("rounds", result.get("total_rounds")),
-        "_migration_compat": True,
-    }
-    start_time = result.get("start_time")
-    end_time = result.get("end_time")
-    if start_time is not None and end_time is not None and normalized.get("time_range") is None:
-        normalized["time_range"] = [start_time, end_time]
     return {
-        k: v
-        for k, v in normalized.items()
-        if v is not None or k in ("status", "video_id", "_migration_compat")
+        "schema_version": "tensile-agent/result/v2",
+        "video_id": "",
+        "status": "unrecognized",
+        "has_fracture": None,
+        "unrecognized_reason": "invalid_model_output",
+        "warnings": ["Runner returned an unsupported result envelope."],
     }
 
 
@@ -544,6 +530,7 @@ def _apply_runner_result_to_task(task: TaskModel, runner_result: Any):
     if isinstance(runner_result, dict) and runner_result.get("ok") is False:
         task.status = TASK_STATUS_FAILED
         task.result = None
+        task.response = _sanitize_event_data(runner_result.get("response"))
         error = runner_result.get("error")
         if isinstance(error, dict):
             task.error = {

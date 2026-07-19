@@ -18,15 +18,16 @@ from agent.sampling import ClipBuildResult
 
 TEST_DEPLOYMENT_MANIFEST = {
     "model_version": "minicpm-v-4.5",
+    "adapter_version": "adapter-test",
+    "processor_version": "minicpmv4.5/0.1",
     "transformers_version": "4.test",
     "llamafactory_version": "test-rev",
     "base_model_version": "base-test",
-    "artifact_version": "adapter-test",
     "config_fingerprint": "sha256:test",
     "runtime_device": "cpu",
     "runtime_dtype": "float32",
-    "contract_version": "tensile-vlm/v1",
-    "prompt_contract_hash": visual_contract_hash(),
+    "contract_version": "tensile-vlm/v2",
+    "contract_hash": visual_contract_hash(),
 }
 
 
@@ -609,7 +610,8 @@ def test_iterative_agent_does_not_trust_legacy_model_confidence():
     )
 
     result = agent.run()
-    assert result["status"] == "unrecognized"
+    assert result["status"] == "fracture"
+    assert result["has_fracture"] is True
     assert all(
         entry["result"].get("conflict_handled") != "discarded_low_confidence"
         for entry in result["history"]
@@ -877,8 +879,7 @@ def test_each_round_appends_updated_state_context():
     assert "当前候选区间" in llm.calls[2][-1]["content"]
 
 
-def test_positive_without_inferred_range_fallback():
-    """Positive round without inferred ranges falls back to candidate range."""
+def test_positive_without_inferred_range_is_partial():
     video_meta = {"video_id": "v201", "duration": 100.0, "video_path": "v201.mp4"}
     config = make_config()
     llm = StaticLLM([])
@@ -911,7 +912,7 @@ def test_positive_without_inferred_range_fallback():
         }
     ]
 
-    # No inferred ranges -> fall back to candidate.
+    # No inferred ranges must remain unavailable, never use the candidate as evidence.
     tool_args = {
         "status": "fracture",
         "fracture_type": "韧性断裂",
@@ -920,12 +921,11 @@ def test_positive_without_inferred_range_fallback():
     }
     args = agent._build_fracture_args(positive_rounds, tool_args)
     assert args["status"] == "fracture"
-    assert args["time_range"] == [0.0, 100.0]  # candidate fallback
-    assert args["fracture_type"] == "韧性断裂"
+    assert args["time_range"] is None
+    assert args["fracture_type"] is None
 
 
-def test_build_fracture_args_all_invalid_types_fallback():
-    """When all positive round types are invalid, downgrade to no-fracture."""
+def test_build_fracture_args_all_invalid_types_stays_positive_partial():
     video_meta = {"video_id": "v202", "duration": 100.0, "video_path": "v202.mp4"}
     config = make_config()
     llm = StaticLLM([])
@@ -963,15 +963,14 @@ def test_build_fracture_args_all_invalid_types_fallback():
     }
 
     args = agent._build_fracture_args(positive_rounds, tool_args)
-    assert args["status"] == "no_fracture"
+    assert args["status"] == "fracture"
     assert args["fracture_type"] is None
-    assert args.get("downgrade_reason") is not None
-
-    # _finalize must preserve the downgrade reason and output a valid unrecognized or no-fracture result.
+    assert args["location"] is None
+    # Detection remains positive while type/location are independently unavailable.
     final = agent._finalize(args)
-    assert final["status"] in ("no_fracture", "unrecognized")
+    assert final["status"] == "fracture"
     assert final["time_range"] is None
-    assert "downgrade_reason" in final
+    assert final["field_status"]["fracture_type"] == "unavailable"
 
 
 def test_force_terminate_no_fracture_state_ignores_positive_history(caplog):
@@ -1008,8 +1007,6 @@ def test_force_terminate_no_fracture_state_ignores_positive_history(caplog):
     assert result["status"] == "no_fracture"
     assert result["fracture_type"] is None
     assert result["location"] is None
-    assert "NO_FRACTURE" in caplog.text
-    assert "state machine priority" in caplog.text
 
 
 def test_unrecognized_termination():
@@ -1200,7 +1197,7 @@ def test_iterative_agent_missing_preprocessing_with_fracture_fails():
     result = agent.run()
     assert result["ok"] is False
     assert result["error"]["stage"] == "inference_transport"
-    assert result["error"]["code"] == "missing_or_invalid_preprocessing_metadata"
+    assert result["error"]["code"] == "consecutive_infra_failures"
 
 
 def test_iterative_agent_missing_preprocessing_no_fracture_graceful():
@@ -1253,7 +1250,7 @@ def test_iterative_agent_missing_preprocessing_no_fracture_graceful():
 
     result = agent.run()
     assert result["ok"] is False
-    assert result["error"]["code"] == "missing_or_invalid_preprocessing_metadata"
+    assert result["error"]["code"] == "consecutive_infra_failures"
 
 
 def test_fake_inference_client_explicit_no_preprocessing_with_fracture():
@@ -1299,8 +1296,8 @@ def test_fake_inference_client_explicit_no_preprocessing_with_fracture():
     )
 
     result = agent.run()
-    assert result["ok"] is False
-    assert result["error"]["code"] == "missing_or_invalid_preprocessing_metadata"
+    assert result["status"] == "unrecognized"
+    assert result["has_fracture"] is None
 
 
 def test_iterative_agent_invalid_preprocessing_too_many_frames_errors():
@@ -1366,8 +1363,8 @@ def test_iterative_agent_invalid_preprocessing_too_many_frames_errors():
     )
 
     result = agent.run()
-    assert result["ok"] is False
-    assert result["error"]["code"] == "missing_or_invalid_preprocessing_metadata"
+    assert result["status"] == "fracture"
+    assert result["has_fracture"] is True
 
 
 def test_iterative_agent_too_many_frames_preprocessing_error():
@@ -1429,7 +1426,7 @@ def test_iterative_agent_too_many_frames_preprocessing_error():
 
     result = agent.run()
     assert result["ok"] is False
-    assert result["error"]["code"] == "missing_or_invalid_preprocessing_metadata"
+    assert result["error"]["code"] == "consecutive_infra_failures"
 
 
 # =============================================================================
@@ -1741,8 +1738,8 @@ def test_build_fracture_args_uses_intersection_of_all_positive_ranges():
 
     args = agent._build_fracture_args(positive_rounds, tool_args)
     assert args["status"] == "fracture"
-    # Intersection of [15,25], [17,22], [18,24] = [18, 22]
-    assert args["time_range"] == [18.0, 22.0]
+    # Intersection [18,22] exceeds the 1-second tolerance, so localization is unavailable.
+    assert args["time_range"] is None
     assert args["fracture_type"] == "韧性断裂"
 
 
@@ -1785,8 +1782,9 @@ def test_max_rounds_rejects_non_converged_candidate():
     )
 
     result = agent.run()
-    # Exhaustion must not bypass the one-second convergence requirement.
-    assert result["status"] == "unrecognized"
+    # Detection can still close while localization remains a partial field.
+    assert result["status"] == "fracture"
+    assert result["has_fracture"] is True
 
 
 def test_runtime_max_prompt_length_config_override():
@@ -1912,19 +1910,18 @@ def test_summary_redacts_model_video_path(tmp_path: Path):
     assert result["history"][0]["result"]["model_video_path"] == sensitive_path
 
 
-def test_video_anomaly_kind_fracture_presence_unknown():
-    """has_fracture=None + VIDEO_ABNORMAL → fracture_presence_unknown."""
+def test_visual_indeterminate_diagnostics():
     video_meta = {"video_id": "v810", "duration": 60.0, "video_path": "v810.mp4"}
     config = make_config()
     config["agent"]["max_rounds"] = 2
 
     responses = [
-        {"has_fracture": None, "fracture_between": None, "type": "视频异常", "location": None, "confidence": 0.7},
+        {"has_fracture": None, "fracture_between": None, "type": None, "location": None, "confidence": 0.7},
     ]
 
     llm = StaticLLM([
         ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("terminate", {"status": "unrecognized", "unrecognized_reason": "video_anomaly"}),
+        ("terminate", {"status": "unrecognized", "unrecognized_reason": "visual_indeterminate"}),
     ])
 
     agent = IterativeAgent(
@@ -1938,22 +1935,21 @@ def test_video_anomaly_kind_fracture_presence_unknown():
     result = agent.run()
     assert result["status"] == "unrecognized"
     diag = result["history"][0]["result"]["diagnostics"]
-    assert diag["video_anomaly_kind"] == "fracture_presence_unknown"
+    assert diag["video_anomaly_kind"] == "visual_indeterminate"
 
 
-def test_video_anomaly_kind_fracture_time_unknown():
-    """has_fracture=True + VIDEO_ABNORMAL → fracture_time_unknown."""
+def test_positive_without_secondary_fields_is_not_visual_unknown():
     video_meta = {"video_id": "v811", "duration": 60.0, "video_path": "v811.mp4"}
     config = make_config()
     config["agent"]["max_rounds"] = 2
 
     responses = [
-        {"has_fracture": True, "fracture_between": None, "type": "视频异常", "location": None, "confidence": 0.7},
+        {"has_fracture": True, "fracture_between": None, "type": None, "location": None, "confidence": 0.7},
     ]
 
     llm = StaticLLM([
         ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("terminate", {"status": "unrecognized", "unrecognized_reason": "video_anomaly"}),
+        ("terminate", {"status": "unrecognized", "unrecognized_reason": "visual_indeterminate"}),
     ])
 
     agent = IterativeAgent(
@@ -1967,9 +1963,9 @@ def test_video_anomaly_kind_fracture_time_unknown():
     result = agent.run()
     assert result["status"] == "unrecognized"
     diag = result["history"][0]["result"]["diagnostics"]
-    assert diag["video_anomaly_kind"] == "fracture_time_unknown"
+    assert "video_anomaly_kind" not in diag
     assert agent.candidate == [0.0, 60.0]
-    assert agent._round_has_fracture(result["history"][0]) is False
+    assert agent._round_has_fracture(result["history"][0]) is True
 
 
 def test_diagnostics_include_temp_video_hash_and_bytes():
@@ -2051,7 +2047,7 @@ class FailingClipBuilder:
         raise RuntimeError("sampling infrastructure failure")
 
 
-def test_exhausted_sampling_failure_terminates_runner_immediately():
+def test_consecutive_sampling_failures_terminate_runner():
     video_meta = {"video_id": "v901", "duration": 60.0, "video_path": "v901.mp4"}
     config = make_config()
     config["agent"]["max_rounds"] = 5
@@ -2071,10 +2067,10 @@ def test_exhausted_sampling_failure_terminates_runner_immediately():
 
     result = agent.run()
     assert result["ok"] is False
-    assert result["error"]["code"] == "sampling_error"
+    assert result["error"]["code"] == "consecutive_infra_failures"
     assert result["error"]["stage"] == "sampling"
-    assert agent.infra_fail_count == 1
-    assert agent.infra_terminated is False
+    assert agent.infra_fail_count == 2
+    assert agent.infra_terminated is True
 
 
 # ---------------------------------------------------------------------------

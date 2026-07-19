@@ -113,9 +113,12 @@ class IterativeAgent:
         self.focus_miss_count = 0
         self.infra_fail_count = 0
         self.infra_terminated = False
+        self.last_infra_error: dict[str, Any] | None = None
+        self.fatal_infra_error: dict[str, Any] | None = None
         self.last_round_confidence_level = "不可信"
         self.best_positive_round: dict[str, Any] | None = None
         self.coverage_index = 0
+        self.localization_index = 0
         self.pending_recheck_range: list[float] | None = None
 
         self.clip_builder = clip_builder or FfmpegVideoClipBuilder()
@@ -248,17 +251,11 @@ class IterativeAgent:
         elif validation_error is not None:
             diagnostics.error = ValidationErrorInfo(**validation_error)
 
-        # Video anomaly classification.
+        # v2 represents a visually indeterminate round with four null fields.
         model_output = result.get("model_output") or {}
         has_fracture = model_output.get("has_fracture")
-        output_type = model_output.get("type")
-        if has_fracture is None and output_type == FractureType.VIDEO_ABNORMAL:
-            diagnostics.video_anomaly_kind = "fracture_presence_unknown"
-        elif (
-            has_fracture is True
-            and output_type == FractureType.VIDEO_ABNORMAL
-        ):
-            diagnostics.video_anomaly_kind = "fracture_time_unknown"
+        if has_fracture is None:
+            diagnostics.video_anomaly_kind = "visual_indeterminate"
 
         return diagnostics
 
@@ -406,6 +403,8 @@ class IterativeAgent:
                     ]
                 elif self.state == "COVERAGE" and self.coverage_index < 5:
                     tool_args["sample_range"] = self._coverage_ranges()[self.coverage_index]
+                elif self.state == "LOCALIZING" and self.localization_index < 5:
+                    tool_args["sample_range"] = self._coverage_ranges()[self.localization_index]
                 sample_range = list(tool_args["sample_range"])
                 self._emit(
                     "sample_and_infer_started",
@@ -439,20 +438,6 @@ class IterativeAgent:
                     candidate=list(self.candidate),
                 )
                 self._log_round(round_idx, message, internal_result)
-
-                # Sampling and inference transport failures have already
-                # exhausted their component retry budget. Continuing the
-                # semantic state machine would turn an infrastructure failure
-                # into a misleading domain result.
-                infra_error = internal_result.get("infra_error")
-                if infra_error is not None:
-                    result = RunnerResult(
-                        ok=False,
-                        error=RunnerError(**infra_error),
-                    ).model_dump()
-                    self._persist_summary(result)
-                    self._emit("video_finished", result=result)
-                    return result
 
                 # Build compact result for LLM tool response.
                 compact = self._build_compact_result(internal_result)
@@ -586,6 +571,8 @@ class IterativeAgent:
         ``unrecognized_reason``.
         """
         status = args.get("status")
+        if self.infra_fail_count > 0:
+            return False, "最近一轮为基础设施失败，必须重试视觉调用，不能生成业务结论"
 
         # -- unrecognized: model explicitly reports it cannot form a conclusion --
         if status == "unrecognized":
@@ -593,16 +580,17 @@ class IterativeAgent:
             valid_reasons = {
                 "video_anomaly", "not_clamped", "conflicting_results",
                 "invalid_model_output", "insufficient_confidence",
-                "incomplete_coverage", "max_rounds",
+                "incomplete_coverage", "max_rounds", "visual_indeterminate",
+                "budget_exhausted",
             }
             if unrecognized_reason not in valid_reasons:
                 return False, (
                     f"unrecognized_reason 无效: {unrecognized_reason}，"
                     f"须为 {sorted(valid_reasons)}"
                 )
-            if unrecognized_reason in {"video_anomaly", "not_clamped"}:
+            if unrecognized_reason in {"video_anomaly", "visual_indeterminate", "not_clamped"}:
                 if not self._has_consistent_special_recheck(unrecognized_reason):
-                    return False, "视频异常或未夹紧必须在同一区间得到两次一致结果"
+                    return False, "视觉不可判定或未夹紧必须在同一区间得到两次一致结果"
             return True, "模型明确报告无法识别"
 
         if status == "no_fracture":
@@ -624,15 +612,17 @@ class IterativeAgent:
 
             positive_evidence = [
                 r for r in unique_rounds
-                if r < len(self.history) and self._round_is_local_fracture(self.history[r])
+                if r < len(self.history) and self._round_has_fracture(self.history[r])
             ]
             if len(positive_evidence) < 2:
                 return False, (
                     f"需要至少 2 轮断裂证据支撑，当前 evidence_rounds 中仅有 "
                     f"{len(positive_evidence)} 轮有效断裂记录"
                 )
+            if not any(self._round_is_local_fracture(self.history[r]) for r in positive_evidence):
+                return False, "至少一轮正证据必须来自严格局部 clip"
 
-            # --- Fix 3a: intersection check across all positive evidence ---
+            # Localization is verified independently from fracture existence.
             evidence_ranges: list[list[float]] = []
             for r_idx in positive_evidence:
                 rng = self.history[r_idx]["result"].get("inferred_time_range")
@@ -641,37 +631,11 @@ class IterativeAgent:
             if len(evidence_ranges) >= 2:
                 inter_start = max(r[0] for r in evidence_ranges)
                 inter_end = min(r[1] for r in evidence_ranges)
-                if inter_start >= inter_end:
-                    return False, (
-                        f"正证据轮次 {positive_evidence} 的 inferred_time_range "
-                        f"无交集，无法收敛，请继续验证"
-                    )
-                all_strictly_local = all(
-                    self._sample_range_is_local(self.history[r].get("result", {}).get("sample_range"))
-                    for r in positive_evidence
-                )
-                if all_strictly_local and inter_end - inter_start > 1.0 + 1e-9:
-                    return False, (
-                        f"局部证据共同交集宽度 {inter_end - inter_start:.2f}s "
-                        "超过公共结果 1 秒上限，请继续局部复查"
-                    )
-
-            # Must converge or exhaust rounds.
-            if self.candidate[1] - self.candidate[0] <= self.tolerance:
-                if self.last_round_confidence_level == "不可信":
-                    return False, "区间虽收敛但最新一轮置信度不可信，请继续验证"
-                return True, "候选区间宽度 ≤ tolerance"
-            # --- Fix 3d: max_rounds requires strict tolerance (no 2× relaxation) ---
-            if round_idx >= self.max_rounds - 1:
-                width = self.candidate[1] - self.candidate[0]
-                if width <= self.tolerance:
-                    return True, "达到 max_rounds 且候选区间宽度 ≤ tolerance"
-                return False, (
-                    f"达到 max_rounds 但候选区间宽度 {width:.2f}s 超过 "
-                    f"tolerance ({self.tolerance:.2f}s)，无法终止"
-                )
-
-            return False, "区间尚未收敛，请继续调用 sample_and_infer"
+                if inter_start < inter_end and inter_end - inter_start <= self.tolerance + 1e-9:
+                    return True, "断裂存在性与定位均已满足分项验证"
+            if self.localization_index >= 5:
+                return True, "断裂存在性已确认；局部定位复查完成但时间字段不可用"
+            return False, "断裂存在性已确认，仍需完成程序调度的局部定位复查"
 
         return False, f"未知 status: {status}"
 
@@ -685,6 +649,11 @@ class IterativeAgent:
             # Infrastructure failures must not drive state transitions, fracture
             # counting, or candidate updates.
             self.infra_fail_count += 1
+            self.last_infra_error = dict(infra_error)
+            if infra_error.get("code") == "deployment_drift":
+                self.fatal_infra_error = dict(infra_error)
+                self.state = "TERMINATED"
+                return
             if self.infra_fail_count >= 2:
                 self.state = "TERMINATED"
                 self.infra_terminated = True
@@ -692,6 +661,7 @@ class IterativeAgent:
 
         # Reset infra failure counter on any non-infra round.
         self.infra_fail_count = 0
+        self.last_infra_error = None
 
         validation_error = result.get("validation_error")
         if validation_error:
@@ -710,20 +680,14 @@ class IterativeAgent:
         new_range = result.get("inferred_time_range")
         confidence_level = result.get("round_confidence_level", "不可信")
 
-        # Both legal VIDEO_ABNORMAL combinations carry no usable temporal
-        # evidence.  Even when fracture presence is confirmed, the round must
-        # never enter narrowing or count as fracture evidence.
-        if model_output.get("type") == FractureType.VIDEO_ABNORMAL:
-            self.last_round_confidence_level = confidence_level
-            self._update_special_recheck(result)
-            return
-
         # ------------------------------------------------------------------
         # has_fracture is None: video anomaly / cannot determine
         # Do not enter NO_FRACTURE state, do not increment counters.
         # ------------------------------------------------------------------
         if has_fracture is None:
             self.last_round_confidence_level = confidence_level
+            if self.state == "LOCALIZING":
+                self.localization_index += 1
             self._update_special_recheck(result)
             return
 
@@ -732,6 +696,10 @@ class IterativeAgent:
         # ------------------------------------------------------------------
         if has_fracture is False:
             self.last_round_confidence_level = confidence_level
+
+            if self.state == "LOCALIZING":
+                self.localization_index += 1
+                return
 
             if model_output.get("type") == FractureType.NOT_CLAMPED:
                 self._update_special_recheck(result)
@@ -777,7 +745,16 @@ class IterativeAgent:
         self.no_fracture_count = 0
         self.pending_recheck_range = None
         if self.state in ("INITIAL", "NO_FRACTURE", "COVERAGE"):
-            self.state = "NARROWING"
+            if new_range is None:
+                self.state = "LOCALIZING"
+                self.localization_index = 0
+            else:
+                self.state = "NARROWING"
+        elif self.state == "LOCALIZING":
+            if new_range is None:
+                self.localization_index += 1
+            else:
+                self.state = "NARROWING"
 
         # Normal interval update and conflict handling.
         if new_range:
@@ -832,13 +809,10 @@ class IterativeAgent:
         """Safely check whether a history entry has a positive fracture prediction."""
         result = entry.get("result", {})
         model_output = result.get("model_output")
-        inferred_range = result.get("inferred_time_range")
         return (
-            isinstance(model_output, dict)
+            result.get("ok") is True
+            and isinstance(model_output, dict)
             and model_output.get("has_fracture", False) is True
-            and model_output.get("type") in FRACTURE_CLASSES
-            and isinstance(inferred_range, list)
-            and len(inferred_range) == 2
         )
 
     def _round_is_local_fracture(self, entry: dict[str, Any]) -> bool:
@@ -847,13 +821,7 @@ class IterativeAgent:
             return False
         result = entry.get("result", {})
         sample_range = result.get("sample_range")
-        inferred_range = result.get("inferred_time_range")
-        return (
-            self._sample_range_is_local(sample_range)
-            and isinstance(inferred_range, list)
-            and len(inferred_range) == 2
-            and sample_range[0] <= inferred_range[0] < inferred_range[1] <= sample_range[1]
-        )
+        return self._sample_range_is_local(sample_range)
 
     def _sample_range_is_local(self, sample_range: Any) -> bool:
         duration = float(self.video_meta.get("duration", 0.0))
@@ -907,10 +875,9 @@ class IterativeAgent:
             result = entry.get("result", {})
             output = result.get("model_output") or {}
             is_match = (
-                reason == "video_anomaly" and output.get("type") == FractureType.VIDEO_ABNORMAL
-            ) or (
-                reason == "not_clamped" and output.get("type") == FractureType.NOT_CLAMPED
-            )
+                reason in {"video_anomaly", "visual_indeterminate"}
+                and output.get("has_fracture") is None
+            ) or (reason == "not_clamped" and output.get("type") == FractureType.NOT_CLAMPED)
             if result.get("ok") is True and is_match:
                 matches.append(
                     (result.get("sample_range"), (output.get("has_fracture"), output.get("type")))
@@ -1002,28 +969,12 @@ class IterativeAgent:
             if rng and len(rng) == 2:
                 all_ranges.append(rng)
 
+        best_time_range: list[float] | None = None
         if len(all_ranges) >= 2:
             inter_start = max(r[0] for r in all_ranges)
             inter_end = min(r[1] for r in all_ranges)
-            if inter_start < inter_end:
-                best_time_range: list[float] | None = [inter_start, inter_end]
-            else:
-                # No intersection — fall back to best single round.
-                logger.warning(
-                    "Positive evidence time ranges have no intersection; "
-                    "falling back to best single round."
-                )
-                best_time_range = best_result.get("inferred_time_range")
-        else:
-            best_time_range = best_result.get("inferred_time_range")
-
-        if best_time_range is None:
-            logger.warning(
-                "Best positive round lacks inferred_time_range; "
-                "falling back to candidate %s",
-                self.candidate,
-            )
-            best_time_range = list(self.candidate)
+            if inter_start < inter_end and inter_end - inter_start <= self.tolerance + 1e-9:
+                best_time_range = [inter_start, inter_end]
 
         # Frame range: inferred from best round.
         best_frame_range = best_result.get("inferred_frame_range")
@@ -1034,41 +985,11 @@ class IterativeAgent:
             [r["result"]["model_output"].get("type") for r in positive_rounds],
             valid_set=FRACTURE_CLASSES,
         )
-        if voted_type is None:
-            fallback_type = tool_args.get("fracture_type")
-            if fallback_type in FRACTURE_CLASSES:
-                voted_type = fallback_type
-            else:
-                fallback_type = best_model_output.get("type")
-                if fallback_type in FRACTURE_CLASSES:
-                    voted_type = fallback_type
-                else:
-                    reason = "all_fracture_types_invalid"
-                    logger.warning(
-                        "All positive round types and LLM fracture_type are invalid; "
-                        "downgrading to no-fracture (%s)",
-                        reason,
-                    )
-                    return self._build_non_fracture_args({
-                        "status": "no_fracture",
-                        "confidence": None,
-                        "downgrade_reason": reason,
-                    })
 
         voted_location = self._vote_field(
             [r["result"]["model_output"].get("location") for r in positive_rounds],
             valid_set={LocationType.INSIDE, LocationType.OUTSIDE},
         )
-        if voted_location is None:
-            fallback_location = tool_args.get("location")
-            if fallback_location in {LocationType.INSIDE, LocationType.OUTSIDE}:
-                voted_location = fallback_location
-            else:
-                fallback_location = best_model_output.get("location")
-                if fallback_location in {LocationType.INSIDE, LocationType.OUTSIDE}:
-                    voted_location = fallback_location
-                else:
-                    voted_location = "unknown"
 
         return {
             "status": "fracture",
@@ -1102,18 +1023,32 @@ class IterativeAgent:
 
     def _force_terminate(self) -> dict[str, Any]:
         """Construct a final output when rounds are exhausted or conflicts unresolvable."""
+        if self.fatal_infra_error is not None:
+            return RunnerResult(
+                ok=False,
+                error=RunnerError(**self.fatal_infra_error),
+            ).model_dump()
         # Fix 3a: consecutive infrastructure failures → RunnerResult(ok=false).
         if self.infra_terminated:
             return RunnerResult(
                 ok=False,
                 error=RunnerError(
-                    stage="internal",
+                    stage=(
+                        self.last_infra_error.get("stage", "internal")
+                        if self.last_infra_error is not None
+                        else "internal"
+                    ),
                     code="consecutive_infra_failures",
                     message=(
                         f"连续 {self.infra_fail_count} 轮基础设施失败，"
                         f"无法完成分析"
                     ),
                 ),
+            ).model_dump()
+        if self.infra_fail_count > 0 and self.last_infra_error is not None:
+            return RunnerResult(
+                ok=False,
+                error=RunnerError(**self.last_infra_error),
             ).model_dump()
 
         positive_rounds = [r for r in self.history if self._round_has_fracture(r)]
@@ -1128,6 +1063,9 @@ class IterativeAgent:
                 "status": "no_fracture",
                 "confidence": self._build_confidence_breakdown("no_fracture", []),
             }))
+
+        if len(positive_rounds) >= 2 and any(self._round_is_local_fracture(r) for r in positive_rounds):
+            return self._finalize(self._build_fracture_args(positive_rounds, {}))
 
         # Exhaustion cannot manufacture a fracture from insufficient or wide
         # evidence.  Only the normal terminate path may approve a fracture.
@@ -1164,7 +1102,7 @@ class IterativeAgent:
         }
         # Validate against the contract schema; on failure, downgrade to unrecognized.
         try:
-            FinalOutput(**output)
+            output.update(FinalOutput(**output).model_dump(mode="json"))
         except Exception as exc:
             reason = f"Final output schema validation failed: {exc}"
             logger.warning(reason)
@@ -1208,13 +1146,18 @@ class IterativeAgent:
         return max(positive_rounds, key=score)
 
     def _vote_field(self, values: list[Any], valid_set: set[str]) -> str | None:
-        """Majority vote among valid values."""
+        """Return a field only when at least two non-null rounds agree."""
         from collections import Counter
 
         filtered = [v for v in values if v in valid_set]
-        if not filtered:
+        if len(filtered) < 2:
             return None
-        return Counter(filtered).most_common(1)[0][0]
+        ranked = Counter(filtered).most_common()
+        if ranked[0][1] < 2:
+            return None
+        if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+            return None
+        return ranked[0][0]
 
     def _time_range_to_frame_range(
         self, frames: list[dict[str, Any]], time_range: list[float]
@@ -1467,13 +1410,25 @@ class IterativeAgent:
         # without proving which frames the model saw would make coverage and
         # repeat-check evidence unverifiable.
         preprocessing = inference_result.preprocessing
-        pp_error_code = _validate_preprocessing_meta(preprocessing)
+        pp_error_code = _validate_preprocessing_meta(
+            preprocessing,
+            getattr(self.inference_client, "deployment_snapshot", None),
+        )
         if pp_error_code is not None:
+            failure_code = (
+                "deployment_drift"
+                if pp_error_code in {
+                    "deployment_drift",
+                    "contract_version_mismatch",
+                    "contract_hash_mismatch",
+                }
+                else "missing_or_invalid_preprocessing_metadata"
+            )
             return _finalize(
                 self._infra_error_result(
                     sample_range,
                     stage="inference_transport",
-                    code="missing_or_invalid_preprocessing_metadata",
+                    code=failure_code,
                     message=f"服务端 preprocessing 元数据无效: {pp_error_code}",
                 )
             )
@@ -1633,7 +1588,9 @@ class IterativeAgent:
             ],
         }
         if result is not None:
-            log_entry["result"] = result
+            # Freeze this round as a snapshot so later candidate/state updates
+            # cannot rewrite accepted evidence.
+            log_entry["result"] = deepcopy(result)
         self.history.append(log_entry)
         logger.info("Round %d: %s", round_idx, json.dumps(log_entry, ensure_ascii=False))
 

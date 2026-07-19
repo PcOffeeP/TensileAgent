@@ -177,7 +177,7 @@ def run_one(
                 "result": None,
                 "error": {
                     "stage": "input",
-                    "code": "unsupported_intent",
+                    "code": intent.rejection_code or "unsupported_intent",
                     "message": intent.ambiguity or "未识别到视频分析需求",
                 },
                 "response": project_result({}, intent),
@@ -238,6 +238,8 @@ def run_one(
 
         stage = "inference_transport"
         inference_client = create_inference_client(config)
+        visual_snapshot = inference_client.preflight()
+        config["_runtime"]["visual_deployment"] = visual_snapshot
 
         stage = "sampling"
         clip_builder = create_clip_builder(
@@ -272,16 +274,28 @@ def run_one(
                         "stage": error.get("stage", "internal"),
                     }
                 )
+            raw_result["response"] = {
+                "status": "failed",
+                "answer": None,
+                "evidence_available": False,
+                "error": error,
+            }
             return raw_result
 
         # Normal success path: filter to the public FinalOutput contract fields.
-        _FO_FIELDS = {"video_id", "status", "time_range", "fracture_type",
-                       "location", "confidence", "visual_evidence", "unrecognized_reason"}
+        _FO_FIELDS = {
+            "schema_version", "video_id", "status", "has_fracture", "time_range",
+            "fracture_type", "location", "confidence", "field_status",
+            "visual_evidence", "unrecognized_reason", "warnings",
+        }
         fo_dict = {k: v for k, v in raw_result.items() if k in _FO_FIELDS}
         # Historical agents returned a model-supplied scalar. It is not a
         # calibrated Agent confidence and must not be re-labelled as one.
         if isinstance(fo_dict.get("confidence"), (int, float)):
             fo_dict["confidence"] = None
+        elif isinstance(fo_dict.get("confidence"), dict):
+            for field in ("decision", "localization", "classification", "overall"):
+                fo_dict["confidence"][field] = None
         envelope = RunnerResult(
             ok=True, result=FinalOutput(**fo_dict)
         ).model_dump()
@@ -298,7 +312,7 @@ def run_one(
                     "stage": stage,
                 }
             )
-        return RunnerResult(
+        failure = RunnerResult(
             ok=False,
             error=RunnerError(
                 stage=stage,
@@ -306,6 +320,13 @@ def run_one(
                 message=str(exc),
             ),
         ).model_dump()
+        failure["response"] = {
+            "status": "failed",
+            "answer": None,
+            "evidence_available": False,
+            "error": failure["error"],
+        }
+        return failure
 
 
 def run_batch(

@@ -27,20 +27,20 @@
     }
   },
   {
-    "description": "video anomaly: fracture presence unknown",
+    "description": "visually indeterminate sample",
     "model_output": {
       "has_fracture": null,
       "fracture_between": null,
-      "type": "视频异常",
+      "type": null,
       "location": null
     }
   },
   {
-    "description": "video anomaly: confirmed fracture but unreliable time",
+    "description": "confirmed fracture with unavailable secondary fields",
     "model_output": {
       "has_fracture": true,
       "fracture_between": null,
-      "type": "视频异常",
+      "type": null,
       "location": null
     }
   }

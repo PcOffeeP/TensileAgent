@@ -924,13 +924,14 @@ def test_diagnostics_do_not_leak_base64(tmp_path: Path):
     assert full_payload not in diagnostics_json
 TEST_DEPLOYMENT_MANIFEST = {
     "model_version": "minicpm-v-4.5",
+    "adapter_version": "adapter-test",
+    "processor_version": "minicpmv4.5/0.1",
     "transformers_version": "4.test",
     "llamafactory_version": "test-rev",
     "base_model_version": "base-test",
-    "artifact_version": "adapter-test",
     "config_fingerprint": "sha256:test",
     "runtime_device": "cpu",
     "runtime_dtype": "float32",
-    "contract_version": "tensile-vlm/v1",
-    "prompt_contract_hash": visual_contract_hash(),
+    "contract_version": "tensile-vlm/v2",
+    "contract_hash": visual_contract_hash(),
 }

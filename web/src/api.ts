@@ -1,11 +1,17 @@
 const API = "/api";
 
 export interface FinalResult {
+  schema_version: "tensile-agent/result/v2";
   video_id: string;
   status: "fracture" | "no_fracture" | "unrecognized";
+  has_fracture: boolean | null;
   time_range: [number, number] | null;
   fracture_type: string | null;
-  location: "inside_gauge" | "outside_gauge" | "unknown" | null;
+  location: "inside_gauge" | "outside_gauge" | null;
+  field_status: Record<
+    "has_fracture" | "time_range" | "fracture_type" | "location" | "confidence" | "visual_evidence",
+    "available" | "unavailable" | "not_applicable"
+  >;
   confidence: {
     decision: number | null;
     localization: number | null;
@@ -16,6 +22,7 @@ export interface FinalResult {
   } | null;
   visual_evidence?: {
     status: "not_requested" | "available" | "unavailable";
+    reliability: "experimental";
     summary: string | null;
     references: Array<{
       round: number;
@@ -26,6 +33,7 @@ export interface FinalResult {
     }>;
   };
   unrecognized_reason: string | null;
+  warnings: string[];
   rounds?: number;
   frame_range?: [number, number] | null;
 }
@@ -41,7 +49,7 @@ export interface Task {
   finished_at: string | null;
   result: FinalResult | null;
   response?: {
-    status: "answered" | "unrecognized" | "failed";
+    status: "answered" | "partial" | "unrecognized" | "failed";
     answer: Record<string, unknown> | null;
     evidence_available: boolean;
     error: { code: string; message: string } | null;

@@ -1,0 +1,64 @@
+{
+  "contract_version": "tensile-vlm/v2",
+  "contract_hash": "14188762127d5e04896d5fd585e99e8dcfc7cc83ff5c86b9dc11cada93cc9002",
+  "model_output_fields": ["has_fracture", "fracture_between", "type", "location"],
+  "model_output_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["has_fracture", "fracture_between", "type", "location"],
+    "properties": {
+      "has_fracture": {"type": ["boolean", "null"]},
+      "fracture_between": {
+        "oneOf": [
+          {
+            "type": "array",
+            "prefixItems": [
+              {"type": "integer", "minimum": 0},
+              {"type": "integer", "minimum": 1}
+            ],
+            "items": false,
+            "minItems": 2,
+            "maxItems": 2
+          },
+          {"type": "null"}
+        ]
+      },
+      "type": {"type": ["string", "null"]},
+      "location": {"type": ["string", "null"]}
+    }
+  },
+  "fracture_types": [
+    "韧性断裂",
+    "脆性断裂",
+    "界面脱粘",
+    "齐根断裂",
+    "爆炸性断裂",
+    "半脆半韧断裂",
+    "界面脱粘、齐根断裂",
+    "脆性断裂、齐根断裂"
+  ],
+  "other_types": ["未断裂", "未夹紧"],
+  "locations": ["inside_gauge", "outside_gauge"],
+  "analysis": {
+    "system_prompt": "你是一位材料力学视频分析助手。请根据提供的拉伸试验视频帧序列，基于画面中可见的形貌变化，判断试样是否发生断裂。如果发生断裂，请尽可能指出断裂发生在哪两个相邻采样帧之间、断裂模式以及断裂位置。次要字段无法判断时必须使用 null，不得猜测。请只输出一个合法 JSON 对象，且只包含 has_fracture、fracture_between、type、location 四个字段，不要添加 Markdown 代码块或额外解释。",
+    "user_prompt": "请分析这段拉伸试验视频，判断试样是否存在断裂。如果存在断裂，请尽可能指出断裂发生在哪两个相邻采样帧之间，并说明断裂模式和断裂位置；无法判断的次要字段输出 null。",
+    "generation": {"do_sample": false, "num_beams": 1, "temperature": 0.0, "max_new_tokens": 256}
+  },
+  "evidence": {
+    "system_prompt": "你是一位材料力学视频观察助手。请只依据当前输入的采样帧，按时间顺序描述试样的可见变化，包括伸长、变细、颈缩、连续性中断、分离、打滑、遮挡或画面异常。不要引用其他分析结果，不要输出分类标签或 JSON，只输出一段简洁的视觉观察。",
+    "user_prompt": "请描述这段拉伸试验视频采样帧中实际可见的变化过程。",
+    "generation": {"do_sample": false, "num_beams": 1, "temperature": 0.0, "max_new_tokens": 256},
+    "reliability": "experimental"
+  },
+  "video": {
+    "max_frames": 8,
+    "allowed_media_types": ["video/mp4"],
+    "timestamp_semantics": "frames[*].timestamp is a finite, strictly increasing offset in seconds relative to the submitted clip; temp_video_manifest maps each sampled clip timestamp to the original video timeline"
+  },
+  "validation_rules": {
+    "true": "fracture_between, type and location may independently be null; non-null fracture_between must be strictly adjacent [i,i+1]; non-null type and location must be declared enum values",
+    "false": "fracture_between and location must be null; type must be 未断裂 or 未夹紧",
+    "null": "fracture_between, type and location must all be null"
+  }
+}

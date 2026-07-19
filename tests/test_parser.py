@@ -87,15 +87,15 @@ def test_parse_rejects_noise_extraction():
 
 
 def test_parse_null_has_fracture_semantics():
-    raw = '{"has_fracture": null, "fracture_between": null, "type": "视频异常", "location": null}'
+    raw = '{"has_fracture": null, "fracture_between": null, "type": null, "location": null}'
     result = ResultParser.parse(raw)
     assert result.ok is True
     assert result.data["has_fracture"] is None
-    assert result.data["type"] == "视频异常"
+    assert result.data["type"] is None
 
 
-def test_parse_video_anomaly_with_confirmed_fracture():
-    raw = '{"has_fracture": true, "fracture_between": null, "type": "视频异常", "location": null}'
+def test_parse_confirmed_fracture_with_missing_secondary_fields():
+    raw = '{"has_fracture": true, "fracture_between": null, "type": null, "location": null}'
     result = ResultParser.parse(raw)
     assert result.ok is True
     assert result.data["has_fracture"] is True

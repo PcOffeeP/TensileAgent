@@ -118,7 +118,7 @@ class TestNormalizeResult:
         assert normalized["stage"] == "sampling"
         assert normalized["code"] == "sampling_error"
 
-    def test_legacy_fallback_migration_compat(self):
+    def test_legacy_fallback_is_rejected(self):
         legacy = {
             "status": "fracture",
             "video_id": "legacy",
@@ -128,11 +128,9 @@ class TestNormalizeResult:
             "rounds": 3,
         }
         normalized = _normalize_result(legacy)
-        assert normalized["_migration_compat"] is True
-        assert normalized["status"] == "fracture"
-        assert normalized["fracture_type"] == "韧性断裂"
-        assert normalized["time_range"] == [5.0, 6.0]
-        assert normalized["rounds"] == 3
+        assert normalized["schema_version"] == "tensile-agent/result/v2"
+        assert normalized["status"] == "unrecognized"
+        assert normalized["unrecognized_reason"] == "invalid_model_output"
 
 
 class TestApplyRunnerResultToTask:

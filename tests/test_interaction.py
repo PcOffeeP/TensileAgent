@@ -26,6 +26,7 @@ def test_projection_only_returns_requested_fields():
     response = project_result(
         {
             "status": "fracture",
+            "has_fracture": True,
             "time_range": [1.0, 1.5],
             "fracture_type": "韧性断裂",
             "location": "inside_gauge",

@@ -5,7 +5,7 @@ interface FinalResultPanelProps {
   result: FinalResult | null;
   error: { stage?: string; code?: string; message: string } | null;
   response?: {
-    status: "answered" | "unrecognized" | "failed";
+    status: "answered" | "partial" | "unrecognized" | "failed";
     answer: Record<string, unknown> | null;
     evidence_available: boolean;
     error: { code: string; message: string } | null;
@@ -61,10 +61,17 @@ export default function FinalResultPanel({ result, error, response }: FinalResul
 
   if (!result) return null;
 
-  if (response?.status === "answered" && response.answer) {
+  if ((response?.status === "answered" || response?.status === "partial") && response.answer) {
     return (
       <div className="bg-white border-2 border-blue-100 rounded-xl p-5 shadow-sm">
-        <h3 className="text-xl font-bold text-slate-900 mb-4">分析回答</h3>
+        <h3 className="text-xl font-bold text-slate-900 mb-2">
+          {response.status === "partial" ? "部分分析回答" : "分析回答"}
+        </h3>
+        {response.status === "partial" && (
+          <p className="text-sm text-amber-700 mb-4">
+            断裂存在性已有结论；部分次要字段因证据不足暂不可用。
+          </p>
+        )}
         <div className="space-y-3">
           {Object.entries(response.answer).map(([key, value]) => (
             <div key={key} className="flex gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
@@ -73,6 +80,16 @@ export default function FinalResultPanel({ result, error, response }: FinalResul
             </div>
           ))}
         </div>
+        {result.visual_evidence?.status === "available" && (
+          <p className="mt-4 text-xs text-violet-700">
+            视觉依据为 experimental，尚未完成反事实可靠性验收。
+          </p>
+        )}
+        {result.confidence && (
+          <p className="mt-2 text-xs text-slate-500">
+            Confidence 数值尚未校准；当前仅展示证据等级 {result.confidence.evidence_level}。
+          </p>
+        )}
       </div>
     );
   }

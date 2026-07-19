@@ -35,6 +35,39 @@ def parse_user_intent(question: str | None) -> UserIntent:
         lower = lower.replace(typo, canonical)
     language = "en" if re.search(r"[a-zA-Z]", text) and not re.search(r"[\u4e00-\u9fff]", text) else "zh"
 
+    injection = re.search(
+        r"忽略.{0,12}(指令|规则|系统)|覆盖.{0,8}(提示|prompt)|系统提示|"
+        r"ignore.{0,12}(previous|system|instruction)|system\s+prompt|jailbreak|"
+        r"把.{0,12}(原话|问题).{0,12}(传|发).{0,8}(视觉|模型)",
+        lower,
+    )
+    refusal = re.search(
+        r"(不要|无需|别|停止|取消).{0,8}(分析|识别|调用|看)|"
+        r"do\s+not\s+(analy[sz]e|inspect|call)|don't\s+(analy[sz]e|inspect|call)",
+        lower,
+    )
+    analysis_request = re.search(r"分析|识别|看看|视频|断裂|analy[sz]e|inspect|fracture|video", lower)
+    if injection:
+        return UserIntent(
+            action="unsupported",
+            requested_fields=["has_fracture"],
+            language=language,
+            ambiguity="请求包含改变系统或视觉协议的指令，已在推理前拒绝",
+            rejection_code="prompt_injection",
+        )
+    if refusal and analysis_request:
+        contradictory = bool(
+            re.search(r"(但|同时|然后|又|however|but).{0,12}(分析|识别|看看|analy[sz]e|inspect)", lower)
+            or re.search(r"(分析|识别|看看|analy[sz]e|inspect).{0,12}(但|同时|however|but).{0,12}(不要|don't)", lower)
+        )
+        return UserIntent(
+            action="unsupported",
+            requested_fields=["has_fracture"],
+            language=language,
+            ambiguity="请求同时要求分析与不分析" if contradictory else "用户明确要求不执行视频分析",
+            rejection_code="contradictory_intent" if contradictory else "analysis_declined",
+        )
+
     requested: list[str] = []
     if re.search(r"断(了|裂|没)|是否.*断|fracture|broken|break", lower):
         requested.append("has_fracture")
@@ -63,6 +96,7 @@ def parse_user_intent(question: str | None) -> UserIntent:
                 requested_fields=["has_fracture"],
                 language=language,
                 ambiguity="未识别到拉伸试验视频分析需求",
+                rejection_code="unsupported_intent",
             )
 
     return UserIntent(
@@ -81,7 +115,7 @@ def project_result(result: dict[str, Any], intent: UserIntent) -> dict[str, Any]
             "status": "unrecognized",
             "answer": None,
             "evidence_available": False,
-            "error": {"code": "unsupported_intent", "message": intent.ambiguity},
+            "error": {"code": intent.rejection_code or "unsupported_intent", "message": intent.ambiguity},
         }
 
     status = result.get("status")
@@ -96,9 +130,8 @@ def project_result(result: dict[str, Any], intent: UserIntent) -> dict[str, Any]
             },
         }
 
-    has_fracture = True if status == "fracture" else False
     complete = {
-        "has_fracture": has_fracture,
+        "has_fracture": result.get("has_fracture"),
         "time_range": result.get("time_range"),
         "type": result.get("fracture_type"),
         "location": result.get("location"),
@@ -106,10 +139,24 @@ def project_result(result: dict[str, Any], intent: UserIntent) -> dict[str, Any]
         "visual_evidence": result.get("visual_evidence"),
     }
     answer = {field: complete[field] for field in intent.requested_fields}
+    status_names = {"type": "fracture_type"}
+    field_status = result.get("field_status") or {}
+    unavailable = [
+        field
+        for field in intent.requested_fields
+        if field_status.get(status_names.get(field, field)) == "unavailable"
+    ]
     evidence = result.get("visual_evidence") or {}
     return {
-        "status": "answered",
+        "status": "partial" if unavailable else "answered",
         "answer": answer,
         "evidence_available": evidence.get("status") == "available",
-        "error": None,
+        "error": (
+            {
+                "code": "requested_fields_unavailable",
+                "message": f"以下请求字段当前不可用: {', '.join(unavailable)}",
+            }
+            if unavailable
+            else None
+        ),
     }
