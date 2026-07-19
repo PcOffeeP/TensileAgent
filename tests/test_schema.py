@@ -72,11 +72,11 @@ def test_model_output_visual_indeterminate():
     output = ModelOutput(
         has_fracture=None,
         fracture_between=None,
-        type=None,
+        type=FractureType.VIDEO_ANOMALY,
         location=None,
     )
     assert output.has_fracture is None
-    assert output.type is None
+    assert output.type == FractureType.VIDEO_ANOMALY
 
 
 def test_model_output_positive_with_unavailable_secondary_fields():

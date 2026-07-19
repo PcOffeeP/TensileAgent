@@ -19,8 +19,8 @@
 3. 每次分析和 Evidence 响应都带实际帧表、request ID 和与预检完全一致的
    `deployment_manifest`。
 4. 旧 `tensile-vlm/v1` 不再被生产代码加载，不维护双协议兼容。
-5. 模型输出仍只有四个字段；`has_fracture=true` 时次要字段可以分别为 `null`，
-   `has_fracture=null` 时其余三项必须全部为 `null`。
+5. 模型输出仍只有四个字段；`has_fracture=true` 时次要字段可以分别为 `null`；
+   `has_fracture=null` 时区间和位置必须为 `null`，类型必须为 `视频异常`。
 6. 不修改训练数据、checkpoint、权重、训练 YAML、数据划分或视觉效果指标。
 
 ## 二、施工边界
@@ -60,10 +60,10 @@ cp ../TensileAgent/agent/contracts/tensile_vlm_v2.json \
 
 - `contract_version`: `tensile-vlm/v2`
 - `contract_hash`:
-  `14188762127d5e04896d5fd585e99e8dcfc7cc83ff5c86b9dc11cada93cc9002`
+  `d26adabe7d7236fc3c5f15dcaa3a7eb7cbeb681102be2c926fe5f4c4b0111102`
 - 8 种断裂类型，新增的第 8 种是 `脆性断裂、齐根断裂`
 - 非断裂类型只有 `未断裂`、`未夹紧`
-- 不包含 `视频异常`
+- 异常类型只有 `视频异常`
 - `max_frames=8`
 - 媒体类型只有 `video/mp4`
 - analysis 和 evidence 各自拥有固定 Prompt 与确定性 generation 配置
@@ -228,7 +228,7 @@ async def tensile_contract(raw_request: Request):
 ```json
 {
   "contract_version": "tensile-vlm/v2",
-  "contract_hash": "14188762127d5e04896d5fd585e99e8dcfc7cc83ff5c86b9dc11cada93cc9002",
+  "contract_hash": "d26adabe7d7236fc3c5f15dcaa3a7eb7cbeb681102be2c926fe5f4c4b0111102",
   "deployment_manifest": {
     "model_version": "...",
     "adapter_version": "...",
@@ -361,7 +361,7 @@ Agent 完成施工后必须报告：
 ```json
 {
   "contract_version": "tensile-vlm/v2",
-  "contract_hash": "14188762127d5e04896d5fd585e99e8dcfc7cc83ff5c86b9dc11cada93cc9002",
+  "contract_hash": "d26adabe7d7236fc3c5f15dcaa3a7eb7cbeb681102be2c926fe5f4c4b0111102",
   "model_output_fields": ["has_fracture", "fracture_between", "type", "location"],
   "model_output_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -400,10 +400,12 @@ Agent 完成施工后必须报告：
     "脆性断裂、齐根断裂"
   ],
   "other_types": ["未断裂", "未夹紧"],
+  "anomaly_types": ["视频异常"],
   "locations": ["inside_gauge", "outside_gauge"],
   "analysis": {
-    "system_prompt": "你是一位材料力学视频分析助手。请根据提供的拉伸试验视频帧序列，基于画面中可见的形貌变化，判断试样是否发生断裂。如果发生断裂，请尽可能指出断裂发生在哪两个相邻采样帧之间、断裂模式以及断裂位置。次要字段无法判断时必须使用 null，不得猜测。请只输出一个合法 JSON 对象，且只包含 has_fracture、fracture_between、type、location 四个字段，不要添加 Markdown 代码块或额外解释。",
-    "user_prompt": "请分析这段拉伸试验视频，判断试样是否存在断裂。如果存在断裂，请尽可能指出断裂发生在哪两个相邻采样帧之间，并说明断裂模式和断裂位置；无法判断的次要字段输出 null。",
+    "system_prompt": "你是一位材料力学视频分析助手。请根据提供的拉伸试验视频，基于画面中的试样变化，判断试样的断裂信息。最后请输出JSON格式的回答。",
+    "user_prompt": "请判断试样是否断裂（has_fracture），并给出断裂帧区间（fracture_between）、断裂类型（type）和断裂位置（location）。",
+    "retry_prompt": "上一轮输出不符合生产契约。请重新输出一个合法 JSON 对象，且只包含 has_fracture、fracture_between、type、location 四个字段，不要添加 Markdown 代码块或额外解释。",
     "generation": {"do_sample": false, "num_beams": 1, "temperature": 0.0, "max_new_tokens": 256}
   },
   "evidence": {
@@ -418,9 +420,9 @@ Agent 完成施工后必须报告：
     "timestamp_semantics": "frames[*].timestamp is a finite, strictly increasing offset in seconds relative to the submitted clip; temp_video_manifest maps each sampled clip timestamp to the original video timeline"
   },
   "validation_rules": {
-    "true": "fracture_between, type and location may independently be null; non-null fracture_between must be strictly adjacent [i,i+1]; non-null type and location must be declared enum values",
+    "true": "fracture_between, type and location may independently be null; non-null fracture_between must be strictly adjacent [i,i+1]; non-null type must be one of fracture_types; non-null location must be one of locations",
     "false": "fracture_between and location must be null; type must be 未断裂 or 未夹紧",
-    "null": "fracture_between, type and location must all be null"
+    "null": "fracture_between and location must be null; type must be 视频异常"
   }
 }
 ```

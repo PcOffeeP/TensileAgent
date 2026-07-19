@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from agent.parser import ParseError, ParseResult, ResultParser
 
 
@@ -87,11 +89,23 @@ def test_parse_rejects_noise_extraction():
 
 
 def test_parse_null_has_fracture_semantics():
-    raw = '{"has_fracture": null, "fracture_between": null, "type": null, "location": null}'
+    raw = '{"has_fracture": null, "fracture_between": null, "type": "视频异常", "location": null}'
     result = ResultParser.parse(raw)
     assert result.ok is True
     assert result.data["has_fracture"] is None
-    assert result.data["type"] is None
+    assert result.data["type"] == "视频异常"
+
+
+@pytest.mark.parametrize("type_value", ["null", '"未断裂"', '"脆性断裂"'])
+def test_parse_null_has_fracture_rejects_non_anomaly_type(type_value: str):
+    raw = (
+        '{"has_fracture": null, "fracture_between": null, '
+        f'"type": {type_value}, "location": null}}'
+    )
+    result = ResultParser.parse(raw)
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error.code == ResultParser.ERROR_INVALID_TYPE_VALUE
 
 
 def test_parse_confirmed_fracture_with_missing_secondary_fields():

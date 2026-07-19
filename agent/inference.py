@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Protocol, runtime_checkable
 
 from agent.contract import load_visual_contract, visual_contract_hash
-from agent.parser import ParseError, ResultParser
+from agent.parser import ResultParser
 from agent.prompts import (
     EVIDENCE_SYSTEM_PROMPT,
     EVIDENCE_USER_PROMPT,
@@ -542,30 +542,11 @@ class LlamaFactoryInferenceClient:
 
         # Capture the last raw HTTP response for preprocessing extraction.
         _last_raw_response: list[Any] = [None]
-        _last_assistant_content: list[str | None] = [None]
-
-        def _fetch_fn(last_error: ParseError | None) -> str:
-            nonlocal messages
-            if last_error is not None:
-                correction = (
-                    f"Your previous response failed validation ({last_error.code}): "
-                    f"{last_error.message}. Output only the complete valid JSON "
-                    "object with exactly the four required fields and no Markdown "
-                    "fences or surrounding text."
-                )
-                if _last_assistant_content[0] is not None:
-                    messages = messages + [
-                        {"role": "assistant", "content": _last_assistant_content[0]}
-                    ]
-                messages = messages + [{"role": "user", "content": correction}]
-            response = _call_model(messages)
-            _last_raw_response[0] = response
-            content = response.choices[0].message.content or ""
-            _last_assistant_content[0] = content
-            return content
 
         infer_start = time.perf_counter()
-        parse_result = ResultParser.parse_with_retries(_fetch_fn, max_retries=2)
+        response = _call_model(messages)
+        _last_raw_response[0] = response
+        parse_result = ResultParser.parse(response.choices[0].message.content or "")
         infer_elapsed = time.perf_counter() - infer_start
 
         # Extract server-side preprocessing metadata.
@@ -659,7 +640,7 @@ class LlamaFactoryInferenceClient:
             base64_length=len(base64_payload),
             raw_http_response=raw_http_response,
             transport_retries=transport_retries,
-            correction_retries=max(0, parse_result.attempts - 1),
+            correction_retries=0,
             elapsed_seconds=round(infer_elapsed, 6),
             error=error_info,
         )

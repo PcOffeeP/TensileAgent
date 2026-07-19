@@ -31,7 +31,7 @@
     "model_output": {
       "has_fracture": null,
       "fracture_between": null,
-      "type": null,
+      "type": "视频异常",
       "location": null
     }
   },

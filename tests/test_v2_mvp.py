@@ -53,7 +53,7 @@ def test_contract_is_self_contained_and_canonical() -> None:
         },
         {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None},
         {"has_fracture": False, "fracture_between": None, "type": "未夹紧", "location": None},
-        {"has_fracture": None, "fracture_between": None, "type": None, "location": None},
+        {"has_fracture": None, "fracture_between": None, "type": "视频异常", "location": None},
     ],
 )
 def test_v2_model_output_legal_matrix(payload: dict) -> None:
@@ -63,7 +63,7 @@ def test_v2_model_output_legal_matrix(payload: dict) -> None:
 @pytest.mark.parametrize(
     "payload",
     [
-        {"has_fracture": None, "fracture_between": None, "type": "视频异常", "location": None},
+        {"has_fracture": None, "fracture_between": None, "type": None, "location": None},
         {"has_fracture": False, "fracture_between": [0, 1], "type": "未断裂", "location": None},
         {"has_fracture": True, "fracture_between": [1, 3], "type": None, "location": None},
         {"has_fracture": True, "fracture_between": None, "type": "未知类型", "location": None},

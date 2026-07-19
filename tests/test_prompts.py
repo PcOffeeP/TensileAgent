@@ -6,12 +6,12 @@ from agent.prompts import PRODUCTION_USER_PROMPT, PROMPT_CONTRACT_HASH, SYSTEM_P
 
 
 def test_system_prompt_contains_exact_four_field_contract():
-    assert "has_fracture" in SYSTEM_PROMPT
-    assert "fracture_between" in SYSTEM_PROMPT
-    assert "type" in SYSTEM_PROMPT
-    assert "location" in SYSTEM_PROMPT
+    assert "has_fracture" in PRODUCTION_USER_PROMPT
+    assert "fracture_between" in PRODUCTION_USER_PROMPT
+    assert "type" in PRODUCTION_USER_PROMPT
+    assert "location" in PRODUCTION_USER_PROMPT
     assert "confidence" not in SYSTEM_PROMPT
-    assert "四个字段" in SYSTEM_PROMPT
+    assert "confidence" not in PRODUCTION_USER_PROMPT
 
 
 def test_contract_hash_is_sha256():

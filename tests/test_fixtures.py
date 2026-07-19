@@ -33,7 +33,7 @@ def test_sample_model_outputs_cover_v2_partial_combinations():
     unknown = by_description["visually indeterminate sample"]
     assert unknown["has_fracture"] is None
     assert unknown["fracture_between"] is None
-    assert unknown["type"] is None
+    assert unknown["type"] == "视频异常"
     assert unknown["location"] is None
 
     confirmed = by_description["confirmed fracture with unavailable secondary fields"]

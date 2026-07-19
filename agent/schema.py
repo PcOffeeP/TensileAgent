@@ -28,6 +28,7 @@ class FractureType(StrEnum):
     BRITTLE_AND_ROOT = "脆性断裂、齐根断裂"
     NO_FRACTURE = "未断裂"
     NOT_CLAMPED = "未夹紧"
+    VIDEO_ANOMALY = "视频异常"
 
 
 FRACTURE_CLASSES: set[str] = {
@@ -46,7 +47,11 @@ NON_FRACTURE_CLASSES: set[str] = {
     FractureType.NOT_CLAMPED,
 }
 
-ALL_MODEL_OUTPUT_TYPES: set[str] = FRACTURE_CLASSES | NON_FRACTURE_CLASSES
+ANOMALY_CLASSES: set[str] = {FractureType.VIDEO_ANOMALY}
+
+ALL_MODEL_OUTPUT_TYPES: set[str] = (
+    FRACTURE_CLASSES | NON_FRACTURE_CLASSES | ANOMALY_CLASSES
+)
 
 UNRECOGNIZED_REASONS: set[str] = {
     "video_anomaly",
@@ -128,10 +133,12 @@ class ModelOutput(BaseModel):
             return self
 
         if self.has_fracture is None:
-            if any(value is not None for value in (self.fracture_between, self.type, self.location)):
+            if self.fracture_between is not None or self.location is not None:
                 raise ValueError(
-                    "fracture_between, type and location must all be null when has_fracture is null"
+                    "fracture_between and location must be null when has_fracture is null"
                 )
+            if self.type != FractureType.VIDEO_ANOMALY:
+                raise ValueError("type must be 视频异常 when has_fracture is null")
             return self
 
         raise ValueError(f"illegal combination: has_fracture={self.has_fracture}")

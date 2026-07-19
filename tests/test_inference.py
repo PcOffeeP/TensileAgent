@@ -367,9 +367,9 @@ def test_llama_factory_inference_client_non_retryable_error(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# Model-output correction retries
+# Model-output validation is server-owned
 # ---------------------------------------------------------------------------
-def test_llama_factory_inference_client_correction_then_success(
+def test_llama_factory_inference_client_does_not_add_client_correction(
     tmp_path: Path, monkeypatch
 ):
     video = tmp_path / "clip.mp4"
@@ -385,13 +385,7 @@ def test_llama_factory_inference_client_correction_then_success(
         completion.model_extra = {}
         completion.preprocessing = None
         completion.choices = [MagicMock()]
-        if len(calls) == 1:
-            completion.choices[0].message.content = "not valid json"
-        else:
-            completion.choices[0].message.content = (
-                '{"has_fracture": false, "fracture_between": null, '
-                '"type": "未断裂", "location": null}'
-            )
+        completion.choices[0].message.content = "not valid json"
         return completion
 
     mock_client = MagicMock()
@@ -402,21 +396,19 @@ def test_llama_factory_inference_client_correction_then_success(
         client = LlamaFactoryInferenceClient(model="minicpm-test")
         result = client.infer(str(video), "analyze")
 
-    assert result.ok
-    assert result.model_output is not None
-    assert result.model_output["type"] == "未断裂"
-    assert result.attempts == 2
-    assert len(calls) == 2
-    # The original system prompt and video-bearing user message are preserved.
-    assert calls[1][0]["role"] == "system"
-    assert calls[1][1]["role"] == "user"
-    assert any(item.get("type") == "video_url" for item in calls[1][1]["content"])
-    # The correction turn appends the parser error details.
-    assert calls[1][-1]["role"] == "user"
-    assert "invalid_json" in calls[1][-1]["content"]
+    assert result.ok is False
+    assert result.model_output is None
+    assert result.error is not None
+    assert result.error.code == "invalid_json"
+    assert result.attempts == 1
+    assert len(calls) == 1
+    assert calls[0][0]["role"] == "system"
+    assert calls[0][1]["role"] == "user"
+    assert any(item.get("type") == "video_url" for item in calls[0][1]["content"])
+    assert len(calls[0]) == 2
 
 
-def test_llama_factory_inference_client_correction_exhausted(
+def test_llama_factory_inference_client_invalid_output_is_parsed_once(
     tmp_path: Path, monkeypatch
 ):
     video = tmp_path / "clip.mp4"
@@ -433,11 +425,9 @@ def test_llama_factory_inference_client_correction_exhausted(
         return completion
 
     mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = [
-        make_completion("not valid json"),
-        make_completion("{\"has_fracture\": true}"),
-        make_completion("{\"unexpected\": 1}"),
-    ]
+    mock_client.chat.completions.create.return_value = make_completion(
+        "{\"has_fracture\": true}"
+    )
 
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value = mock_client
@@ -447,9 +437,9 @@ def test_llama_factory_inference_client_correction_exhausted(
     assert not result.ok
     assert result.model_output is None
     assert result.error is not None
-    assert result.error.code == "invalid_model_output"
-    assert result.attempts == 3
-    assert mock_client.chat.completions.create.call_count == 3
+    assert result.error.code == "missing_field"
+    assert result.attempts == 1
+    assert mock_client.chat.completions.create.call_count == 1
 
 
 # ---------------------------------------------------------------------------

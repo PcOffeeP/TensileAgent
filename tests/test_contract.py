@@ -3,7 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from agent.contract import CONTRACT_PATH, load_visual_contract, visual_contract_hash
+from agent.contract import (
+    CONTRACT_PATH,
+    EXPECTED_CONTRACT_HASH,
+    load_visual_contract,
+    visual_contract_hash,
+)
 from agent.inference import _validate_preprocessing_meta
 from agent.prompts import PRODUCTION_USER_PROMPT, build_user_prompt
 from agent.schema import ToolSampleAndInfer, ToolTerminate, VisualEvidence
@@ -37,6 +42,8 @@ def _preprocessing() -> dict:
 
 def test_contract_is_four_field_and_fixed_prompt():
     contract = load_visual_contract()
+    assert contract["contract_hash"] == EXPECTED_CONTRACT_HASH
+    assert contract["anomaly_types"] == ["视频异常"]
     assert contract["model_output_fields"] == [
         "has_fracture", "fracture_between", "type", "location"
     ]
