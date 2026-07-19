@@ -69,7 +69,7 @@ export default function App() {
 
   if (configReady === null) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#FAF9F6] text-slate-500">
+      <div className="flex items-center justify-center h-screen text-slate-500">
         <p>加载中...</p>
       </div>
     );
@@ -79,29 +79,31 @@ export default function App() {
   if (reconfiguring) return <SetupDialog mode="reconfigure" onComplete={() => { setReconfiguring(false); setCurrentView("config"); refreshConfig(); }} />;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#FAF9F6]">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar
         currentView={currentView}
         onViewChange={setCurrentView}
         config={config}
         health={health}
       />
-      <main className="flex-1 flex overflow-hidden">
-        <div className="flex-1 overflow-auto p-6">
-          {currentView === "analysis" && (
-            <AnalysisView
-              activeTask={activeTask}
-              onTaskCreated={handleTaskCreated}
-              onCloseActiveTask={() => setActiveTaskId(null)}
-            />
-          )}
-          {currentView === "history" && (
-            <HistoryView
-              tasks={tasks}
-              onDeleteTask={handleDeleteTask}
-            />
-          )}
-          {currentView === "config" && <ConfigView config={config} onRefresh={refreshConfig} onReconfigure={() => setReconfiguring(true)} />}
+      <main className="flex-1 flex overflow-hidden min-w-0">
+        <div className="flex-1 overflow-auto p-6 lg:p-8">
+          <div className="mx-auto h-full w-full max-w-[1440px]">
+            {currentView === "analysis" && (
+              <AnalysisView
+                activeTask={activeTask}
+                onTaskCreated={handleTaskCreated}
+                onCloseActiveTask={() => setActiveTaskId(null)}
+              />
+            )}
+            {currentView === "history" && (
+              <HistoryView
+                tasks={tasks}
+                onDeleteTask={handleDeleteTask}
+              />
+            )}
+            {currentView === "config" && <ConfigView config={config} onRefresh={refreshConfig} onReconfigure={() => setReconfiguring(true)} />}
+          </div>
         </div>
       </main>
     </div>

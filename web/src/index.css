@@ -11,28 +11,15 @@
 
 body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background-color: var(--color-bg-base);
+  background-color: #F8FAFC;
+  background-image: radial-gradient(circle, rgba(0, 47, 167, 0.09) 1px, transparent 1px);
+  background-size: 22px 22px;
   color: #111827;
-  /* Dynamic Background: Material Stretching Effect */
-  background-image: 
-    radial-gradient(circle at 50% 50%, rgba(0, 47, 167, 0.05) 0%, transparent 60%),
-    linear-gradient(90deg, rgba(0, 47, 167, 0.03) 1px, transparent 1px),
-    linear-gradient(rgba(0, 47, 167, 0.03) 1px, transparent 1px);
-  background-size: 100% 100%, 40px 40px, 40px 40px;
-  background-position: center center, 0 0, 0 0;
-  animation: stretch-grid 12s ease-in-out infinite alternate;
 }
 
-@keyframes stretch-grid {
-  0% {
-    background-size: 100% 100%, 40px 40px, 40px 40px;
-    background-position: center center, 0 0, 0 0;
-  }
-  100% {
-    /* Simulate horizontal stretching and vertical compression (Poisson's ratio effect) */
-    background-size: 100% 100%, 70px 40px, 40px 36px;
-    background-position: center center, 15px 0, 0 0;
-  }
+::selection {
+  background: rgba(0, 47, 167, 0.14);
+  color: #0F172A;
 }
 
 /* 滚动条 */
@@ -41,19 +28,69 @@ body {
 ::-webkit-scrollbar-thumb { background: rgba(0, 47, 167, 0.2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0, 47, 167, 0.4); }
 
-/* Glassmorphism utilities */
-.glass-panel {
-  background: var(--color-bg-panel);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 8px 32px rgba(0, 47, 167, 0.08);
-}
+@layer components {
+  /* 浅色细边面板：白底 92% + 1px slate-200 + 8px 圆角 + 极浅阴影 */
+  .tech-panel {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
 
-/* For data-dense dashboard elements */
-.data-table-row {
-  border-bottom: 1px solid var(--color-border);
-}
-.data-table-row:hover {
-  background: rgba(0, 47, 167, 0.04);
+  /* 向后兼容：旧 glass-panel 重定义为同款浅色细边风格（去 backdrop-blur 与重阴影） */
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  /* 角部刻度：相对定位容器，左上/右下各一个 8px L 形角标（1px） */
+  .tech-corners {
+    position: relative;
+  }
+  .tech-corners::before,
+  .tech-corners::after {
+    content: "";
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    pointer-events: none;
+  }
+  .tech-corners::before {
+    top: 6px;
+    left: 6px;
+    border-top: 1px solid rgba(0, 47, 167, 0.35);
+    border-left: 1px solid rgba(0, 47, 167, 0.35);
+  }
+  .tech-corners::after {
+    bottom: 6px;
+    right: 6px;
+    border-bottom: 1px solid rgba(0, 47, 167, 0.35);
+    border-right: 1px solid rgba(0, 47, 167, 0.35);
+  }
+
+  /* 微标签：等宽 10px、大写、字距 0.12em、浅灰 */
+  .tech-label {
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #94A3B8;
+  }
+
+  /* 小徽章：等宽 11px 蓝字 + 5% 蓝底 + 1px 蓝描边 + 4px 圆角 */
+  .tech-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace);
+    font-size: 11px;
+    line-height: 1.4;
+    color: #002FA7;
+    background: rgba(0, 47, 167, 0.05);
+    border: 1px solid rgba(0, 47, 167, 0.25);
+    border-radius: 4px;
+  }
 }

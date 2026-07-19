@@ -16,6 +16,13 @@ const statusIcon: Record<string, React.ReactNode> = {
   failed: <XCircle className="w-4 h-4 text-rose-500" />,
 };
 
+const statusLabel: Record<string, string> = {
+  running: "运行中",
+  queued: "排队中",
+  completed: "成功",
+  failed: "失败",
+};
+
 function formatResultSummary(t: Task): string {
   if (!t.result) return "";
   switch (t.result.status) {
@@ -87,13 +94,13 @@ export default function HistoryView({ tasks, onDeleteTask }: Omit<HistoryViewPro
             placeholder="搜索视频 ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded text-sm text-slate-900 outline-none focus:ring-1 focus:ring-[#002FA7]"
+            className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 outline-none focus:border-[#002FA7]/50 focus:ring-2 focus:ring-[#002FA7]/20 transition-colors placeholder:text-slate-400"
           />
         </div>
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 py-2 bg-white border border-slate-300 rounded text-sm text-slate-900 outline-none focus:ring-1 focus:ring-[#002FA7]"
+          className="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 outline-none focus:border-[#002FA7]/50 focus:ring-2 focus:ring-[#002FA7]/20 transition-colors"
         >
           <option value="all">全部</option>
           <option value="completed">成功</option>
@@ -104,21 +111,21 @@ export default function HistoryView({ tasks, onDeleteTask }: Omit<HistoryViewPro
       </div>
       <div className="space-y-1">
         {filtered.map((t) => (
-          <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-lg hover:bg-slate-50 cursor-pointer group transition-colors" onClick={() => setSelectedTaskId(t.id)}>
+          <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 bg-white border border-slate-200 rounded-md hover:border-[#002FA7]/30 hover:bg-slate-50/60 cursor-pointer group transition-colors" onClick={() => setSelectedTaskId(t.id)}>
             {statusIcon[t.status] || <Play className="w-4 h-4 text-slate-400" />}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-900 truncate">{t.video_name || t.video_id}</p>
               <p className="text-xs text-slate-500">
-                {formatDateTime(t.created_at)}
+                <span className="font-mono text-[11px]">{formatDateTime(t.created_at)}</span>
                 {formatResultSummary(t)}
               </p>
             </div>
-            <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-              t.status === "completed" ? "bg-emerald-100 text-emerald-700" :
-              t.status === "failed" ? "bg-rose-100 text-rose-700" :
-              t.status === "running" ? "bg-[#002FA7]/10 text-[#002FA7]" : "bg-amber-100 text-amber-700"
+            <span className={`text-[11px] px-1.5 py-0.5 rounded ${
+              t.status === "completed" ? "bg-emerald-50 text-emerald-600" :
+              t.status === "failed" ? "bg-rose-50 text-rose-600" :
+              t.status === "running" ? "bg-[#002FA7]/5 text-[#002FA7]" : "bg-amber-50 text-amber-600"
             }`}>
-              {t.status}
+              {statusLabel[t.status] || t.status}
             </span>
             <button
               onClick={(e) => { e.stopPropagation(); onDeleteTask(t.id); }}
@@ -126,7 +133,7 @@ export default function HistoryView({ tasks, onDeleteTask }: Omit<HistoryViewPro
             >
               <Trash2 className="w-4 h-4 text-rose-500" />
             </button>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
+            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-400 transition-colors" />
           </div>
         ))}
         {filtered.length === 0 && <p className="text-center text-slate-500 py-8">暂无记录</p>}

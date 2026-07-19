@@ -39,20 +39,24 @@ function formatAnswerValue(key: string, value: unknown): string {
 export default function FinalResultPanel({ result, error, response }: FinalResultPanelProps) {
   const overallConfidence = result?.confidence?.overall ?? null;
   if (error) {
+    const errorMeta = [
+      error.stage ? `Stage: ${error.stage}` : null,
+      error.code ? `Code: ${error.code}` : null,
+      (error as any).error && !error.code ? `Error: ${(error as any).error}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
     return (
-      <div className="bg-rose-50 border-2 border-rose-200 rounded-xl p-5 shadow-sm">
-        <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-            <XCircle className="w-6 h-6 text-rose-600" />
+      <div className="tech-corners bg-white border border-slate-200 border-l-[3px] border-l-rose-500 rounded-lg p-4 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-md border border-rose-200 bg-rose-50/60 flex items-center justify-center shrink-0">
+            <XCircle className="w-4 h-4 text-rose-500" />
           </div>
-          <div>
-            <h3 className="text-lg font-bold text-rose-800 mb-1">分析任务失败</h3>
-            <div className="text-sm text-rose-700 bg-white/50 p-3 rounded border border-rose-100 mt-2">
-              {error.stage && <div><strong>Stage:</strong> {error.stage}</div>}
-              {error.code && <div><strong>Code:</strong> {error.code}</div>}
-              {(error as any).error && !error.code && <div><strong>Error:</strong> {(error as any).error}</div>}
-              <div className="mt-1"><strong>Message:</strong> {error.message ?? "Unknown error"}</div>
-            </div>
+          <div className="min-w-0">
+            <div className="tech-label mb-1">ERROR</div>
+            <h3 className="text-sm font-semibold text-slate-800">分析任务失败</h3>
+            <p className="text-sm text-slate-600 mt-1">{error.message ?? "Unknown error"}</p>
+            {errorMeta && <p className="font-mono text-[10px] text-slate-400 mt-1.5">{errorMeta}</p>}
           </div>
         </div>
       </div>
@@ -62,33 +66,39 @@ export default function FinalResultPanel({ result, error, response }: FinalResul
   if (!result) return null;
 
   if ((response?.status === "answered" || response?.status === "partial") && response.answer) {
+    const footnote = [
+      result.visual_evidence?.status === "available"
+        ? "视觉依据为 experimental，尚未完成反事实可靠性验收"
+        : null,
+      result.confidence
+        ? `Confidence 数值尚未校准，当前仅展示证据等级 ${result.confidence.evidence_level}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("；");
     return (
-      <div className="bg-white border-2 border-blue-100 rounded-xl p-5 shadow-sm">
-        <h3 className="text-xl font-bold text-slate-900 mb-2">
+      <div className="tech-corners bg-white border border-slate-200 border-l-[3px] border-l-[#002FA7] rounded-lg p-5 shadow-sm">
+        <div className="tech-label mb-1">{response.status === "partial" ? "PARTIAL ANSWER" : "ANSWER"}</div>
+        <h3 className="text-lg font-bold text-slate-900 mb-2">
           {response.status === "partial" ? "部分分析回答" : "分析回答"}
         </h3>
         {response.status === "partial" && (
-          <p className="text-sm text-amber-700 mb-4">
-            断裂存在性已有结论；部分次要字段因证据不足暂不可用。
+          <p className="text-xs text-amber-600 mb-3">
+            部分次要字段因证据不足暂不可用。
           </p>
         )}
         <div className="space-y-3">
           {Object.entries(response.answer).map(([key, value]) => (
             <div key={key} className="flex gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <span className="w-24 shrink-0 text-sm font-semibold text-slate-500">{FIELD_LABELS[key] ?? key}</span>
-              <span className="text-sm text-slate-900">{formatAnswerValue(key, value)}</span>
+              <span className="tech-label w-24 shrink-0 pt-0.5">{FIELD_LABELS[key] ?? key}</span>
+              <span className={`text-sm text-slate-900 ${key === "visual_evidence" ? "" : "font-mono"}`}>
+                {formatAnswerValue(key, value)}
+              </span>
             </div>
           ))}
         </div>
-        {result.visual_evidence?.status === "available" && (
-          <p className="mt-4 text-xs text-violet-700">
-            视觉依据为 experimental，尚未完成反事实可靠性验收。
-          </p>
-        )}
-        {result.confidence && (
-          <p className="mt-2 text-xs text-slate-500">
-            Confidence 数值尚未校准；当前仅展示证据等级 {result.confidence.evidence_level}。
-          </p>
+        {footnote && (
+          <p className="mt-4 text-[11px] text-slate-400">{footnote}。</p>
         )}
       </div>
     );
@@ -96,40 +106,42 @@ export default function FinalResultPanel({ result, error, response }: FinalResul
 
   if (result.status === "fracture") {
     return (
-      <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-5 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-        <div className="flex items-start gap-4 relative z-10">
-          <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 shadow-md">
-            <CheckCircle className="w-7 h-7 text-white" />
+      <div className="tech-corners bg-white border border-slate-200 border-l-[3px] border-l-emerald-500 rounded-lg p-5 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="w-9 h-9 rounded-md border border-emerald-200 bg-emerald-50/60 flex items-center justify-center shrink-0">
+            <CheckCircle className="w-5 h-5 text-emerald-600" />
           </div>
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <h3 className="text-xl font-bold text-emerald-800">发现断裂 (Fracture)</h3>
+            <div className="tech-label mb-1">DIAGNOSIS</div>
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              <h3 className="text-lg font-bold text-slate-900">
+                发现断裂 <span className="font-mono text-xs text-emerald-600 tracking-wider">FRACTURE</span>
+              </h3>
               {overallConfidence != null && (
-                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full border border-emerald-200">
-                  置信度: {(overallConfidence * 100).toFixed(0)}%
+                <span className="tech-chip">
+                  置信度 {(overallConfidence * 100).toFixed(0)}%
                 </span>
               )}
             </div>
-            
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-              <div className="bg-white/80 p-3 rounded-lg border border-emerald-100/50">
-                <div className="text-[10px] text-emerald-600/70 font-semibold uppercase tracking-wider mb-1">断裂时间区间</div>
-                <div className="text-emerald-900 font-mono font-medium">
+              <div className="bg-slate-50/60 p-3 rounded-md border border-slate-200">
+                <div className="tech-label mb-1">断裂时间区间</div>
+                <div className="text-slate-900 font-mono text-sm font-medium">
                   {result.time_range ? `${result.time_range[0]}s - ${result.time_range[1]}s` : '未知'}
                 </div>
               </div>
-              <div className="bg-white/80 p-3 rounded-lg border border-emerald-100/50">
-                <div className="text-[10px] text-emerald-600/70 font-semibold uppercase tracking-wider mb-1">断裂类型</div>
-                <div className="text-emerald-900 font-medium">
+              <div className="bg-slate-50/60 p-3 rounded-md border border-slate-200">
+                <div className="tech-label mb-1">断裂类型</div>
+                <div className="text-slate-900 font-mono text-sm font-medium">
                   {result.fracture_type || '未知'}
                 </div>
               </div>
-              <div className="bg-white/80 p-3 rounded-lg border border-emerald-100/50">
-                <div className="text-[10px] text-emerald-600/70 font-semibold uppercase tracking-wider mb-1">断裂位置</div>
-                <div className="text-emerald-900 font-medium">
-                  {result.location === 'inside_gauge' ? '标距内 (Inside Gauge)' : 
-                   result.location === 'outside_gauge' ? '标距外 (Outside Gauge)' : 
+              <div className="bg-slate-50/60 p-3 rounded-md border border-slate-200">
+                <div className="tech-label mb-1">断裂位置</div>
+                <div className="text-slate-900 font-mono text-sm font-medium">
+                  {result.location === 'inside_gauge' ? '标距内 (Inside Gauge)' :
+                   result.location === 'outside_gauge' ? '标距外 (Outside Gauge)' :
                    result.location || '未知'}
                 </div>
               </div>
@@ -142,21 +154,24 @@ export default function FinalResultPanel({ result, error, response }: FinalResul
 
   if (result.status === "no_fracture") {
     return (
-      <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-5 shadow-sm">
+      <div className="tech-corners bg-white border border-slate-200 border-l-[3px] border-l-amber-500 rounded-lg p-5 shadow-sm">
         <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-full bg-amber-400 flex items-center justify-center shrink-0 shadow-md">
-            <CheckCircle className="w-7 h-7 text-white" />
+          <div className="w-9 h-9 rounded-md border border-amber-200 bg-amber-50/60 flex items-center justify-center shrink-0">
+            <CheckCircle className="w-5 h-5 text-amber-600" />
           </div>
           <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h3 className="text-xl font-bold text-amber-800">未发生断裂 (No Fracture)</h3>
+            <div className="tech-label mb-1">DIAGNOSIS</div>
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
+              <h3 className="text-lg font-bold text-slate-900">
+                未发生断裂 <span className="font-mono text-xs text-amber-600 tracking-wider">NO FRACTURE</span>
+              </h3>
               {overallConfidence != null && (
-                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full border border-amber-200">
-                  置信度: {(overallConfidence * 100).toFixed(0)}%
+                <span className="tech-chip">
+                  置信度 {(overallConfidence * 100).toFixed(0)}%
                 </span>
               )}
             </div>
-            <p className="text-sm text-amber-700 mt-2">Agent 已完成搜索，未能在视频中观察到样本断裂现象。</p>
+            <p className="text-sm text-slate-600 mt-2">Agent 已完成搜索，未能在视频中观察到样本断裂现象。</p>
           </div>
         </div>
       </div>
@@ -165,15 +180,18 @@ export default function FinalResultPanel({ result, error, response }: FinalResul
 
   if (result.status === "unrecognized") {
     return (
-      <div className="bg-slate-50 border-2 border-slate-300 rounded-xl p-5 shadow-sm">
+      <div className="tech-corners bg-white border border-slate-200 border-l-[3px] border-l-slate-400 rounded-lg p-5 shadow-sm">
         <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-full bg-slate-300 flex items-center justify-center shrink-0 shadow-sm">
-            <HelpCircle className="w-7 h-7 text-slate-600" />
+          <div className="w-9 h-9 rounded-md border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
+            <HelpCircle className="w-5 h-5 text-slate-500" />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-slate-800 mb-1">无法识别 (Unrecognized)</h3>
-            <p className="text-sm text-slate-600 mt-2 bg-white p-3 rounded border border-slate-200">
-              <span className="font-semibold text-slate-700">原因：</span> 
+            <div className="tech-label mb-1">DIAGNOSIS</div>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">
+              无法识别 <span className="font-mono text-xs text-slate-500 tracking-wider">UNRECOGNIZED</span>
+            </h3>
+            <p className="text-sm text-slate-600 mt-2 bg-slate-50/60 p-3 rounded-md border border-slate-200">
+              <span className="font-semibold text-slate-700">原因：</span>
               {result.unrecognized_reason || "视觉信息不足或超出 Agent 识别能力。"}
             </p>
           </div>
