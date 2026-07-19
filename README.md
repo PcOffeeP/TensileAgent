@@ -6,6 +6,9 @@
 `GET /v1/tensile/contract`，并在每轮响应中返回与任务预检完全一致的
 deployment manifest；旧 v1 服务会被拒绝。
 
+当前全量模型服务地址、独立 API Key 配置、预检和 Key 轮换流程见
+[视觉推理服务接入说明](docs/VISUAL_INFERENCE_SERVICE.md)。
+
 本地联调可以启动协议 Stub：
 
 ```bash
@@ -346,11 +349,14 @@ agent:
     reasoning_effort: "none"
 
 backend:                         # 微调模型推理服务
-  api_url: "http://localhost:8000/v1"
-  model: "minicpmv4_5"
+  api_url: "http://100.70.83.68:8001/v1"
+  model: "tensile-vlm"
 ```
 
-API Key 可通过 Web UI 或 `agent/setup.py` 写入 `agent/.env`。Web 的持久选择写入被 Git 忽略的 `agent/config.local.yaml`；启动参数优先级最高但只影响当前进程。存在运行中或排队任务时禁止切换模型。
+决策模型 Key 使用 `LLM_API_KEY`；视觉推理服务使用独立的
+`INFERENCE_API_KEY`。两者均可保存在被 Git 忽略的 `agent/.env`，不能混用或提交。
+Web 的持久选择写入同样被忽略的 `agent/config.local.yaml`；启动参数优先级最高但只影响
+当前进程。存在运行中或排队任务时禁止切换模型。
 
 决策模型的脱敏传输记录保存在 `data/08_runtime/llm_traces/<task-id>/`，包含实际 messages、tools、tool calls、usage 和耗时，不包含 API Key、Base64 或绝对路径。
 
