@@ -14,5 +14,5 @@ agent:
   temperature: 0.2
   tolerance_seconds: 1.0
 backend:
-  api_url: http://localhost:8000/v1
-  model: minicpmv4_5
+  api_url: http://100.70.83.68:8001/v1
+  model: tensile-vlm

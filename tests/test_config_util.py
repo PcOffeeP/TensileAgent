@@ -17,6 +17,7 @@ from agent.config_util import (
     _MINIMAL_CONFIG,
     get_active_backend,
     get_api_key,
+    get_inference_api_key,
     get_local_model_digest,
     list_available_models,
     save_api_key,
@@ -78,6 +79,31 @@ class TestGetApiKey:
         result = get_api_key()
 
         assert result == "sk-dotenv"
+
+
+class TestGetInferenceApiKey:
+    def test_env_var_has_priority_over_dotenv(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dotenv = tmp_path / ".env"
+        dotenv.write_text("INFERENCE_API_KEY=visual-from-dotenv\n", encoding="utf-8")
+        monkeypatch.setattr("agent.config_util.DOT_ENV_PATH", dotenv)
+        monkeypatch.setenv("INFERENCE_API_KEY", "visual-from-env")
+
+        assert get_inference_api_key() == "visual-from-env"
+
+    def test_reads_visual_key_from_dotenv_without_reusing_llm_key(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dotenv = tmp_path / ".env"
+        dotenv.write_text(
+            "LLM_API_KEY=decision-key\nINFERENCE_API_KEY=visual-key\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("agent.config_util.DOT_ENV_PATH", dotenv)
+        monkeypatch.delenv("INFERENCE_API_KEY", raising=False)
+
+        assert get_inference_api_key() == "visual-key"
 
 
 # ── save_api_key ───────────────────────────────────────────────────────────
@@ -155,7 +181,8 @@ class TestDeepMergeDefaults:
         assert config["agent"]["max_rounds"] == 10
         assert config["agent"]["remote"]["provider"] == "dashscope"
         assert config["agent"]["local"]["provider"] == "ollama"
-        assert config["backend"]["api_url"] == "http://localhost:8000/v1"
+        assert config["backend"]["api_url"] == "http://100.70.83.68:8001/v1"
+        assert config["backend"]["model"] == "tensile-vlm"
 
     def test_existing_backend_not_overridden(self) -> None:
         """Existing agent.backend: 'local' is preserved over default 'remote'."""

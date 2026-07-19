@@ -10,7 +10,7 @@ from typing import Any
 
 import requests
 
-from agent.config_util import get_local_model_digest
+from agent.config_util import get_inference_api_key, get_local_model_digest
 from agent.contract import visual_contract_hash
 from agent.runner import load_config
 
@@ -30,8 +30,14 @@ def run_doctor(config_path: str | Path = "agent/config.yaml") -> dict[str, Any]:
     checks["ollama"] = {"ok": digest is not None, "model": model, "digest": digest}
 
     contract_url = f"{str(backend.get('api_url', 'http://localhost:8000/v1')).rstrip('/')}/tensile/contract"
+    inference_api_key = get_inference_api_key()
+    headers = (
+        {"Authorization": f"Bearer {inference_api_key}"}
+        if inference_api_key
+        else {}
+    )
     try:
-        response = requests.get(contract_url, timeout=3)
+        response = requests.get(contract_url, headers=headers, timeout=3)
         payload = response.json()
         contract_ok = (
             response.ok
@@ -41,11 +47,17 @@ def run_doctor(config_path: str | Path = "agent/config.yaml") -> dict[str, Any]:
         checks["visual_service"] = {
             "ok": contract_ok,
             "url": contract_url,
+            "auth_configured": inference_api_key is not None,
             "contract_version": payload.get("contract_version"),
             "contract_hash": payload.get("contract_hash"),
         }
     except Exception as exc:  # noqa: BLE001
-        checks["visual_service"] = {"ok": False, "url": contract_url, "error": str(exc)}
+        checks["visual_service"] = {
+            "ok": False,
+            "url": contract_url,
+            "auth_configured": inference_api_key is not None,
+            "error": str(exc),
+        }
 
     runtime_dir = Path("data/08_runtime")
     try:

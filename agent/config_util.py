@@ -76,6 +76,19 @@ def get_api_key() -> str | None:
     return dotenv.get("LLM_API_KEY")
 
 
+def get_inference_api_key() -> str | None:
+    """Get the visual inference API key without mixing it with the LLM key.
+
+    Priority: ``INFERENCE_API_KEY`` environment variable > ``agent/.env`` >
+    ``None``.
+    """
+    env_key = os.environ.get("INFERENCE_API_KEY")
+    if env_key:
+        return env_key
+    dotenv = _load_dotenv()
+    return dotenv.get("INFERENCE_API_KEY")
+
+
 def save_api_key(api_key: str) -> None:
     """Save API key to agent/.env."""
     _write_dotenv("LLM_API_KEY", api_key)
@@ -174,8 +187,8 @@ _MINIMAL_CONFIG: dict[str, Any] = {
         },
     },
     "backend": {
-        "api_url": "http://localhost:8000/v1",
-        "model": "minicpmv4_5",
+        "api_url": "http://100.70.83.68:8001/v1",
+        "model": "tensile-vlm",
     },
 }
 

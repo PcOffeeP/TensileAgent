@@ -124,6 +124,25 @@ def test_create_inference_client_mock_mode():
         assert result.model_output["location"] is None
 
 
+def test_create_inference_client_uses_visual_key_from_config_util():
+    config = {
+        "backend": {
+            "api_url": "http://100.70.83.68:8001/v1",
+            "model": "tensile-vlm",
+        }
+    }
+    with (
+        patch("agent.inference.OpenAI"),
+        patch("agent.inference.get_inference_api_key", return_value="visual-secret"),
+    ):
+        client = create_inference_client(config)
+
+    assert isinstance(client, LlamaFactoryInferenceClient)
+    assert client.base_url == "http://100.70.83.68:8001/v1"
+    assert client.model == "tensile-vlm"
+    assert client.api_key == "visual-secret"
+
+
 # ---------------------------------------------------------------------------
 # LlamaFactoryInferenceClient validation
 # ---------------------------------------------------------------------------

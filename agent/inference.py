@@ -16,6 +16,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol, runtime_checkable
 
+from agent.config_util import get_inference_api_key
 from agent.contract import load_visual_contract, visual_contract_hash
 from agent.parser import ResultParser
 from agent.prompts import (
@@ -827,7 +828,7 @@ def create_inference_client(config: dict[str, Any] | None = None) -> InferenceCl
         or "http://localhost:8000/v1"
     )
     model = backend_cfg.get("model") or os.getenv("INFERENCE_MODEL") or "minicpmv4_5"
-    api_key = os.getenv("INFERENCE_API_KEY") or "EMPTY"
+    api_key = get_inference_api_key() or "EMPTY"
 
     return LlamaFactoryInferenceClient(
         model=model,
