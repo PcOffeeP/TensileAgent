@@ -1,0 +1,87 @@
+{
+  "contract_version": "tensile-vlm/v3",
+  "contract_hash": "3f9f8217774cb4947fc4e19e41a5fe14b8a5ea30c8e84ed4f664abddd9de04f0",
+  "model_output_fields": ["clip_state", "fracture_mechanism", "root_break", "location", "special_case"],
+  "model_output_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["clip_state", "fracture_mechanism", "root_break", "location", "special_case"],
+    "properties": {
+      "clip_state": {"enum": ["未断裂", "发生断裂", "已断裂", "无法判断"]},
+      "fracture_mechanism": {
+        "enum": ["韧性断裂", "脆性断裂", "界面脱粘", "爆炸性断裂", "半脆半韧断裂", null]
+      },
+      "root_break": {"type": ["boolean", "null"]},
+      "location": {"enum": ["inside_gauge", "outside_gauge", null]},
+      "special_case": {"enum": ["未夹紧", "视频异常", null]}
+    },
+    "allOf": [
+      {
+        "if": {
+          "properties": {"clip_state": {"const": "未断裂"}},
+          "required": ["clip_state"]
+        },
+        "then": {
+          "properties": {
+            "fracture_mechanism": {"const": null},
+            "root_break": {"const": null},
+            "location": {"const": null},
+            "special_case": {"const": null}
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {"special_case": {"enum": ["未夹紧", "视频异常"]}},
+          "required": ["special_case"]
+        },
+        "then": {
+          "properties": {
+            "clip_state": {"const": "无法判断"},
+            "fracture_mechanism": {"const": null},
+            "root_break": {"const": null},
+            "location": {"const": null}
+          }
+        }
+      }
+    ]
+  },
+  "clip_states": ["未断裂", "发生断裂", "已断裂", "无法判断"],
+  "fracture_mechanisms": ["韧性断裂", "脆性断裂", "界面脱粘", "爆炸性断裂", "半脆半韧断裂"],
+  "locations": ["inside_gauge", "outside_gauge"],
+  "special_cases": ["未夹紧", "视频异常"],
+  "analysis": {
+    "system_prompt": "你是一位材料力学视频分析助手。请只根据当前拉伸试验视频片段中可见的试样状态和变化进行判断，不要猜测片段外发生的事件。最后只输出一个 JSON 对象。",
+    "user_prompt": "请输出且只输出 clip_state、fracture_mechanism、root_break、location、special_case 五个字段。clip_state 必须是未断裂、发生断裂、已断裂、无法判断之一：未断裂表示当前片段可靠画面均在断裂前；发生断裂表示片段同时包含断裂前和断裂后的可见证据；已断裂表示当前片段可靠画面均在断裂后；证据不足、未夹紧或视频异常时选择无法判断。fracture_mechanism 只能是韧性断裂、脆性断裂、界面脱粘、爆炸性断裂、半脆半韧断裂之一或 null；root_break 只能是 true、false 或 null；location 只能是 inside_gauge、outside_gauge 或 null；special_case 只能是未夹紧、视频异常或 null。未断裂时其余字段必须为 null；special_case 非 null 时 clip_state 必须为无法判断，且三个断裂信息字段必须为 null。不要输出解释或 Markdown。",
+    "retry_prompt": "上一轮输出不符合 tensile-vlm/v3。请重新输出一个合法 JSON 对象，且只包含 clip_state、fracture_mechanism、root_break、location、special_case 五个字段，不要添加 Markdown 或解释。",
+    "generation": {"do_sample": false, "num_beams": 1, "temperature": 0.0, "max_new_tokens": 256}
+  },
+  "evidence": {
+    "system_prompt": "你是一位材料力学视频观察助手。请只依据当前输入的采样帧，按时间顺序描述试样的可见变化，包括伸长、变细、颈缩、连续性中断、分离、打滑、遮挡或画面异常。不要引用其他分析结果，不要输出分类标签或 JSON，只输出一段简洁的视觉观察。",
+    "user_prompt": "请描述这段拉伸试验视频采样帧中实际可见的变化过程。",
+    "generation": {"do_sample": false, "num_beams": 1, "temperature": 0.0, "max_new_tokens": 256},
+    "reliability": "experimental"
+  },
+  "video": {
+    "max_frames": 8,
+    "allowed_media_types": ["video/mp4"],
+    "timestamp_semantics": "frames[*].timestamp is a finite, strictly increasing offset in seconds relative to the submitted clip; the Agent owns original-video interval mapping"
+  },
+  "search_semantics": {
+    "direction_field": "clip_state",
+    "未断裂": "fracture_event_is_after_clip",
+    "发生断裂": "fracture_event_is_within_clip",
+    "已断裂": "fracture_event_is_before_clip",
+    "无法判断": "no_directional_evidence",
+    "summary_fields": ["fracture_mechanism", "root_break", "location"],
+    "agent_owned_guards": ["bounds", "coverage", "shrinkage", "budget", "conflicts", "termination"]
+  },
+  "validation_rules": {
+    "未断裂": "fracture_mechanism, root_break, location and special_case must be null",
+    "发生断裂": "special_case must be null; fracture summary fields may independently be null",
+    "已断裂": "special_case must be null; fracture summary fields may independently be null",
+    "无法判断": "provides no search direction; summary fields may independently be null unless special_case is non-null",
+    "special_case": "when non-null, clip_state must be 无法判断 and fracture summary fields must be null"
+  }
+}
