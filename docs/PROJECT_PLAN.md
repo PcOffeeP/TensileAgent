@@ -2,8 +2,8 @@
 
 > 状态：已批准
 >
-> 实施状态（2026-07-22）：`tensile-vlm/v3` 目标契约已进入阶段 A 冻结；现有运行时继续使用 v2，暂不切换状态机或视觉服务。
-> 版本：15.0
+> 实施状态（2026-07-23）：`tensile-vlm/v4` 四字段目标契约已冻结，取代未部署的 v3 设计；现有运行时继续使用 v2，暂不切换状态机或视觉服务。
+> 版本：16.0
 
 ## 项目目标
 
@@ -13,14 +13,18 @@ TensileAgent 面向项目研究人员、演示人员和本地评测使用者，�
 
 ## 下一代视觉契约冻结边界
 
-新的跨仓目标契约为 `tensile-vlm/v3`。单 clip 输出固定为 `clip_state`、
-`fracture_mechanism`、`root_break`、`location`、`special_case`；其中只有 `clip_state`
-向 Agent 提供搜索方向，其余字段只用于最终模式、齐根属性和位置汇总。`未断裂`指向更晚时间，
+新的跨仓目标契约为 `tensile-vlm/v4`。单 clip 输出固定为 `clip_state`、
+`fracture_mechanism`、`fracture_site`、`special_case`；其中只有 `clip_state`
+向 Agent 提供搜索方向，其余字段只用于最终模式和断裂位置汇总。`fracture_site` 将 v3 中重复的
+`root_break + location` 合并为互斥三级：`inside_gauge`（标距内，正常位置）、
+`outside_gauge_non_root`（标距外非齐根，不理想）和 `grip_root`（夹具根部齐根，严重负面）。
+严重程度由 Agent 确定性投影，不由视觉模型主观评价。`未断裂`指向更晚时间，
 `已断裂`指向更早时间，`发生断裂`要求在当前区间继续收缩，`无法判断`不提供方向性证据。
 边界、覆盖、收缩、预算、冲突和终止仍必须由确定性代码兜底。
 
 阶段 A 只冻结设计、artifact、Prompt 和契约测试。当前 `tensile-vlm/v2` Runner、HTTP Stub、
-证据结构和状态机保持有效，不能把 v3 artifact 的存在解释为运行时已迁移。运行时迁移必须等新
+证据结构和状态机保持有效，不能把 v4 artifact 的存在解释为运行时已迁移。v3 artifact 仅作为
+未部署设计和审查迁移来源保留。运行时迁移必须等新
 子视频、人工审查、训练发布和视觉服务完成后，在单独阶段整体修改 schema、Prompt、stub、
 HTTP 契约、Verifier、Web 展示和端到端测试。
 
@@ -75,4 +79,4 @@ Agent 的 Planner 只选择合法工具、采样区间和受控任务模式，�
 - [非阻塞] 当前四字段模型可能仍因同时承担检测、定位和分类而压缩正例边界；若固定 Prompt 基线达不到验收门槛，再进入重训，不在 Agent 侧用自由 Prompt 掩盖模型问题。
 - [非阻塞] 第二次 evidence 调用可能产生事后合理化；必须通过断裂前截断、遮挡、无关帧替换和时序打乱反事实验证后才能作为公开视觉依据。
 - [已解决] 视觉协议和公共结果直接升级到 v2，不保留 v1 DTO 兼容入口；历史标量不会冒充已校准概率。
-- [已解决] 下一代视觉输出使用独立 `tensile-vlm/v3`，不原地扩展 v2，也不让服务长期返回混合字段；迁移前 v2 继续是唯一运行时协议。
+- [已解决] 下一代视觉输出升级为独立 `tensile-vlm/v4`，将 v3 重复的 `root_break + location` 合并为 `fracture_site`；迁移前 v2 继续是唯一运行时协议。
