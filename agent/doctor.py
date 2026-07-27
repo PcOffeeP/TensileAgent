@@ -29,7 +29,8 @@ def run_doctor(config_path: str | Path = "agent/config.yaml") -> dict[str, Any]:
     if decision_backend == "deterministic":
         planner = config.get("agent", {}).get("deterministic", {})
         checks["decision_backend"] = {
-            "ok": planner.get("model") == "v4.1-interval-policy-v1",
+            "ok": planner.get("model")
+            in {"v4.1-interval-policy-v1", "v2-interval-policy-v1"},
             "backend": decision_backend,
             "model": planner.get("model"),
         }

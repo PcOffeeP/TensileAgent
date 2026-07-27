@@ -1,0 +1,49 @@
+{
+  "schema_version": "tensile-agent/v2-comparison-spec/v1",
+  "comparison_version": "v2-v4.1-common-metrics-v1",
+  "input_policy": "Use the exact frozen all_110 inputs and question after the V4.1 one-time run has completed.",
+  "decision_policy": "Use deterministic/v2-interval-policy-v1 so the comparison introduces no external decision-model credential or stochastic decision policy.",
+  "prediction_mapping": {
+    "齐根断裂": {
+      "fracture_mechanism": null,
+      "coarse_site": "outside_gauge"
+    },
+    "界面脱粘、齐根断裂": {
+      "fracture_mechanism": "界面脱粘",
+      "coarse_site": "outside_gauge"
+    },
+    "脆性断裂、齐根断裂": {
+      "fracture_mechanism": "脆性断裂",
+      "coarse_site": "outside_gauge"
+    },
+    "inside_gauge": {
+      "coarse_site": "inside_gauge"
+    },
+    "outside_gauge": {
+      "coarse_site": "outside_gauge"
+    },
+    "not_clamped": {
+      "special_case": "未夹紧"
+    },
+    "video_anomaly": {
+      "special_case": "视频异常"
+    }
+  },
+  "comparable_metrics": [
+    "has_fracture_accuracy",
+    "fracture_recall",
+    "no_fracture_recall",
+    "time_hit_rate",
+    "mechanism_macro_f1",
+    "coarse_site_macro_f1",
+    "joint_common_success_rate",
+    "special_case_exact"
+  ],
+  "non_comparable_metrics": {
+    "fine_site_macro_f1": "V2 exposes only inside_gauge/outside_gauge and cannot distinguish outside_gauge_non_root from grip_root."
+  },
+  "regression_rule": {
+    "absolute_tolerance": 0.03,
+    "direction": "V4.1 minus V2 must be at least -0.03 for each supported numeric key metric."
+  }
+}

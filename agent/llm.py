@@ -161,16 +161,26 @@ class DeterministicPlanner(BaseAgentLLM):
         del tools, temperature, max_tokens
         history = self._history(messages)
         valid = [item for item in history if item.get("ok") is True]
+        is_v2 = self._model == "v2-interval-policy-v1"
 
         if len(valid) >= 2:
             current = valid[-1]
             previous = valid[-2]
             current_output = current.get("model_output") or {}
             previous_output = previous.get("model_output") or {}
-            special = current_output.get("special_case")
+            special = (
+                current_output.get("type")
+                if is_v2
+                else current_output.get("special_case")
+            )
             if (
                 special in {"未夹紧", "视频异常"}
-                and previous_output.get("special_case") == special
+                and (
+                    previous_output.get("type")
+                    if is_v2
+                    else previous_output.get("special_case")
+                )
+                == special
                 and self._same_range(
                     current.get("sample_range"),
                     previous.get("sample_range"),
@@ -185,7 +195,7 @@ class DeterministicPlanner(BaseAgentLLM):
                         ),
                     },
                 )
-            if (
+            if not is_v2 and (
                 current_output.get("clip_state") == "无法判断"
                 and previous_output.get("clip_state") == "无法判断"
                 and self._same_range(
@@ -205,7 +215,17 @@ class DeterministicPlanner(BaseAgentLLM):
         # polluted by earlier search negatives, so only propose no-fracture
         # when the latest five successful rounds are all strict negatives.
         if len(valid) >= 6 and all(
-            (item.get("model_output") or {}).get("clip_state") == "未断裂"
+            (
+                (
+                    (item.get("model_output") or {}).get("has_fracture")
+                    is False
+                    and (item.get("model_output") or {}).get("type")
+                    == "未断裂"
+                )
+                if is_v2
+                else (item.get("model_output") or {}).get("clip_state")
+                == "未断裂"
+            )
             for item in valid[-5:]
         ):
             return self._tool_call("terminate", {"status": "no_fracture"})
@@ -213,8 +233,12 @@ class DeterministicPlanner(BaseAgentLLM):
         positive_indices = [
             index
             for index, item in enumerate(history)
-            if (item.get("model_output") or {}).get("clip_state")
-            in {"发生断裂", "已断裂"}
+            if (
+                (item.get("model_output") or {}).get("has_fracture") is True
+                if is_v2
+                else (item.get("model_output") or {}).get("clip_state")
+                in {"发生断裂", "已断裂"}
+            )
         ]
         localized = [
             index
@@ -229,17 +253,33 @@ class DeterministicPlanner(BaseAgentLLM):
                 outputs = [history[index].get("model_output") or {} for index in positive_indices]
                 mechanism = next(
                     (
-                        output.get("fracture_mechanism")
+                        (
+                            output.get("type")
+                            if is_v2
+                            else output.get("fracture_mechanism")
+                        )
                         for output in reversed(outputs)
-                        if output.get("fracture_mechanism")
+                        if (
+                            output.get("type")
+                            if is_v2
+                            else output.get("fracture_mechanism")
+                        )
                     ),
                     None,
                 )
                 site = next(
                     (
-                        output.get("fracture_site")
+                        (
+                            output.get("location")
+                            if is_v2
+                            else output.get("fracture_site")
+                        )
                         for output in reversed(outputs)
-                        if output.get("fracture_site")
+                        if (
+                            output.get("location")
+                            if is_v2
+                            else output.get("fracture_site")
+                        )
                     ),
                     None,
                 )

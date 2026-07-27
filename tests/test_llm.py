@@ -291,3 +291,72 @@ def test_deterministic_planner_does_not_count_search_negatives_as_coverage():
     ]
     name, _ = _planner_tool(planner.chat_with_tools(messages, []))
     assert name == "sample_and_infer"
+
+
+def test_v2_deterministic_planner_terminates_special_case():
+    planner = DeterministicPlanner("v2-interval-policy-v1")
+    special = {
+        "ok": True,
+        "sample_range": [0.0, 10.0],
+        "model_output": {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未夹紧",
+            "location": None,
+        },
+    }
+    messages = [
+        {"role": "tool", "content": json.dumps(special, ensure_ascii=False)},
+        {"role": "tool", "content": json.dumps(special, ensure_ascii=False)},
+    ]
+    name, arguments = _planner_tool(planner.chat_with_tools(messages, []))
+    assert name == "terminate"
+    assert arguments == {
+        "status": "unrecognized",
+        "unrecognized_reason": "not_clamped",
+    }
+
+
+def test_v2_deterministic_planner_terminates_localized_fracture():
+    planner = DeterministicPlanner("v2-interval-policy-v1")
+    messages = [
+        {
+            "role": "tool",
+            "content": json.dumps(
+                {
+                    "ok": True,
+                    "sample_range": [1.0, 2.0],
+                    "model_output": {
+                        "has_fracture": True,
+                        "fracture_between": [1, 2],
+                        "type": "脆性断裂",
+                        "location": "inside_gauge",
+                    },
+                    "inferred_time_range": [1.1, 1.8],
+                },
+                ensure_ascii=False,
+            ),
+        },
+        {
+            "role": "tool",
+            "content": json.dumps(
+                {
+                    "ok": True,
+                    "sample_range": [1.2, 1.9],
+                    "model_output": {
+                        "has_fracture": True,
+                        "fracture_between": [1, 2],
+                        "type": "脆性断裂",
+                        "location": "inside_gauge",
+                    },
+                    "inferred_time_range": [1.3, 1.7],
+                },
+                ensure_ascii=False,
+            ),
+        },
+    ]
+    name, arguments = _planner_tool(planner.chat_with_tools(messages, []))
+    assert name == "terminate"
+    assert arguments["status"] == "fracture"
+    assert arguments["fracture_type"] == "脆性断裂"
+    assert arguments["location"] == "inside_gauge"
