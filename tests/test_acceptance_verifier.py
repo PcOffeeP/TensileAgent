@@ -173,8 +173,9 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
                     "status": "available",
                     "references": [
                         {
-                            "request_id": "request",
+                            "request_id": "evidence-request",
                             "clip_hash": "clip",
+                            "frame_timestamps": [0.1, 0.2],
                         }
                     ],
                 },
@@ -191,6 +192,8 @@ def test_verify_complete_acceptance_run(tmp_path: Path) -> None:
     assert report["passed"] is True
     assert report["successful_videos"] == 1
     assert report["semantic_model_call_count"] == 1
+    assert report["evidence_model_call_count"] == 1
+    assert report["total_vlm_call_count"] == 2
 
 
 def test_incomplete_run_fails_before_reading_results(tmp_path: Path) -> None:
@@ -250,6 +253,47 @@ def test_bound_infrastructure_recovery_history_is_allowed(
             "failure_removed_after_success": True,
             "source_clip_sha256_unchanged": True,
             "semantic_identity_changed": False,
+        },
+    )
+    report = verify_acceptance_run(manifest, authorization, root)
+    assert report["passed"] is True
+
+
+def test_duplicate_original_timestamps_are_valid_monotonic_mapping(
+    tmp_path: Path,
+) -> None:
+    manifest, authorization, root = _fixture(tmp_path)
+    diagnostic_path = (
+        root / "v/data/08_runtime/diagnostics/v_round_0000_diagnostics.json"
+    )
+    diagnostic = json.loads(diagnostic_path.read_text(encoding="utf-8"))
+    diagnostic["temp_video_manifest"][1]["timestamp"] = 0.1
+    _write_json(diagnostic_path, diagnostic)
+    assert verify_acceptance_run(manifest, authorization, root)["passed"] is True
+
+
+def test_interrupted_pending_task_history_is_bound_to_recovery_manifest(
+    tmp_path: Path,
+) -> None:
+    manifest, authorization, root = _fixture(tmp_path)
+    events_path = root / "v/events.jsonl"
+    current = events_path.read_text(encoding="utf-8")
+    interrupted = [
+        {"event_type": "video_started", "video_id": "v"},
+        {"event_type": "sample_and_infer_started", "video_id": "v"},
+    ]
+    events_path.write_text(
+        "\n".join(json.dumps(event) for event in interrupted)
+        + "\n"
+        + current,
+        encoding="utf-8",
+    )
+    _write_json(
+        root.parent / "recovery/recovery_manifest.json",
+        {
+            "run_id": "run",
+            "semantic_identity_changed": False,
+            "retry_policy": "retry_failed_and_continue_pending_same_one_time_run",
         },
     )
     report = verify_acceptance_run(manifest, authorization, root)

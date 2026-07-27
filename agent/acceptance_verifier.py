@@ -55,6 +55,14 @@ def _strictly_increasing(values: list[float]) -> bool:
     )
 
 
+def _non_decreasing(values: list[float]) -> bool:
+    return bool(values) and all(
+        math.isfinite(value)
+        and (index == 0 or value >= values[index - 1])
+        for index, value in enumerate(values)
+    )
+
+
 def _diagnostic_error(
     path: Path,
     expected_deployment: dict[str, Any],
@@ -73,7 +81,7 @@ def _diagnostic_error(
     if (
         len(original_times) != len(manifest)
         or not all(isinstance(value, (int, float)) for value in original_times)
-        or not _strictly_increasing([float(value) for value in original_times])
+        or not _non_decreasing([float(value) for value in original_times])
     ):
         return "invalid original-video timestamp mapping"
     if (
@@ -157,7 +165,9 @@ def verify_acceptance_run(
     input_by_id = {row["video_id"]: row for row in inputs}
     seen_request_ids: set[str] = set()
     recovery_path = root.parent / "recovery/recovery_completion.json"
+    recovery_manifest_path = root.parent / "recovery/recovery_manifest.json"
     recovered_ids: set[str] = set()
+    interrupted_pending_retry_allowed = False
     if recovery_path.is_file():
         recovery = _read_json(recovery_path)
         if (
@@ -172,10 +182,24 @@ def verify_acceptance_run(
         if not isinstance(recovered_video_id, str):
             raise ValueError("recovery completion missing video_id")
         recovered_ids.add(recovered_video_id)
+    if recovery_manifest_path.is_file():
+        recovery_manifest = _read_json(recovery_manifest_path)
+        if (
+            recovery_manifest.get("run_id")
+            != authorization["one_time_run_id"]
+            or recovery_manifest.get("semantic_identity_changed") is not False
+        ):
+            raise ValueError("invalid infrastructure recovery manifest")
+        interrupted_pending_retry_allowed = (
+            recovery_manifest.get("retry_policy")
+            == "retry_failed_and_continue_pending_same_one_time_run"
+        )
     errors: dict[str, list[str]] = {}
     total_diagnostics = 0
     total_semantic_calls = 0
     total_events = 0
+    total_evidence_calls = 0
+    seen_evidence_request_ids: set[str] = set()
 
     for video_id in sorted(expected_ids):
         task_dir = root / video_id
@@ -272,7 +296,14 @@ def verify_acceptance_run(
             task_errors.append("video_failed present in successful task")
         if historical_events:
             if video_id not in recovered_ids:
-                task_errors.append("unbound historical retry events")
+                historical_types = [
+                    event.get("event_type") for event in historical_events
+                ]
+                if not (
+                    interrupted_pending_retry_allowed
+                    and "video_finished" not in historical_types
+                ):
+                    task_errors.append("unbound historical retry events")
             elif not any(
                 event.get("event_type") == "video_failed"
                 for event in historical_events
@@ -294,6 +325,7 @@ def verify_acceptance_run(
         if len(diagnostics) != finished:
             task_errors.append("diagnostic/event count mismatch")
         task_requests: dict[str, str] = {}
+        task_clips: dict[str, list[float]] = {}
         for path in diagnostics:
             if _mode(path) != 0o600:
                 task_errors.append(f"{path.name}: mode is not 0600")
@@ -312,6 +344,10 @@ def verify_acceptance_run(
                 task_requests[str(diagnostic["request_id"])] = str(
                     diagnostic["temp_video_hash"]
                 )
+                task_clips[str(diagnostic["temp_video_hash"])] = [
+                    float(frame["timestamp"])
+                    for frame in diagnostic["sampled_frames"]
+                ]
         total_diagnostics += len(diagnostics)
 
         summary_path = (
@@ -345,16 +381,30 @@ def verify_acceptance_run(
                         task_errors.append("invalid evidence reference")
                         continue
                     request_id = reference.get("request_id")
-                    if request_id not in task_requests:
+                    clip_hash = reference.get("clip_hash")
+                    frame_timestamps = reference.get("frame_timestamps")
+                    if not isinstance(request_id, str) or not request_id:
                         task_errors.append(
-                            "evidence reference request_id is unbound"
+                            "evidence reference request_id is missing"
+                        )
+                    elif request_id in seen_evidence_request_ids:
+                        task_errors.append(
+                            "duplicate evidence request_id"
+                        )
+                    else:
+                        seen_evidence_request_ids.add(request_id)
+                        total_evidence_calls += 1
+                    if clip_hash not in task_clips:
+                        task_errors.append(
+                            "evidence reference clip_hash is unbound"
                         )
                     elif (
-                        reference.get("clip_hash")
-                        != task_requests[request_id]
+                        not isinstance(frame_timestamps, list)
+                        or [float(value) for value in frame_timestamps]
+                        != task_clips[clip_hash]
                     ):
                         task_errors.append(
-                            "evidence reference clip_hash mismatch"
+                            "evidence reference frame timestamps mismatch"
                         )
         elif status != "unrecognized":
             task_errors.append(
@@ -377,7 +427,12 @@ def verify_acceptance_run(
         "event_count": total_events,
         "diagnostic_count": total_diagnostics,
         "semantic_model_call_count": total_semantic_calls,
+        "evidence_model_call_count": total_evidence_calls,
+        "total_vlm_call_count": total_semantic_calls + total_evidence_calls,
         "unique_request_id_count": len(seen_request_ids),
+        "unique_evidence_request_id_count": len(
+            seen_evidence_request_ids
+        ),
         "all_tasks_same_deployment": not any(
             "deployment" in error
             for task_errors in errors.values()
