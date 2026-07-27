@@ -15,6 +15,10 @@ from agent.acceptance_batch import (
     sha256_file,
 )
 from agent.acceptance_verifier import verify_acceptance_run
+from agent.acceptance_reporting import (
+    build_diagnostic_report,
+    summarize_batch_timing,
+)
 from agent.scoring_v4_1 import (
     evaluate_thresholds,
     load_scoring_records,
@@ -25,6 +29,8 @@ from agent.scoring_v4_1 import (
 ROOT = Path(__file__).resolve().parents[1]
 SCORER_PATH = ROOT / "agent/scoring_v4_1.py"
 SPEC_PATH = ROOT / "agent/scoring/v4_1_agent_acceptance_v1.json"
+REPORTER_PATH = ROOT / "agent/acceptance_reporting.py"
+FINALIZER_PATH = ROOT / "agent/acceptance_finalizer.py"
 
 
 def _canonical_bytes(value: Any) -> bytes:
@@ -142,27 +148,24 @@ def finalize_stage_g(
         raise ValueError("heldout_21 must be a strict subset of all_110")
     development_ids = all_ids - heldout_ids
 
-    all_report = score_predictions(
-        load_scoring_records(
-            annotations,
-            results_root,
-            allowed_video_ids=all_ids,
-        )
+    all_records = load_scoring_records(
+        annotations,
+        results_root,
+        allowed_video_ids=all_ids,
     )
-    heldout_report = score_predictions(
-        load_scoring_records(
-            annotations,
-            results_root,
-            allowed_video_ids=heldout_ids,
-        )
+    heldout_records = load_scoring_records(
+        annotations,
+        results_root,
+        allowed_video_ids=heldout_ids,
     )
-    development_report = score_predictions(
-        load_scoring_records(
-            annotations,
-            results_root,
-            allowed_video_ids=development_ids,
-        )
+    development_records = load_scoring_records(
+        annotations,
+        results_root,
+        allowed_video_ids=development_ids,
     )
+    all_report = score_predictions(all_records)
+    heldout_report = score_predictions(heldout_records)
+    development_report = score_predictions(development_records)
     for name, report in (
         ("all_110", all_report),
         ("heldout_21", heldout_report),
@@ -200,6 +203,8 @@ def finalize_stage_g(
         "annotations_sha256": sha256_file(annotations),
         "scorer_sha256": sha256_file(SCORER_PATH),
         "spec_sha256": sha256_file(SPEC_PATH),
+        "reporter_sha256": sha256_file(REPORTER_PATH),
+        "finalizer_sha256": sha256_file(FINALIZER_PATH),
     }
     finalization_id = "stage-g-finalization-" + hashlib.sha256(
         json.dumps(
@@ -217,6 +222,17 @@ def finalize_stage_g(
         "all_110_accuracy_report.json": all_report,
         "heldout_21_accuracy_report.json": heldout_report,
         "development_89_accuracy_report.json": development_report,
+        "all_110_diagnostic_report.json": build_diagnostic_report(all_records),
+        "heldout_21_diagnostic_report.json": build_diagnostic_report(
+            heldout_records
+        ),
+        "development_89_diagnostic_report.json": build_diagnostic_report(
+            development_records
+        ),
+        "batch_timing_report.json": summarize_batch_timing(
+            results_root,
+            all_ids,
+        ),
         "stage_g_gate.json": stage_g_gate,
     }
     artifact_hashes: dict[str, str] = {}
