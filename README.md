@@ -3,7 +3,8 @@
 ## 当前版本边界
 
 TensileAgent 已完成 `tensile-vlm/v4.1` 中间模型的 Agent 集成和一次冻结的
-110 视频运行，但质量门未通过。当前唯一允许的处置级别为
+110 视频运行。当前中间交付以整体链路为硬门，已经通过；模型性能只记录最新快照，
+不作为中间交付门、不触发优化或重训。当前唯一允许的处置级别为
 `intermediate_development_model`：训练机保留 coverage-first seed3407 merged
 BF16 模型，服务只监听 loopback，本机通过 SSH tunnel 联调。
 
@@ -12,10 +13,12 @@ BF16 模型，服务只监听 loopback，本机通过 SSH tunnel 联调。
 | Agent Runner、状态机、HTTP 客户端 | V4.1 中间集成已完成 |
 | 当前视觉服务 | V4.1 中间模型，`127.0.0.1:8002`，非生产 |
 | V4.1 consumer artifact | 已冻结：`agent/contracts/tensile_vlm_v4_1.json` |
-| Stage B | 质量门失败 |
+| 中间交付链路门 | 通过 |
+| 性能策略 | 只记录、不阻断、暂定不优化 |
+| Stage B | 历史质量门失败 |
 | Stage C | 延期，未执行 full-data 训练 |
-| Stage D | 质量门失败 |
-| Stage G | 110/110 运行完成、链路完整，但质量门失败 |
+| Stage D | 历史质量门失败 |
+| Stage G | 110/110 运行完成、链路完整；历史质量门失败 |
 | V2 | 保留为回滚对象，不代表已完成同源最终比较 |
 
 不得将当前状态宣称为 final、full-data、independent-test-passed 或生产通过。

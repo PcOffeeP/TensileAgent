@@ -3,7 +3,8 @@
 > 状态：已批准
 >
 > 实施状态（2026-07-27）：V4.1 中间模型、Agent 集成和一次冻结的 110 视频运行已完成；
-> 链路完整但 Stage B、Stage D、Stage G 质量门均失败，Stage C 延期。当前仅允许
+> 当前中间交付以端到端链路为硬门并已通过，性能指标只记录、不阻断、暂定不优化；
+> 历史 Stage B、Stage D、Stage G 质量门失败事实保留，Stage C 延期。当前仅允许
 > `intermediate_development_model` 处置，通过 loopback 服务与 SSH tunnel 联调；
 > 不构成 final、full-data、independent-test-passed 或生产批准。
 > 版本：17.0
@@ -71,9 +72,10 @@ Agent 的 Planner 只选择合法工具、采样区间和受控任务模式，�
 4. **已完成**：冻结中间 V4.1 服务 deployment manifest 和 V2 回滚对象。
 5. **已完成**：迁移单轮 schema、搜索方向、证据结构、Stub、HTTP 客户端、Verifier、
    结果投影和 Web 展示。
-6. **已完成但门禁失败**：Stage D 与 Stage G；110/110 运行和链路完整性通过，质量门失败。
-7. **进行中**：建立单一交付中心、双机 Git 同步、训练机稳定部署、本机 SSH tunnel
-   真实视频联调和断链 fail-closed 证据。
+6. **已完成并记录历史结果**：Stage D 与 Stage G；110/110 运行和链路完整性通过，
+   原性能质量门失败。性能结果仅作为快照，不阻断当前中间交付。
+7. **已完成**：单一交付中心、双机 Git 同步、训练机稳定部署、本机 SSH tunnel
+   真实视频联调和断链 fail-closed 证据；当前中间交付链路门通过。
 8. **生产切换门未满足**：只有未来重新完成并通过质量门、独立测试和生产授权，才允许
    标准配置或生产别名切换。
 

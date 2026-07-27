@@ -26,5 +26,19 @@
     "stage_c_completed": false,
     "stage_d_passed": false,
     "stage_g_passed": false
+  },
+  "intermediate_delivery_policy": {
+    "primary_gate": "artifact_and_runtime_chain",
+    "performance_metrics_mode": "record_only_non_blocking",
+    "performance_thresholds_block_delivery": false,
+    "optimization_status": "paused",
+    "retraining_authorized": false
+  },
+  "artifact_gate": {
+    "merged_bf16_present": true,
+    "expected_safetensors_shards_present": true,
+    "full_hash_verified": true,
+    "manifest_identity_verified": true,
+    "passed": true
   }
 }

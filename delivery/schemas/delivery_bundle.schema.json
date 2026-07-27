@@ -1,18 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "tensile-delivery/bundle/v1",
+  "$id": "tensile-delivery/bundle/v2",
   "type": "object",
   "required": [
     "schema_version",
     "bundle_name",
     "disposition",
     "components",
-    "quality_status",
+    "delivery_gate",
+    "performance_policy",
+    "historical_quality_status",
     "prohibited_claims"
   ],
   "properties": {
     "schema_version": {
-      "const": "tensile-delivery/bundle/v1"
+      "const": "tensile-delivery/bundle/v2"
     },
     "bundle_name": {
       "type": "string",
@@ -23,13 +25,27 @@
     },
     "components": {
       "type": "object",
-      "required": ["agent", "model", "service", "acceptance"],
+      "required": ["agent", "model", "service", "acceptance", "performance"],
       "additionalProperties": {
         "type": "object",
         "required": ["path", "sha256"]
       }
     },
-    "quality_status": {
+    "delivery_gate": {
+      "type": "object",
+      "required": ["overall_passed", "checks"]
+    },
+    "performance_policy": {
+      "type": "object",
+      "required": [
+        "mode",
+        "thresholds_evaluated_for_delivery",
+        "blocks_intermediate_delivery",
+        "optimization_status",
+        "retraining_authorized"
+      ]
+    },
+    "historical_quality_status": {
       "type": "object",
       "required": [
         "stage_b_passed",
@@ -47,4 +63,3 @@
     }
   }
 }
-

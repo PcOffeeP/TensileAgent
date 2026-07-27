@@ -19,5 +19,13 @@
     "deployment_summary_sha256": "23e554a1269c58f22f596a42703037b09c3ccb0d99683534b6b8271add54a28c",
     "real_media_smoke_passed": true,
     "v2_rollback_rehearsal_passed": true
+  },
+  "runtime_gate": {
+    "contract_identity_verified": true,
+    "deployment_identity_verified": true,
+    "loopback_only_verified": true,
+    "real_media_smoke_passed": true,
+    "v2_rollback_rehearsal_passed": true,
+    "passed": true
   }
 }

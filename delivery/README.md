@@ -1,7 +1,11 @@
 # TensileAgent 单一交付中心
 
 `delivery/current/bundle.json` 是当前中间交付的机器入口。它绑定 Agent、模型、
-视觉服务和聚合验收报告的轻量组件快照，并明确能力边界。
+视觉服务、链路验收和性能快照的轻量组件，并明确能力边界。
+
+`delivery_gate` 只检查模型/服务身份、产物完整性、测试、真实远程调用、fail-closed
+和双机同步。`performance_snapshot` 仅记录当前测量值，不比较阈值、不阻断交付、
+不触发优化或重训。
 
 验证：
 
@@ -20,4 +24,3 @@ python3 scripts/generate_delivery_bundle.py \
 
 当前 bundle 不是生产发布物。权重继续由训练机托管，服务只监听 loopback，并通过
 SSH tunnel 提供本地联调。
-

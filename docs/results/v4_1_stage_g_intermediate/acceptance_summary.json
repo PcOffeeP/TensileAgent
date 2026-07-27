@@ -7,12 +7,19 @@
     "failed_videos": 0,
     "chain_integrity_passed": true
   },
-  "quality_status": {
+  "historical_quality_status": {
     "stage_b_passed": false,
     "stage_c_completed": false,
     "stage_d_passed": false,
     "stage_g_passed": false,
     "production_approved": false
+  },
+  "intermediate_delivery_policy": {
+    "primary_gate": "end_to_end_chain",
+    "performance_metrics_mode": "record_only_non_blocking",
+    "performance_thresholds_block_delivery": false,
+    "optimization_status": "paused",
+    "retraining_authorized": false
   },
   "aggregate_metrics": {
     "all_110": {
@@ -52,4 +59,3 @@
     "stage_g_gate_sha256": "900e8c27cff2ec1509a8420e0e06df0cf2ede9d874179559eba5b6b830994530"
   }
 }
-

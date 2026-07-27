@@ -1,8 +1,8 @@
 {
-  "schema_version": "tensile-delivery/validation/v1",
-  "validated_at": "2026-07-27T21:10:49+08:00",
+  "schema_version": "tensile-delivery/validation/v2",
+  "validated_at": "2026-07-27T21:23:29+08:00",
   "bundle": {
-    "sha256": "3493d66250ce0d31fc19101bd6ed30983fce6f4b70b0e30e425df79466616a50",
+    "sha256": "bf2bebceccb986711e8426ed06bc04d9641922745589eaca46783d2298afcf73",
     "cross_repository_validation_passed": true
   },
   "git_sync": {
@@ -59,13 +59,34 @@
     "protocol_fallback_observed": false,
     "passed": true
   },
+  "delivery_gate": {
+    "overall_passed": true,
+    "checks": {
+      "component_manifests_validated": true,
+      "cross_repository_identity_verified": true,
+      "model_full_hash_verified": true,
+      "service_contract_verified": true,
+      "agent_tests_passed": true,
+      "web_build_passed": true,
+      "real_video_remote_gpu_call_passed": true,
+      "transport_fail_closed_verified": true,
+      "git_sync_verified": true
+    }
+  },
+  "performance_policy": {
+    "mode": "record_only_non_blocking",
+    "thresholds_evaluated_for_delivery": false,
+    "blocks_intermediate_delivery": false,
+    "optimization_status": "paused",
+    "retraining_authorized": false
+  },
   "tests": {
-    "local_python": "488 passed, 1 warning",
+    "local_python": "490 passed, 1 warning",
     "local_web_build": "passed",
-    "remote_python": "488 passed",
+    "remote_python": "pending policy update sync and test rerun",
     "remote_web_build": "not rerun because npm is not installed in the remote shell; local build passed and prior frozen remote acceptance build remains historical evidence"
   },
-  "quality_status": {
+  "historical_quality_status": {
     "stage_b_passed": false,
     "stage_c_completed": false,
     "stage_d_passed": false,

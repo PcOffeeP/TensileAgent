@@ -4,42 +4,74 @@
     "model": {
       "path": "delivery/model_component.json",
       "repository": "mVllm_2",
-      "sha256": "e4d84ade97f6ab6cb1e055411d73c53aec7a8296165abce3421e3c446ad18f4c"
+      "sha256": "b68a59880a580bb623507358a6f7857c2f860dc8c7960262745d2809382cf0dc"
     },
     "service": {
       "path": "delivery/service_component.json",
       "repository": "mVllm_2",
-      "sha256": "6464fce8a650f0cd3b2d857e2d8ad245793e64bb9371ffef750241647070b5c3"
+      "sha256": "17b1ead07efacc2a6402847aaebc04e62710a185de90b70d1ec960308932495e"
     }
   },
   "components": {
     "acceptance": {
       "path": "docs/results/v4_1_stage_g_intermediate/acceptance_summary.json",
-      "sha256": "589ee3f185de76977dbfdfcaf17ff885822660d83646a1be829a13897d334890"
+      "sha256": "86ed069398eb24c39c7bffe38e649ea2f1d9e03e4a94169f4194f06e62699db8"
     },
     "agent": {
       "path": "delivery/components/agent_component.json",
-      "sha256": "cff89ee46c4ed137851119a40321b584b4b474b4c3bacf26901acd31a936cc62"
+      "sha256": "b930cf46605f579c5fca902e7c3b5894917a0dc7b3d730b744b86d0748b45ab7"
     },
     "model": {
       "path": "delivery/components/model_component.json",
-      "sha256": "e4d84ade97f6ab6cb1e055411d73c53aec7a8296165abce3421e3c446ad18f4c"
+      "sha256": "b68a59880a580bb623507358a6f7857c2f860dc8c7960262745d2809382cf0dc"
+    },
+    "performance": {
+      "path": "docs/results/v4_1_stage_g_intermediate/performance_snapshot.json",
+      "sha256": "a48511ffaf319d954018f490a40132ff71bba1b0d0b32da2ce12a76b80a7db63"
     },
     "service": {
       "path": "delivery/components/service_component.json",
-      "sha256": "6464fce8a650f0cd3b2d857e2d8ad245793e64bb9371ffef750241647070b5c3"
+      "sha256": "17b1ead07efacc2a6402847aaebc04e62710a185de90b70d1ec960308932495e"
     }
+  },
+  "delivery_gate": {
+    "checks": {
+      "agent_tests_passed": true,
+      "component_manifests_validated": true,
+      "cross_repository_identity_verified": true,
+      "git_sync_verified": true,
+      "model_full_hash_verified": true,
+      "real_video_remote_gpu_call_passed": true,
+      "service_contract_verified": true,
+      "transport_fail_closed_verified": true,
+      "web_build_passed": true
+    },
+    "overall_passed": true
   },
   "disposition": "intermediate_development_model",
   "documentation": {
     "product_card": {
       "path": "delivery/current/PRODUCT_CARD.md",
-      "sha256": "2c0f51226f58e19cde5c69e2e88bb362bfbf02b0c914f91bdef7c52208d49c31"
+      "sha256": "591610350912b924231588276354a0eae8e9688236fa3cda5effa56b8520e423"
     },
     "v2_rollback": {
       "path": "delivery/rollback/V2_ROLLBACK.md",
       "sha256": "f2dbffc3660715ae6e1ca59e67cf602ec271bfab2934092c5e0de39c740cf970"
     }
+  },
+  "historical_quality_status": {
+    "production_approved": false,
+    "stage_b_passed": false,
+    "stage_c_completed": false,
+    "stage_d_passed": false,
+    "stage_g_passed": false
+  },
+  "performance_policy": {
+    "blocks_intermediate_delivery": false,
+    "mode": "record_only_non_blocking",
+    "optimization_status": "paused",
+    "retraining_authorized": false,
+    "thresholds_evaluated_for_delivery": false
   },
   "prohibited_claims": [
     "final",
@@ -47,12 +79,5 @@
     "independent-test-passed",
     "production-approved"
   ],
-  "quality_status": {
-    "production_approved": false,
-    "stage_b_passed": false,
-    "stage_c_completed": false,
-    "stage_d_passed": false,
-    "stage_g_passed": false
-  },
-  "schema_version": "tensile-delivery/bundle/v1"
+  "schema_version": "tensile-delivery/bundle/v2"
 }

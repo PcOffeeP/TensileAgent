@@ -13,6 +13,13 @@
     "full_data_final": false,
     "independent_test_passed": false
   },
+  "intermediate_delivery_policy": {
+    "primary_gate": "end_to_end_chain",
+    "performance_metrics_mode": "record_only_non_blocking",
+    "performance_thresholds_block_delivery": false,
+    "optimization_status": "paused",
+    "retraining_authorized": false
+  },
   "runtime": {
     "visual_service_access": "ssh_tunnel",
     "training_service_url": "http://127.0.0.1:8002",

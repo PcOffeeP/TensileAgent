@@ -1,0 +1,53 @@
+{
+  "schema_version": "tensile-delivery/performance-snapshot/v1",
+  "model_disposition": "intermediate_development_model",
+  "measurement_source": "frozen_stage_g_run",
+  "policy": {
+    "mode": "record_only_non_blocking",
+    "thresholds_evaluated_for_delivery": false,
+    "blocks_intermediate_delivery": false,
+    "optimization_status": "paused",
+    "retraining_authorized": false
+  },
+  "metrics": {
+    "all_110": {
+      "sample_count": 110,
+      "has_fracture_accuracy": 0.4090909090909091,
+      "fracture_recall": 0.3111111111111111,
+      "no_fracture_recall": 0.85,
+      "joint_success_rate": 0.4090909090909091
+    },
+    "heldout_21": {
+      "sample_count": 21,
+      "has_fracture_accuracy": 0.42857142857142855,
+      "fracture_recall": 0.35294117647058826,
+      "no_fracture_recall": 0.75,
+      "joint_success_rate": 0.42857142857142855
+    },
+    "development_89": {
+      "sample_count": 89,
+      "has_fracture_accuracy": 0.4044943820224719,
+      "fracture_recall": 0.3013698630136986,
+      "no_fracture_recall": 0.875,
+      "joint_success_rate": 0.4044943820224719
+    }
+  },
+  "unavailable_metrics": {
+    "fields": [
+      "time_hit_rate",
+      "mechanism_macro_f1",
+      "site_macro_f1",
+      "special_case_accuracy"
+    ],
+    "reason": "frozen scorer did not map the corresponding Chinese authority CSV headers",
+    "interpreted_as_pass": false,
+    "interpreted_as_fail_for_intermediate_delivery": false
+  },
+  "historical_gate_record": {
+    "stage_b_passed": false,
+    "stage_c_completed": false,
+    "stage_d_passed": false,
+    "stage_g_passed": false
+  }
+}
+

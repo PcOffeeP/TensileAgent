@@ -43,11 +43,11 @@ def validate(root: Path = ROOT, mvllm_root: Path | None = None) -> dict[str, Any
     bundle_path = root / "delivery/current/bundle.json"
     bundle = load_object(bundle_path)
     errors: list[str] = []
-    if bundle.get("schema_version") != "tensile-delivery/bundle/v1":
+    if bundle.get("schema_version") != "tensile-delivery/bundle/v2":
         errors.append("invalid bundle schema")
     if bundle.get("disposition") != "intermediate_development_model":
         errors.append("invalid delivery disposition")
-    quality = bundle.get("quality_status", {})
+    quality = bundle.get("historical_quality_status", {})
     expected_quality = {
         "stage_b_passed": False,
         "stage_c_completed": False,
@@ -56,7 +56,36 @@ def validate(root: Path = ROOT, mvllm_root: Path | None = None) -> dict[str, Any
         "production_approved": False,
     }
     if quality != expected_quality:
-        errors.append("quality status must preserve failed/deferred gates")
+        errors.append("historical quality status must preserve failed/deferred facts")
+    performance_policy = bundle.get("performance_policy", {})
+    expected_performance_policy = {
+        "mode": "record_only_non_blocking",
+        "thresholds_evaluated_for_delivery": False,
+        "blocks_intermediate_delivery": False,
+        "optimization_status": "paused",
+        "retraining_authorized": False,
+    }
+    if performance_policy != expected_performance_policy:
+        errors.append("performance policy must remain record-only and non-blocking")
+    delivery_gate = bundle.get("delivery_gate", {})
+    checks = delivery_gate.get("checks", {})
+    required_chain_checks = {
+        "component_manifests_validated",
+        "cross_repository_identity_verified",
+        "model_full_hash_verified",
+        "service_contract_verified",
+        "agent_tests_passed",
+        "web_build_passed",
+        "real_video_remote_gpu_call_passed",
+        "transport_fail_closed_verified",
+        "git_sync_verified",
+    }
+    if (
+        delivery_gate.get("overall_passed") is not True
+        or set(checks) != required_chain_checks
+        or not all(checks.get(name) is True for name in required_chain_checks)
+    ):
+        errors.append("end-to-end delivery gate is incomplete")
     required_claims = {
         "final",
         "full-data",
@@ -72,7 +101,7 @@ def validate(root: Path = ROOT, mvllm_root: Path | None = None) -> dict[str, Any
             errors.append(f"{name} documentation hash mismatch")
 
     loaded: dict[str, dict[str, Any]] = {}
-    for name in ("agent", "model", "service", "acceptance"):
+    for name in ("agent", "model", "service", "acceptance", "performance"):
         binding = bundle.get("components", {}).get(name, {})
         path = root / str(binding.get("path", ""))
         if not path.is_file():
@@ -104,16 +133,25 @@ def validate(root: Path = ROOT, mvllm_root: Path | None = None) -> dict[str, Any
         errors.append("service access policy must be ssh_tunnel_only")
     if service.get("runtime", {}).get("host") != "127.0.0.1":
         errors.append("service must remain loopback-only")
-    if acceptance.get("quality_status") != expected_quality:
-        errors.append("acceptance summary quality status mismatch")
+    if acceptance.get("historical_quality_status") != expected_quality:
+        errors.append("acceptance summary historical quality status mismatch")
+    performance = loaded.get("performance", {})
+    if performance.get("policy") != expected_performance_policy:
+        errors.append("performance snapshot policy mismatch")
+    if not isinstance(performance.get("metrics"), dict) or not performance.get("metrics"):
+        errors.append("performance snapshot metrics are missing")
 
     validation_path = root / "delivery/current/validation.json"
     if validation_path.is_file():
         validation = load_object(validation_path)
         if validation.get("bundle", {}).get("sha256") != sha256(bundle_path):
             errors.append("validation report bundle hash mismatch")
-        if validation.get("quality_status") != expected_quality:
-            errors.append("validation report quality status mismatch")
+        if validation.get("historical_quality_status") != expected_quality:
+            errors.append("validation report historical quality status mismatch")
+        if validation.get("performance_policy") != expected_performance_policy:
+            errors.append("validation report performance policy mismatch")
+        if validation.get("delivery_gate") != delivery_gate:
+            errors.append("validation report delivery gate mismatch")
 
     if mvllm_root is not None:
         for name in ("model", "service"):
@@ -128,7 +166,7 @@ def validate(root: Path = ROOT, mvllm_root: Path | None = None) -> dict[str, Any
                 errors.append(f"{name} snapshot differs from canonical source")
 
     return {
-        "schema_version": "tensile-delivery/bundle-validation/v1",
+        "schema_version": "tensile-delivery/bundle-validation/v2",
         "bundle_sha256": sha256(bundle_path),
         "component_count": len(loaded),
         "cross_repository_checked": mvllm_root is not None,
