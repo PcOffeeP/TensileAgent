@@ -14,6 +14,7 @@ from agent.runner import run_one
 
 MANIFEST_SCHEMA = "tensile-agent/acceptance-manifest/v1"
 BATCH_SCHEMA = "tensile-agent/acceptance-batch/v1"
+STAGE_G_AUTHORIZATION_SCHEMA = "tensile-agent/stage-g-authorization/v1"
 
 
 def sha256_file(path: str | Path) -> str:
@@ -104,16 +105,64 @@ def _deployment_matches(result: dict[str, Any], expected: dict[str, Any]) -> boo
     return actual == expected
 
 
+def load_stage_g_authorization(
+    path: str | Path,
+    manifest: dict[str, Any],
+    list_name: str,
+) -> dict[str, Any]:
+    """Validate the one-time authorization required for semantic held-out runs."""
+    authorization_path = Path(path).resolve()
+    authorization = json.loads(authorization_path.read_text(encoding="utf-8"))
+    if authorization.get("schema_version") != STAGE_G_AUTHORIZATION_SCHEMA:
+        raise ValueError("unsupported Stage G authorization schema")
+    if authorization.get("status") != "authorized":
+        raise ValueError("Stage G authorization is not active")
+    if authorization.get("agent_acceptance_manifest_id") != manifest["manifest_id"]:
+        raise ValueError("Stage G authorization manifest ID mismatch")
+    if authorization.get("agent_acceptance_manifest_sha256") != manifest["_sha256"]:
+        raise ValueError("Stage G authorization manifest hash mismatch")
+    if list_name not in authorization.get("allowed_input_lists", []):
+        raise ValueError(f"Stage G authorization does not allow {list_name}")
+    if authorization.get("heldout_semantics_opened") is not False:
+        raise ValueError("Stage G authorization must be created before semantic opening")
+    run_id = authorization.get("one_time_run_id")
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise ValueError("Stage G authorization missing one_time_run_id")
+    authorization["_path"] = str(authorization_path)
+    authorization["_sha256"] = sha256_file(authorization_path)
+    return authorization
+
+
 def run_acceptance_batch(
     manifest_path: str | Path,
     output_dir: str | Path,
     *,
     list_name: str = "all_110",
     retry_failed: bool = False,
+    stage_g_authorization_path: str | Path | None = None,
     run_one_fn: Callable[..., dict[str, Any]] = run_one,
 ) -> dict[str, Any]:
     """Run or resume one frozen input list without overwriting successes."""
     manifest = load_acceptance_manifest(manifest_path)
+    protected_lists = {"all_110", "heldout_21"}
+    stage_g_authorization: dict[str, Any] | None = None
+    if (
+        list_name in protected_lists
+        and manifest.get("policy", {}).get(
+            "heldout_semantic_runs_allowed_before_stage_g",
+            False,
+        )
+        is False
+    ):
+        if stage_g_authorization_path is None:
+            raise ValueError(
+                f"{list_name} requires a frozen Stage G authorization"
+            )
+        stage_g_authorization = load_stage_g_authorization(
+            stage_g_authorization_path,
+            manifest,
+            list_name,
+        )
     inputs = load_bound_input_list(manifest, list_name)
     root = Path(output_dir).resolve()
     root.mkdir(parents=True, exist_ok=True)
@@ -164,6 +213,16 @@ def run_acceptance_batch(
             "schema_version": BATCH_SCHEMA,
             "acceptance_manifest_id": manifest["manifest_id"],
             "acceptance_manifest_sha256": manifest["_sha256"],
+            "stage_g_authorization_id": (
+                stage_g_authorization.get("authorization_id")
+                if stage_g_authorization is not None
+                else None
+            ),
+            "stage_g_authorization_sha256": (
+                stage_g_authorization.get("_sha256")
+                if stage_g_authorization is not None
+                else None
+            ),
             "input_list": list_name,
             "video_id": video_id,
             "video_path": item["video_path"],
@@ -189,6 +248,16 @@ def run_acceptance_batch(
         "schema_version": BATCH_SCHEMA,
         "acceptance_manifest_id": manifest["manifest_id"],
         "acceptance_manifest_sha256": manifest["_sha256"],
+        "stage_g_authorization_id": (
+            stage_g_authorization.get("authorization_id")
+            if stage_g_authorization is not None
+            else None
+        ),
+        "stage_g_authorization_sha256": (
+            stage_g_authorization.get("_sha256")
+            if stage_g_authorization is not None
+            else None
+        ),
         "input_list": list_name,
         "total": len(inputs),
         "completed_now": completed,

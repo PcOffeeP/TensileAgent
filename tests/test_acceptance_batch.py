@@ -14,7 +14,7 @@ def _sha(path: Path) -> str:
 def test_acceptance_batch_resumes_without_overwriting_success(tmp_path: Path) -> None:
     video = tmp_path / "video_0001.mp4"
     video.write_bytes(b"fixture")
-    inputs = tmp_path / "all_110.json"
+    inputs = tmp_path / "development_fixture.json"
     inputs.write_text(
         json.dumps([{"video_id": "video_0001", "video_path": str(video)}]),
         encoding="utf-8",
@@ -36,7 +36,7 @@ def test_acceptance_batch_resumes_without_overwriting_success(tmp_path: Path) ->
         "config": {"path": str(config), "sha256": _sha(config)},
         "question": "请完整分析",
         "input_lists": {
-            "all_110": {
+            "development_fixture": {
                 "path": str(inputs),
                 "sha256": _sha(inputs),
                 "count": 1,
@@ -68,12 +68,14 @@ def test_acceptance_batch_resumes_without_overwriting_success(tmp_path: Path) ->
     first = run_acceptance_batch(
         manifest_path,
         output,
+        list_name="development_fixture",
         run_one_fn=fake_run_one,
     )
     success_bytes = (output / "video_0001" / "result.json").read_bytes()
     second = run_acceptance_batch(
         manifest_path,
         output,
+        list_name="development_fixture",
         run_one_fn=fake_run_one,
     )
 
@@ -81,3 +83,52 @@ def test_acceptance_batch_resumes_without_overwriting_success(tmp_path: Path) ->
     assert second["skipped_immutable_successes"] == 1
     assert calls == [str(video)]
     assert (output / "video_0001" / "result.json").read_bytes() == success_bytes
+
+
+def test_protected_lists_fail_closed_without_stage_g_authorization(
+    tmp_path: Path,
+) -> None:
+    video = tmp_path / "video_0001.mp4"
+    video.write_bytes(b"fixture")
+    inputs = tmp_path / "all_110.json"
+    inputs.write_text(
+        json.dumps([{"video_id": "video_0001", "video_path": str(video)}]),
+        encoding="utf-8",
+    )
+    config = tmp_path / "config.yaml"
+    config.write_text("backend: {}\n", encoding="utf-8")
+    manifest = {
+        "schema_version": "tensile-agent/acceptance-manifest/v1",
+        "status": "frozen",
+        "manifest_id": "fixture",
+        "agent_runtime_commit": "a" * 40,
+        "visual_contract_version": "tensile-vlm/v4.1",
+        "service_deployment": {"deployment_manifest": {}},
+        "config": {"path": str(config), "sha256": _sha(config)},
+        "question": "请完整分析",
+        "input_lists": {
+            "all_110": {
+                "path": str(inputs),
+                "sha256": _sha(inputs),
+                "count": 1,
+            }
+        },
+        "scoring": {"path": "spec.json", "sha256": "scorer"},
+        "thresholds": {"has_fracture_accuracy": 0.85},
+        "policy": {"heldout_semantic_runs_allowed_before_stage_g": False},
+    }
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    calls: list[str] = []
+
+    try:
+        run_acceptance_batch(
+            manifest_path,
+            tmp_path / "output",
+            run_one_fn=lambda path, **_kwargs: calls.append(path),
+        )
+    except ValueError as exc:
+        assert "Stage G authorization" in str(exc)
+    else:
+        raise AssertionError("protected batch unexpectedly started")
+    assert calls == []

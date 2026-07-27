@@ -41,6 +41,7 @@ python3 -m agent.run \
 ```bash
 python3 scripts/run_v4_1_acceptance_batch.py \
   --manifest /absolute/path/agent_acceptance_manifest.json \
+  --stage-g-authorization /absolute/path/stage_g_authorization.json \
   --input-list all_110 \
   --output-dir data/08_runtime/v4_1_acceptance
 ```
@@ -48,6 +49,8 @@ python3 scripts/run_v4_1_acceptance_batch.py \
 每个视频独立保存事件、工作目录和身份绑定结果。成功结果不可覆盖；默认保留失败，
 只有纯基础设施恢复时才使用 `--retry-failed`。任一 input-list hash、配置 hash、
 manifest hash 或 deployment identity 漂移均 fail closed。
+`all_110` 和 `heldout_21` 还必须提供与 acceptance manifest 精确绑定的一次性
+Stage G authorization；缺少 Stage D 前置或授权文件时 runner 在首次 VLM 调用前拒绝。
 
 ## 评分
 

@@ -15,12 +15,17 @@ def main() -> None:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--input-list", default="all_110")
     parser.add_argument("--retry-failed", action="store_true")
+    parser.add_argument(
+        "--stage-g-authorization",
+        help="Frozen one-time authorization required for all_110 or heldout_21",
+    )
     args = parser.parse_args()
     summary = run_acceptance_batch(
         args.manifest,
         args.output_dir,
         list_name=args.input_list,
         retry_failed=args.retry_failed,
+        stage_g_authorization_path=args.stage_g_authorization,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     raise SystemExit(0 if summary["failed_or_pending_retry"] == 0 else 1)
