@@ -1,0 +1,23 @@
+{
+  "schema_version": "tensile-delivery/service-component/v1",
+  "component_name": "v4.1-loopback-pre-acceptance",
+  "repository": "mVllm_2",
+  "source_repository_commit": "1c4eda2194c1cc56f107d9bef13ee7a159623692",
+  "contract_version": "tensile-vlm/v4.1",
+  "contract_hash": "3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab",
+  "model_component_path": "delivery/model_component.json",
+  "deployment_manifest_path": "pipeline/deployments/v4_1_intermediate_stage_b_8e1fdb09f8e6.json",
+  "deployment_manifest_sha256": "249135fcd93bb98b5a6e8609c6825a444ddeb3d42a8175b71a59a60f6ab759cc",
+  "runtime": {
+    "host": "127.0.0.1",
+    "port": 8002,
+    "access_policy": "ssh_tunnel_only",
+    "production_alias": false
+  },
+  "evidence": {
+    "deployment_summary_path": "docs/results/v4_1_stage_e_pre_acceptance/deployment_summary.json",
+    "deployment_summary_sha256": "23e554a1269c58f22f596a42703037b09c3ccb0d99683534b6b8271add54a28c",
+    "real_media_smoke_passed": true,
+    "v2_rollback_rehearsal_passed": true
+  }
+}

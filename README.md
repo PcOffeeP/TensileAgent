@@ -2,28 +2,30 @@
 
 ## 当前版本边界
 
-TensileAgent 当前运行时仍固定使用 `tensile-vlm/v2`。跨仓目标
-`tensile-vlm/v4.1` 契约已经冻结，上游 mVllm_2 已完成 V4.1 数据发布和三折 LoRA
-训练，正在进行模型合并与严格验证集评测。
+TensileAgent 已完成 `tensile-vlm/v4.1` 中间模型的 Agent 集成和一次冻结的
+110 视频运行，但质量门未通过。当前唯一允许的处置级别为
+`intermediate_development_model`：训练机保留 coverage-first seed3407 merged
+BF16 模型，服务只监听 loopback，本机通过 SSH tunnel 联调。
 
 | 层 | 当前状态 |
 | --- | --- |
-| Agent Runner、状态机、HTTP 客户端 | V2，仍在使用 |
-| 当前视觉生产服务 | V2，仍在使用 |
+| Agent Runner、状态机、HTTP 客户端 | V4.1 中间集成已完成 |
+| 当前视觉服务 | V4.1 中间模型，`127.0.0.1:8002`，非生产 |
 | V4.1 consumer artifact | 已冻结：`agent/contracts/tensile_vlm_v4_1.json` |
-| V4.1 数据发布 | 已完成：`v4.1.0-760050fad303` |
-| V4.1 三折 LoRA 训练 | 已完成 |
-| V4.1 模型合并与严格评测 | 上游进行中 |
-| V4.1 Agent 运行时迁移 | 尚未开始整体切换 |
+| Stage B | 质量门失败 |
+| Stage C | 延期，未执行 full-data 训练 |
+| Stage D | 质量门失败 |
+| Stage G | 110/110 运行完成、链路完整，但质量门失败 |
+| V2 | 保留为回滚对象，不代表已完成同源最终比较 |
 
-V4.1 artifact 的存在不代表运行时已迁移。在模型效果验收和服务端 V4.1 部署完成前，
-不要修改当前 V2 contract hash、把 V4.1 输出送入 V2 parser，或让 Web 展示把 prospective
-的 `临界未断裂` 线索当作最终断裂结论。迁移顺序见
-[项目计划](docs/PROJECT_PLAN.md)。
+不得将当前状态宣称为 final、full-data、independent-test-passed 或生产通过。
+机器可验的当前交付入口见 [delivery](delivery/README.md)，人工状态入口见跨仓 handoff。
+Stage G 聚合结果和 scorer 覆盖限制见
+[中间汇总](docs/results/v4_1_stage_g_intermediate/README.md)。
 
-## 当前可替换视觉后端 MVP（V2）
+## 历史可替换视觉后端 MVP（V2）
 
-运行时固定使用 `tensile-vlm/v2`。视觉服务必须提供
+以下内容记录 V2 回滚基线。V2 视觉服务必须提供
 `GET /v1/tensile/contract`，并在每轮响应中返回与任务预检完全一致的
 deployment manifest；旧 v1 服务会被拒绝。
 

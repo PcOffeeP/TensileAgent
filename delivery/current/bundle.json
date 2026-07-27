@@ -1,0 +1,48 @@
+{
+  "bundle_name": "v4.1-intermediate-development-2026-07-27",
+  "canonical_sources": {
+    "model": {
+      "path": "delivery/model_component.json",
+      "repository": "mVllm_2",
+      "sha256": "e4d84ade97f6ab6cb1e055411d73c53aec7a8296165abce3421e3c446ad18f4c"
+    },
+    "service": {
+      "path": "delivery/service_component.json",
+      "repository": "mVllm_2",
+      "sha256": "6464fce8a650f0cd3b2d857e2d8ad245793e64bb9371ffef750241647070b5c3"
+    }
+  },
+  "components": {
+    "acceptance": {
+      "path": "docs/results/v4_1_stage_g_intermediate/acceptance_summary.json",
+      "sha256": "589ee3f185de76977dbfdfcaf17ff885822660d83646a1be829a13897d334890"
+    },
+    "agent": {
+      "path": "delivery/components/agent_component.json",
+      "sha256": "23e98e550d1b371d4af124e266932268ea16c9f656330ada9e0bf855a7cb8943"
+    },
+    "model": {
+      "path": "delivery/components/model_component.json",
+      "sha256": "e4d84ade97f6ab6cb1e055411d73c53aec7a8296165abce3421e3c446ad18f4c"
+    },
+    "service": {
+      "path": "delivery/components/service_component.json",
+      "sha256": "6464fce8a650f0cd3b2d857e2d8ad245793e64bb9371ffef750241647070b5c3"
+    }
+  },
+  "disposition": "intermediate_development_model",
+  "prohibited_claims": [
+    "final",
+    "full-data",
+    "independent-test-passed",
+    "production-approved"
+  ],
+  "quality_status": {
+    "production_approved": false,
+    "stage_b_passed": false,
+    "stage_c_completed": false,
+    "stage_d_passed": false,
+    "stage_g_passed": false
+  },
+  "schema_version": "tensile-delivery/bundle/v1"
+}

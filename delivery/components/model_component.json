@@ -1,0 +1,30 @@
+{
+  "schema_version": "tensile-delivery/model-component/v1",
+  "component_name": "coverage-first-seed3407-merged-bf16",
+  "repository": "mVllm_2",
+  "source_repository_commit": "1c4eda2194c1cc56f107d9bef13ee7a159623692",
+  "model_tier": "intermediate_development_model",
+  "full_data_final": false,
+  "production_approved": false,
+  "source": {
+    "training_variant": "coverage-first",
+    "seed": 3407,
+    "optimizer_steps": 1125
+  },
+  "artifact": {
+    "managed_remote_path": "LlamaFactory/saves/minicpmv4_5/lora/sft_tensile_v4_1_phase2_source_aware_3k_coverage_first_2a84e8b6cfc3_seed3407_merged",
+    "format": "merged_bf16",
+    "expected_safetensors_shards": 10,
+    "aggregate_sha256": "1f75e4f91db487273588c1e1c8bf867b20acdfc565c191d914915b366c4c1b1c"
+  },
+  "evidence": {
+    "acceptance_summary_path": "docs/results/v4_1_stage_b_intermediate/acceptance_summary.json",
+    "acceptance_summary_sha256": "1c01bd1653be47e771da59c91fe843f449563ec8770ee5ecba78353dfe69fdc3"
+  },
+  "quality_status": {
+    "stage_b_passed": false,
+    "stage_c_completed": false,
+    "stage_d_passed": false,
+    "stage_g_passed": false
+  }
+}

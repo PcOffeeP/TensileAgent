@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tensile-delivery/bundle/v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "bundle_name",
+    "disposition",
+    "components",
+    "quality_status",
+    "prohibited_claims"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "tensile-delivery/bundle/v1"
+    },
+    "bundle_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "disposition": {
+      "const": "intermediate_development_model"
+    },
+    "components": {
+      "type": "object",
+      "required": ["agent", "model", "service", "acceptance"],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["path", "sha256"]
+      }
+    },
+    "quality_status": {
+      "type": "object",
+      "required": [
+        "stage_b_passed",
+        "stage_c_completed",
+        "stage_d_passed",
+        "stage_g_passed"
+      ]
+    },
+    "prohibited_claims": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
+

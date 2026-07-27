@@ -1,0 +1,55 @@
+{
+  "schema_version": "tensile-agent/stage-g-intermediate-summary/v1",
+  "model_disposition": "intermediate_development_model",
+  "run": {
+    "expected_videos": 110,
+    "successful_videos": 110,
+    "failed_videos": 0,
+    "chain_integrity_passed": true
+  },
+  "quality_status": {
+    "stage_b_passed": false,
+    "stage_c_completed": false,
+    "stage_d_passed": false,
+    "stage_g_passed": false,
+    "production_approved": false
+  },
+  "aggregate_metrics": {
+    "all_110": {
+      "has_fracture_accuracy": 0.4090909090909091,
+      "fracture_recall": 0.3111111111111111,
+      "no_fracture_recall": 0.85,
+      "joint_success_rate": 0.4090909090909091
+    },
+    "heldout_21": {
+      "has_fracture_accuracy": 0.42857142857142855,
+      "fracture_recall": 0.35294117647058826,
+      "no_fracture_recall": 0.75,
+      "joint_success_rate": 0.42857142857142855
+    },
+    "development_89": {
+      "has_fracture_accuracy": 0.4044943820224719,
+      "fracture_recall": 0.3013698630136986,
+      "no_fracture_recall": 0.875,
+      "joint_success_rate": 0.4044943820224719
+    }
+  },
+  "scorer_coverage_limitation": {
+    "present": true,
+    "cause": "frozen scorer did not map Chinese authority CSV headers for time, mechanism, site, and special-case fields",
+    "zero_denominator_fields": [
+      "time",
+      "mechanism",
+      "site",
+      "special_case"
+    ],
+    "official_gate_recomputed": false,
+    "failure_independent_of_limitation": true
+  },
+  "source_artifacts": {
+    "finalization_manifest_sha256": "06fbe1fd0ee109ddd38dc401c80853769902a2f27b31866ee9519cb80d756551",
+    "chain_integrity_report_sha256": "bfa946574441f6ce2ad785145545d9ccd64df78f7030879426774ec083025c96",
+    "stage_g_gate_sha256": "900e8c27cff2ec1509a8420e0e06df0cf2ede9d874179559eba5b6b830994530"
+  }
+}
+

@@ -1,0 +1,23 @@
+{
+  "schema_version": "tensile-delivery/agent-component/v1",
+  "component_name": "tensile-agent-v4.1-intermediate",
+  "repository": "TensileAgent",
+  "runtime_source_commit": "50d0a9d4b463bca3db8a0a5837be6de1ee820fe4",
+  "delivery_lineage_commit": "69578c4fae6f2cf4faf2337e30d904c1ee056fda",
+  "contract_version": "tensile-vlm/v4.1",
+  "contract_hash": "3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab",
+  "result_schema": "tensile-agent/result/v4.1",
+  "capability": {
+    "tier": "intermediate_development",
+    "production_approved": false,
+    "full_data_final": false,
+    "independent_test_passed": false
+  },
+  "runtime": {
+    "visual_service_access": "ssh_tunnel",
+    "visual_service_url": "http://127.0.0.1:8002",
+    "fail_closed_on_contract_drift": true,
+    "fail_closed_on_transport_failure": true
+  }
+}
+
