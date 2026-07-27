@@ -1,6 +1,27 @@
 # TensileAgent
 
-## 可替换视觉后端 MVP
+## 当前版本边界
+
+TensileAgent 当前运行时仍固定使用 `tensile-vlm/v2`。跨仓目标
+`tensile-vlm/v4.1` 契约已经冻结，上游 mVllm_2 已完成 V4.1 数据发布和三折 LoRA
+训练，正在进行模型合并与严格验证集评测。
+
+| 层 | 当前状态 |
+| --- | --- |
+| Agent Runner、状态机、HTTP 客户端 | V2，仍在使用 |
+| 当前视觉生产服务 | V2，仍在使用 |
+| V4.1 consumer artifact | 已冻结：`agent/contracts/tensile_vlm_v4_1.json` |
+| V4.1 数据发布 | 已完成：`v4.1.0-760050fad303` |
+| V4.1 三折 LoRA 训练 | 已完成 |
+| V4.1 模型合并与严格评测 | 上游进行中 |
+| V4.1 Agent 运行时迁移 | 尚未开始整体切换 |
+
+V4.1 artifact 的存在不代表运行时已迁移。在模型效果验收和服务端 V4.1 部署完成前，
+不要修改当前 V2 contract hash、把 V4.1 输出送入 V2 parser，或让 Web 展示把 prospective
+的 `临界未断裂` 线索当作最终断裂结论。迁移顺序见
+[项目计划](docs/PROJECT_PLAN.md)。
+
+## 当前可替换视觉后端 MVP（V2）
 
 运行时固定使用 `tensile-vlm/v2`。视觉服务必须提供
 `GET /v1/tensile/contract`，并在每轮响应中返回与任务预检完全一致的
@@ -55,7 +76,7 @@ TensileAgent/
 └── README.md
 ```
 
-## 架构概览
+## 当前 V2 架构概览
 
 ### 核心思路
 
@@ -176,7 +197,7 @@ TensileAgent 只决定要检查的区间 [start, end]；视觉 Prompt 由程序�
 | **Web API** | FastAPI + SSE | 任务队列、实时事件流、历史持久化 |
 | **前端** | React 19 + Vite + Tailwind CSS 4 | 深色三栏控制台 |
 
-### 三种最终状态
+### 当前 V2 的三种最终状态
 
 | 状态 | 条件 |
 |------|------|
@@ -377,9 +398,17 @@ pytest tests/test_schema.py -v
 
 | 仓库 | 说明 |
 |------|------|
-| **[mVllm_2](../mVllm_2)** | MiniCPM-V 4.5 微调流水线（数据准备、训练、评估） |
+| **[mVllm_2](../mVllm_2)** | MiniCPM-V 4.5 数据、微调、评测与视觉服务仓库 |
 
-`mVllm_2` 包含完整的数据流水线和训练配置，并维护 `tensile-vlm/v2` 权威契约。视觉模型单轮只返回四字段；TensileAgent 在多轮证据基础上形成 `tensile-agent/result/v2`，支持字段级 partial。confidence 未完成源视频隔离校准前只显示证据等级，数值保持 `null`。
+`mVllm_2/main` 当前维护 `tensile-vlm/v4.1` 数据与训练链路；V2 数据已在独立 archive
+中冻结。TensileAgent 生产运行仍使用 V2 权威 artifact，单轮返回
+`has_fracture`、`fracture_between`、`type`、`location`，并在多轮证据基础上形成
+`tensile-agent/result/v2`。confidence 未完成源视频隔离校准前只显示证据等级，数值保持
+`null`。
+
+V4.1 目标输出为 `clip_state`、`fracture_mechanism`、`fracture_site`、
+`special_case`。其中 `临界未断裂` 的机制和位置属于 prospective 线索，必须由后续真实
+断裂证据确认；这套语义要等服务和 Agent 整体迁移后才会成为运行时行为。
 
 生产服务的 `deployment_manifest` 必须完整携带模型、adapter、base model、processor、框架、配置、runtime、`contract_version` 和 `contract_hash`。Agent 在任务预检时冻结完整快照；缺失、变化或不一致时拒绝使用该轮结果。
 
