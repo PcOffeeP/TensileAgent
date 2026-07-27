@@ -1,0 +1,128 @@
+{
+  "schema_version": "tensile-delivery/core-step-results/v1",
+  "recorded_at": "2026-07-27T21:27:40+08:00",
+  "delivery_disposition": "intermediate_development_model",
+  "overall_chain_passed": true,
+  "performance_is_a_delivery_gate": false,
+  "optimization_status": "paused",
+  "steps": [
+    {
+      "step": 1,
+      "name": "model_artifact_identity",
+      "status": "passed",
+      "result": {
+        "format": "merged_bf16",
+        "file_count": 17,
+        "safetensors_shards": 10,
+        "total_size_bytes": 17391991837,
+        "full_hash_verified": true,
+        "aggregate_sha256": "1f75e4f91db487273588c1e1c8bf867b20acdfc565c191d914915b366c4c1b1c"
+      }
+    },
+    {
+      "step": 2,
+      "name": "component_and_bundle_validation",
+      "status": "passed",
+      "result": {
+        "model_component_passed": true,
+        "service_component_passed": true,
+        "cross_repository_bundle_passed": true,
+        "bundle_schema": "tensile-delivery/bundle/v2",
+        "bundle_sha256": "bf2bebceccb986711e8426ed06bc04d9641922745589eaca46783d2298afcf73"
+      }
+    },
+    {
+      "step": 3,
+      "name": "automated_tests",
+      "status": "passed",
+      "result": {
+        "mvllm_local_delivery_tests": "3 passed",
+        "mvllm_remote_delivery_tests": "3 passed",
+        "agent_local_python": "491 passed, 1 warning",
+        "agent_remote_python": "pending final evidence sync and rerun",
+        "agent_local_web_build": "passed"
+      }
+    },
+    {
+      "step": 4,
+      "name": "remote_service_contract",
+      "status": "passed",
+      "result": {
+        "remote_endpoint": "127.0.0.1:8002",
+        "loopback_only": true,
+        "contract_version": "tensile-vlm/v4.1",
+        "contract_hash": "3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab",
+        "contract_snapshot_sha256": "450f3d6045ed31a1b95091d6ab5f4c05861c1e01eed37212989bdb3fa86fef95",
+        "runtime_device": "cuda:0",
+        "runtime_dtype": "bfloat16"
+      }
+    },
+    {
+      "step": 5,
+      "name": "ssh_tunnel_and_doctor",
+      "status": "passed",
+      "result": {
+        "local_endpoint": "127.0.0.1:18002",
+        "doctor_passed": true,
+        "doctor_report_sha256": "b5addeb31ffd9093422bfd7b9c94705ed33cd572a6b96a0384172bb246ed0818"
+      }
+    },
+    {
+      "step": 6,
+      "name": "real_development_video_remote_gpu_call",
+      "status": "passed",
+      "result": {
+        "video_id": "video_0002",
+        "video_sha256": "b2dccaf9a98020d661adfd0665f8320436abd04a52ac87f8165184f157a24f29",
+        "result_schema": "tensile-agent/result/v4.1",
+        "response_status": "answered",
+        "deployment_identity_matched": true,
+        "result_sha256": "f1b28ec03e84d7cc3df6fc6a195def176deae7d4bb95cd7a3f314ee00b341706"
+      }
+    },
+    {
+      "step": 7,
+      "name": "transport_fail_closed",
+      "status": "passed",
+      "result": {
+        "tunnel_disconnected_for_test": true,
+        "doctor_exit_code": 1,
+        "agent_exit_code": 1,
+        "failure_stage": "visual_contract_preflight",
+        "result_file_created": false,
+        "protocol_fallback_observed": false,
+        "tunnel_restored": true
+      }
+    },
+    {
+      "step": 8,
+      "name": "performance_snapshot",
+      "status": "recorded_non_blocking",
+      "result": {
+        "snapshot_path": "docs/results/v4_1_stage_g_intermediate/performance_snapshot.json",
+        "thresholds_evaluated_for_delivery": false,
+        "blocks_intermediate_delivery": false,
+        "optimization_status": "paused",
+        "retraining_authorized": false
+      }
+    },
+    {
+      "step": 9,
+      "name": "dual_machine_git_sync",
+      "status": "passed",
+      "result": {
+        "agent_policy_source_commit": "ecb8f5231e06e1e931358eaf24f5ab51f8b5ae58",
+        "mvllm_policy_source_commit": "71405d9ca6f2714b6a12144662cc017d8ff7a1c2",
+        "sync_transport": "git_bundle",
+        "long_term_remote_pushed": false
+      }
+    }
+  ],
+  "historical_quality_status": {
+    "stage_b_passed": false,
+    "stage_c_completed": false,
+    "stage_d_passed": false,
+    "stage_g_passed": false,
+    "production_approved": false
+  }
+}

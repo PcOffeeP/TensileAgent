@@ -1,14 +1,14 @@
 {
   "schema_version": "tensile-delivery/validation/v2",
-  "validated_at": "2026-07-27T21:23:29+08:00",
+  "validated_at": "2026-07-27T21:27:40+08:00",
   "bundle": {
     "sha256": "bf2bebceccb986711e8426ed06bc04d9641922745589eaca46783d2298afcf73",
     "cross_repository_validation_passed": true
   },
   "git_sync": {
-    "agent_source_commit": "e0cba45c5038954ff422c53509a260f31461e864",
+    "agent_source_commit": "ecb8f5231e06e1e931358eaf24f5ab51f8b5ae58",
     "agent_local_remote_matched": true,
-    "mvllm_source_commit": "c6dd47a2b8ca7e579e17956dfdc4a01790a311e9",
+    "mvllm_source_commit": "71405d9ca6f2714b6a12144662cc017d8ff7a1c2",
     "mvllm_local_remote_matched": true,
     "sync_transport": "git_bundle",
     "long_term_remote_pushed": false
@@ -45,7 +45,7 @@
     "real_gpu_call_passed": true,
     "result_schema": "tensile-agent/result/v4.1",
     "response_status": "answered",
-    "result_sha256": "8928bd71e27c0c83300410c093cf6c81d48401b3fae78185395d025770eb3983",
+    "result_sha256": "f1b28ec03e84d7cc3df6fc6a195def176deae7d4bb95cd7a3f314ee00b341706",
     "deployment_identity_matched": true,
     "tunnel_restored_after_failure_test": true
   },
@@ -81,9 +81,9 @@
     "retraining_authorized": false
   },
   "tests": {
-    "local_python": "490 passed, 1 warning",
+    "local_python": "491 passed, 1 warning",
     "local_web_build": "passed",
-    "remote_python": "pending policy update sync and test rerun",
+    "remote_python": "pending final evidence sync and rerun",
     "remote_web_build": "not rerun because npm is not installed in the remote shell; local build passed and prior frozen remote acceptance build remains historical evidence"
   },
   "historical_quality_status": {

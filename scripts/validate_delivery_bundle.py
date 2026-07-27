@@ -153,6 +153,26 @@ def validate(root: Path = ROOT, mvllm_root: Path | None = None) -> dict[str, Any
         if validation.get("delivery_gate") != delivery_gate:
             errors.append("validation report delivery gate mismatch")
 
+    core_steps_path = root / "delivery/current/core_step_results.json"
+    if not core_steps_path.is_file():
+        errors.append("core step results are missing")
+    else:
+        core_steps = load_object(core_steps_path)
+        steps = core_steps.get("steps", [])
+        if (
+            core_steps.get("overall_chain_passed") is not True
+            or core_steps.get("performance_is_a_delivery_gate") is not False
+            or not isinstance(steps, list)
+            or len(steps) != 9
+            or any(
+                step.get("status") not in {"passed", "recorded_non_blocking"}
+                for step in steps
+            )
+        ):
+            errors.append("core step results are incomplete")
+        if core_steps.get("historical_quality_status") != expected_quality:
+            errors.append("core step historical quality status mismatch")
+
     if mvllm_root is not None:
         for name in ("model", "service"):
             canonical = bundle.get("canonical_sources", {}).get(name, {})

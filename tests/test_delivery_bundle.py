@@ -66,3 +66,18 @@ def test_delivery_gate_requires_every_chain_check(monkeypatch) -> None:
     monkeypatch.setattr(validator, "load_object", load_with_failed_chain)
     report = validator.validate(ROOT)
     assert "end-to-end delivery gate is incomplete" in report["errors"]
+
+
+def test_core_step_results_keep_performance_non_blocking(monkeypatch) -> None:
+    original_load = validator.load_object
+
+    def load_with_blocking_core_steps(path: Path):
+        value = original_load(path)
+        if path.name == "core_step_results.json":
+            value = copy.deepcopy(value)
+            value["performance_is_a_delivery_gate"] = True
+        return value
+
+    monkeypatch.setattr(validator, "load_object", load_with_blocking_core_steps)
+    report = validator.validate(ROOT)
+    assert "core step results are incomplete" in report["errors"]
