@@ -1,0 +1,18 @@
+agent:
+  backend: deterministic
+  deterministic:
+    model: v4.1-interval-policy-v1
+  local:
+    base_url: http://localhost:11434/v1
+    model: tensile-qwen35:9b
+    provider: ollama
+    reasoning_effort: none
+  max_low_conf_rounds: 2
+  max_rounds: 10
+  temperature: 0.2
+  tolerance_seconds: 1.0
+backend:
+  api_url: http://127.0.0.1:18002/v1
+  contract_version: tensile-vlm/v4.1
+  model: tensile-vlm
+

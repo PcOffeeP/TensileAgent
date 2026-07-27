@@ -75,6 +75,16 @@ def generate(root: Path, mvllm_root: Path) -> dict[str, Any]:
                 "sha256": sha256(sources["service"]),
             },
         },
+        "documentation": {
+            "product_card": {
+                "path": "delivery/current/PRODUCT_CARD.md",
+                "sha256": sha256(root / "delivery/current/PRODUCT_CARD.md"),
+            },
+            "v2_rollback": {
+                "path": "delivery/rollback/V2_ROLLBACK.md",
+                "sha256": sha256(root / "delivery/rollback/V2_ROLLBACK.md"),
+            },
+        },
         "quality_status": {
             "stage_b_passed": False,
             "stage_c_completed": False,
@@ -104,4 +114,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

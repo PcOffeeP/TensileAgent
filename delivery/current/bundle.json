@@ -19,7 +19,7 @@
     },
     "agent": {
       "path": "delivery/components/agent_component.json",
-      "sha256": "23e98e550d1b371d4af124e266932268ea16c9f656330ada9e0bf855a7cb8943"
+      "sha256": "cff89ee46c4ed137851119a40321b584b4b474b4c3bacf26901acd31a936cc62"
     },
     "model": {
       "path": "delivery/components/model_component.json",
@@ -31,6 +31,16 @@
     }
   },
   "disposition": "intermediate_development_model",
+  "documentation": {
+    "product_card": {
+      "path": "delivery/current/PRODUCT_CARD.md",
+      "sha256": "2c0f51226f58e19cde5c69e2e88bb362bfbf02b0c914f91bdef7c52208d49c31"
+    },
+    "v2_rollback": {
+      "path": "delivery/rollback/V2_ROLLBACK.md",
+      "sha256": "f2dbffc3660715ae6e1ca59e67cf602ec271bfab2934092c5e0de39c740cf970"
+    }
+  },
   "prohibited_claims": [
     "final",
     "full-data",

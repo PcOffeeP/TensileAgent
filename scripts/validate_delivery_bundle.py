@@ -65,6 +65,11 @@ def validate(root: Path = ROOT, mvllm_root: Path | None = None) -> dict[str, Any
     }
     if set(bundle.get("prohibited_claims", [])) != required_claims:
         errors.append("prohibited claims are incomplete")
+    for name in ("product_card", "v2_rollback"):
+        binding = bundle.get("documentation", {}).get(name, {})
+        path = root / str(binding.get("path", ""))
+        if not path.is_file() or sha256(path) != binding.get("sha256"):
+            errors.append(f"{name} documentation hash mismatch")
 
     loaded: dict[str, dict[str, Any]] = {}
     for name in ("agent", "model", "service", "acceptance"):
@@ -101,6 +106,14 @@ def validate(root: Path = ROOT, mvllm_root: Path | None = None) -> dict[str, Any
         errors.append("service must remain loopback-only")
     if acceptance.get("quality_status") != expected_quality:
         errors.append("acceptance summary quality status mismatch")
+
+    validation_path = root / "delivery/current/validation.json"
+    if validation_path.is_file():
+        validation = load_object(validation_path)
+        if validation.get("bundle", {}).get("sha256") != sha256(bundle_path):
+            errors.append("validation report bundle hash mismatch")
+        if validation.get("quality_status") != expected_quality:
+            errors.append("validation report quality status mismatch")
 
     if mvllm_root is not None:
         for name in ("model", "service"):
@@ -139,4 +152,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

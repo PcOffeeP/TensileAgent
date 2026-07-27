@@ -1,0 +1,75 @@
+{
+  "schema_version": "tensile-delivery/validation/v1",
+  "validated_at": "2026-07-27T21:10:49+08:00",
+  "bundle": {
+    "sha256": "3493d66250ce0d31fc19101bd6ed30983fce6f4b70b0e30e425df79466616a50",
+    "cross_repository_validation_passed": true
+  },
+  "git_sync": {
+    "agent_source_commit": "e0cba45c5038954ff422c53509a260f31461e864",
+    "agent_local_remote_matched": true,
+    "mvllm_source_commit": "c6dd47a2b8ca7e579e17956dfdc4a01790a311e9",
+    "mvllm_local_remote_matched": true,
+    "sync_transport": "git_bundle",
+    "long_term_remote_pushed": false
+  },
+  "model": {
+    "tier": "intermediate_development_model",
+    "hash_mode": "full",
+    "aggregate_sha256": "1f75e4f91db487273588c1e1c8bf867b20acdfc565c191d914915b366c4c1b1c",
+    "file_count": 17,
+    "safetensors_count": 10,
+    "total_size_bytes": 17391991837,
+    "matched_component_manifest": true
+  },
+  "remote_service": {
+    "host": "127.0.0.1",
+    "port": 8002,
+    "process_id_at_validation": 183971,
+    "contract_version": "tensile-vlm/v4.1",
+    "contract_hash": "3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab",
+    "contract_snapshot_sha256": "450f3d6045ed31a1b95091d6ab5f4c05861c1e01eed37212989bdb3fa86fef95",
+    "model_aggregate_sha256": "1f75e4f91db487273588c1e1c8bf867b20acdfc565c191d914915b366c4c1b1c",
+    "runtime_device": "cuda:0",
+    "runtime_dtype": "bfloat16",
+    "loopback_only": true
+  },
+  "local_tunnel_smoke": {
+    "local_host": "127.0.0.1",
+    "local_port": 18002,
+    "remote_port": 8002,
+    "doctor_passed": true,
+    "doctor_report_sha256": "b5addeb31ffd9093422bfd7b9c94705ed33cd572a6b96a0384172bb246ed0818",
+    "development_video_id": "video_0002",
+    "development_video_sha256": "b2dccaf9a98020d661adfd0665f8320436abd04a52ac87f8165184f157a24f29",
+    "real_gpu_call_passed": true,
+    "result_schema": "tensile-agent/result/v4.1",
+    "response_status": "answered",
+    "result_sha256": "8928bd71e27c0c83300410c093cf6c81d48401b3fae78185395d025770eb3983",
+    "deployment_identity_matched": true,
+    "tunnel_restored_after_failure_test": true
+  },
+  "fail_closed": {
+    "tunnel_was_explicitly_disconnected": true,
+    "doctor_exit_code": 1,
+    "doctor_report_sha256": "cf985da81ef14539f38d89b20a680ffde03e4c474544dcd7888054512cf8f2bf",
+    "agent_exit_code": 1,
+    "failure_stage": "visual_contract_preflight",
+    "result_file_created": false,
+    "protocol_fallback_observed": false,
+    "passed": true
+  },
+  "tests": {
+    "local_python": "488 passed, 1 warning",
+    "local_web_build": "passed",
+    "remote_python": "488 passed",
+    "remote_web_build": "not rerun because npm is not installed in the remote shell; local build passed and prior frozen remote acceptance build remains historical evidence"
+  },
+  "quality_status": {
+    "stage_b_passed": false,
+    "stage_c_completed": false,
+    "stage_d_passed": false,
+    "stage_g_passed": false,
+    "production_approved": false
+  }
+}

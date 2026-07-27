@@ -15,9 +15,10 @@
   },
   "runtime": {
     "visual_service_access": "ssh_tunnel",
-    "visual_service_url": "http://127.0.0.1:8002",
+    "training_service_url": "http://127.0.0.1:8002",
+    "local_tunnel_url": "http://127.0.0.1:18002",
+    "config_path": "delivery/config/v4_1_ssh_tunnel.yaml",
     "fail_closed_on_contract_drift": true,
     "fail_closed_on_transport_failure": true
   }
 }
-
