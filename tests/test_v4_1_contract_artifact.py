@@ -6,7 +6,7 @@ import pytest
 
 
 PATH = Path(__file__).parents[1] / "agent/contracts/tensile_vlm_v4_1.json"
-EXPECTED_HASH = "47e393007ff1677c8b60a47d6d86f8181d7b1388a238d79469a3046bc045b937"
+EXPECTED_HASH = "3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab"
 
 
 def test_v4_1_target_contract_is_fixed_without_switching_runtime():

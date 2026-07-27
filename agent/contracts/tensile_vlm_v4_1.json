@@ -1,6 +1,6 @@
 {
   "contract_version": "tensile-vlm/v4.1",
-  "contract_hash": "47e393007ff1677c8b60a47d6d86f8181d7b1388a238d79469a3046bc045b937",
+  "contract_hash": "3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab",
   "model_output_fields": [
     "clip_state",
     "fracture_mechanism",
@@ -164,9 +164,9 @@
     "null": "unavailable"
   },
   "analysis": {
-    "system_prompt": "你是一位材料力学视频分析助手。请只根据当前拉伸试验视频片段中可见的试样状态和变化进行判断，不要猜测片段外发生的事件。最后只输出一个 JSON 对象。",
-    "user_prompt": "请输出且只输出 clip_state、fracture_mechanism、fracture_site、special_case 四个字段。clip_state 必须是未断裂、临界未断裂、发生断裂、已断裂、无法判断之一。未断裂表示当前片段尚未断裂且没有可靠临界征兆，其他字段必须为 null；临界未断裂表示尚未真正断裂，但已出现明显局部颈缩、变细或损伤集中等韧性断裂临界征兆，此时 fracture_mechanism 只能是韧性断裂或 null，fracture_site 可根据征兆集中位置选择 inside_gauge、outside_gauge_non_root、grip_root 或 null，special_case 必须为 null。发生断裂表示片段同时包含断裂前后证据；已断裂表示可靠画面均在断裂后；证据不足、未夹紧或视频异常时选择无法判断。临界未断裂的机制和位置是预测线索，不是已经观察到的最终断裂结果。special_case 非 null 时 clip_state 必须为无法判断，且两个断裂汇总字段必须为 null。只根据当前采样帧判断，不要输出质量评价、解释或 Markdown。",
-    "retry_prompt": "上一轮输出不符合 tensile-vlm/v4.1。请重新输出且只输出 clip_state、fracture_mechanism、fracture_site、special_case 四字段合法 JSON，不要添加解释或 Markdown。",
+    "system_prompt": "你是一位材料力学视频分析助手。请只根据当前拉伸试验视频片段中按时间顺序可见的试样状态和变化进行判断，不要猜测片段外发生的事件。必须严格使用下列枚举原词，禁止同义改写。最后只输出一个 JSON 对象。",
+    "user_prompt": "请输出且只输出 clip_state、fracture_mechanism、fracture_site、special_case 四个字段。先按时间顺序判断试样连续性：全部可靠画面仍连续且无可靠临界征兆时为未断裂；仍连续但已出现明显局部颈缩、变细或损伤集中时为临界未断裂；片段内明确出现从连续到分离的变化时为发生断裂；可靠画面从一开始就已分离且没有片段内断裂前证据时为已断裂；证据不足、未夹紧或视频异常时为无法判断。clip_state 只能是未断裂、临界未断裂、发生断裂、已断裂、无法判断之一。fracture_mechanism 只能是韧性断裂、脆性断裂、界面脱粘、爆炸性断裂、半脆半韧断裂之一或 null，禁止输出“沿界面断裂”“沿长度方向开裂”等枚举外同义词。fracture_site 只能是 inside_gauge、outside_gauge_non_root、grip_root 之一或 null。special_case 只能是未夹紧、视频异常之一或 null。未断裂时其他字段必须为 null；临界未断裂时 fracture_mechanism 只能是韧性断裂或 null，fracture_site 可为合法位置或 null，special_case 必须为 null；special_case 非 null 时 clip_state 必须为无法判断，且 fracture_mechanism 和 fracture_site 必须为 null。只根据当前采样帧判断，不要输出质量评价、解释或 Markdown。",
+    "retry_prompt": "上一轮输出不符合 tensile-vlm/v4.1。请严格使用指定枚举原词，重新输出且只输出 clip_state、fracture_mechanism、fracture_site、special_case 四字段合法 JSON，不要添加解释或 Markdown。",
     "generation": {
       "do_sample": false,
       "num_beams": 1,
