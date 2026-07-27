@@ -45,5 +45,8 @@
   "regression_rule": {
     "absolute_tolerance": 0.03,
     "direction": "V4.1 minus V2 must be at least -0.03 for each supported numeric key metric."
+  },
+  "special_case_rule": {
+    "direction": "V4.1 must be exact on the identical special-case subset and may not have fewer correct cases than V2."
   }
 }

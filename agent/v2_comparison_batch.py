@@ -44,6 +44,10 @@ def build_v2_comparison_manifest(
     v4_finalization_manifest_path: str | Path,
     config_path: str | Path,
     comparison_spec_path: str | Path,
+    comparison_scorer_path: str | Path,
+    comparison_finalizer_path: str | Path,
+    annotations_path: str | Path,
+    v4_common_baseline_path: str | Path,
     service_snapshot: dict[str, Any],
     agent_runtime_commit: str,
     batch_runner_path: str | Path,
@@ -79,14 +83,35 @@ def build_v2_comparison_manifest(
 
     config = Path(config_path).resolve()
     spec = Path(comparison_spec_path).resolve()
+    scorer = Path(comparison_scorer_path).resolve()
+    finalizer = Path(comparison_finalizer_path).resolve()
+    annotations = Path(annotations_path).resolve()
+    baseline = Path(v4_common_baseline_path).resolve()
     runner = Path(batch_runner_path).resolve()
     all_110 = v4_manifest["input_lists"]["all_110"]
+    baseline_value = json.loads(baseline.read_text(encoding="utf-8"))
+    if (
+        baseline_value.get("schema_version")
+        != "tensile-agent/v4-common-baseline/v1"
+        or baseline_value.get("v4_acceptance_manifest_sha256")
+        != sha256_file(v4_manifest_path)
+        or baseline_value.get("v4_finalization_manifest_sha256")
+        != sha256_file(finalization_path)
+        or baseline_value.get("annotations_sha256")
+        != sha256_file(annotations)
+        or baseline_value.get("video_count") != all_110["count"]
+    ):
+        raise ValueError("V4.1 common baseline identity mismatch")
     seed = {
         "v4_acceptance_manifest_sha256": sha256_file(v4_manifest_path),
         "v4_finalization_manifest_sha256": sha256_file(finalization_path),
         "input_list_sha256": all_110["sha256"],
         "config_sha256": sha256_file(config),
         "comparison_spec_sha256": sha256_file(spec),
+        "comparison_scorer_sha256": sha256_file(scorer),
+        "comparison_finalizer_sha256": sha256_file(finalizer),
+        "annotations_sha256": sha256_file(annotations),
+        "v4_common_baseline_sha256": sha256_file(baseline),
         "service_snapshot": service_snapshot,
         "agent_runtime_commit": agent_runtime_commit,
         "batch_runner_sha256": sha256_file(runner),
@@ -128,6 +153,22 @@ def build_v2_comparison_manifest(
             "path": str(spec),
             "sha256": sha256_file(spec),
         },
+        "comparison_scorer": {
+            "path": str(scorer),
+            "sha256": sha256_file(scorer),
+        },
+        "comparison_finalizer": {
+            "path": str(finalizer),
+            "sha256": sha256_file(finalizer),
+        },
+        "annotations": {
+            "path": str(annotations),
+            "sha256": sha256_file(annotations),
+        },
+        "v4_common_baseline": {
+            "path": str(baseline),
+            "sha256": sha256_file(baseline),
+        },
         "service_snapshot": service_snapshot,
         "batch_runner": {
             "path": str(runner),
@@ -161,7 +202,15 @@ def load_v2_comparison_manifest(path: str | Path) -> dict[str, Any]:
         or manifest.get("status") != "frozen"
     ):
         raise ValueError("invalid V2 comparison manifest")
-    for binding in ("config", "comparison_spec", "batch_runner"):
+    for binding in (
+        "config",
+        "comparison_spec",
+        "comparison_scorer",
+        "comparison_finalizer",
+        "annotations",
+        "v4_common_baseline",
+        "batch_runner",
+    ):
         value = manifest[binding]
         if sha256_file(value["path"]) != value["sha256"]:
             raise ValueError(f"V2 comparison {binding} hash mismatch")

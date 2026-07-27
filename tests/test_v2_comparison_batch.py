@@ -26,6 +26,12 @@ def _prepare(tmp_path: Path) -> tuple[dict, Path]:
     config.write_text("backend: {}\n", encoding="utf-8")
     spec = tmp_path / "spec.json"
     spec.write_text("{}\n", encoding="utf-8")
+    scorer = tmp_path / "scorer.py"
+    scorer.write_text("# scorer\n", encoding="utf-8")
+    finalizer = tmp_path / "finalizer.py"
+    finalizer.write_text("# finalizer\n", encoding="utf-8")
+    annotations = tmp_path / "annotations.csv"
+    annotations.write_text("video_id,type\nv,未断裂\n", encoding="utf-8")
     runner = tmp_path / "runner.py"
     runner.write_text("# runner\n", encoding="utf-8")
     v4 = tmp_path / "v4.json"
@@ -61,11 +67,29 @@ def _prepare(tmp_path: Path) -> tuple[dict, Path]:
         ),
         encoding="utf-8",
     )
+    baseline = tmp_path / "v4_common_baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "schema_version": "tensile-agent/v4-common-baseline/v1",
+                "v4_acceptance_manifest_sha256": sha256_file(v4),
+                "v4_finalization_manifest_sha256": sha256_file(final),
+                "annotations_sha256": sha256_file(annotations),
+                "video_count": 1,
+                "report": {},
+            }
+        ),
+        encoding="utf-8",
+    )
     manifest = build_v2_comparison_manifest(
         v4_acceptance_manifest_path=v4,
         v4_finalization_manifest_path=final,
         config_path=config,
         comparison_spec_path=spec,
+        comparison_scorer_path=scorer,
+        comparison_finalizer_path=finalizer,
+        annotations_path=annotations,
+        v4_common_baseline_path=baseline,
         service_snapshot={
             "contract_version": "tensile-vlm/v2",
             "deployment_manifest": DEPLOYMENT,
