@@ -900,10 +900,21 @@ def create_inference_client(config: dict[str, Any] | None = None) -> InferenceCl
     )
     model = backend_cfg.get("model") or os.getenv("INFERENCE_MODEL") or "minicpmv4_5"
     api_key = get_inference_api_key() or "EMPTY"
+    max_request_size = backend_cfg.get(
+        "max_request_size",
+        DEFAULT_MAX_REQUEST_SIZE,
+    )
+    if (
+        isinstance(max_request_size, bool)
+        or not isinstance(max_request_size, int)
+        or max_request_size <= 0
+    ):
+        raise ValueError("backend.max_request_size must be a positive integer")
 
     return LlamaFactoryInferenceClient(
         model=model,
         base_url=base_url,
         api_key=api_key,
+        max_request_size=max_request_size,
         contract_version=contract_version,
     )

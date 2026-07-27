@@ -18,4 +18,5 @@ agent:
 backend:
   api_url: http://127.0.0.1:8001/v1
   contract_version: tensile-vlm/v2
+  max_request_size: 1073741824
   model: tensile-vlm

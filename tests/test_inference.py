@@ -143,6 +143,31 @@ def test_create_inference_client_uses_visual_key_from_config_util():
     assert client.api_key == "visual-secret"
 
 
+def test_create_inference_client_uses_configured_max_request_size():
+    config = {
+        "backend": {
+            "contract_version": "tensile-vlm/v2",
+            "max_request_size": 1024,
+        }
+    }
+    with patch("agent.inference.OpenAI"):
+        client = create_inference_client(config)
+    assert isinstance(client, LlamaFactoryInferenceClient)
+    assert client.max_request_size == 1024
+
+
+def test_create_inference_client_rejects_invalid_max_request_size():
+    with pytest.raises(ValueError, match="positive integer"):
+        create_inference_client(
+            {
+                "backend": {
+                    "contract_version": "tensile-vlm/v2",
+                    "max_request_size": 0,
+                }
+            }
+        )
+
+
 # ---------------------------------------------------------------------------
 # LlamaFactoryInferenceClient validation
 # ---------------------------------------------------------------------------
