@@ -32,8 +32,8 @@ Stage F 已将 TensileAgent 按任务显式迁移到 `tensile-vlm/v4.1`，但仍
 
 验证结果：
 
-- 本机完整 Python 测试：462 passed；
-- 训练机独立 acceptance 工作区完整 Python 测试：462 passed；
+- 本机完整 Python 测试：464 passed；
+- 训练机独立 acceptance 工作区完整 Python 测试：464 passed；
 - Web TypeScript/Vite build：通过；
 - Doctor：V4.1 contract、hash、服务、确定性 Planner、ffmpeg/ffprobe 全通过；
 - development-only 真实视频完整 Agent smoke：6 轮、`no_fracture`，公共 schema、

@@ -38,8 +38,8 @@
   "stage_b_intermediate_acceptance_id": "stage-b-intermediate-8e1fdb09f8e6",
   "status": "stage_f_pre_acceptance_passed",
   "tests": {
-    "local_python": "462 passed",
-    "remote_python": "462 passed",
+    "local_python": "464 passed",
+    "remote_python": "464 passed",
     "web_build": "passed"
   },
   "visual_contract_hash": "3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab",
