@@ -7,10 +7,10 @@ Stage F 已将 TensileAgent 按任务显式迁移到 `tensile-vlm/v4.1`，但仍
 冻结身份：
 
 - Agent runtime commit:
-  `f141d36114904fe7222dbd6076241fa46ba5b155`
-- Agent acceptance ID: `agent-acceptance-80c3c4fdc613`
+  `50d0a9d4b463bca3db8a0a5837be6de1ee820fe4`
+- Agent acceptance ID: `agent-acceptance-8a9ef687d7c7`
 - Agent acceptance manifest SHA256:
-  `a8be0b3aaf2303adb62d1ac8c2221c59025eced19f74070e5e91196296b10841`
+  `6397cd3ee8e16dbba369fcbbb6683e2cd110cfdb07ba9db6006d8266e571129c`
 - Stage B intermediate acceptance: `stage-b-intermediate-8e1fdb09f8e6`
 - V4.1 runtime contract hash:
   `3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab`
@@ -25,6 +25,8 @@ Stage F 已将 TensileAgent 按任务显式迁移到 `tensile-vlm/v4.1`，但仍
 - Doctor、HTTP stub、CLI、Web API 和 Web 展示；
 - acceptance 专用确定性 Planner，不引入新模型权重或外部凭据；
 - 身份绑定、成功不可覆盖的可恢复 batch runner；
+- `all_110/heldout_21` 缺少一次性 Stage G authorization 时在首次 VLM 调用前
+  fail closed；
 - 固定 taxonomy、分母、阈值和合成金样例的版本化 scorer；
 - 110 条和 21 条输入清单只冻结视频 ID/路径/hash，未读取语义标签。
 
@@ -43,7 +45,7 @@ Stage F 已将 TensileAgent 按任务显式迁移到 `tensile-vlm/v4.1`，但仍
 
 训练机不可变运行时 manifest：
 
-`/home/liuyang/文档/TensileAgent-acceptance/data/08_runtime/v4_1_acceptance_manifests/agent-acceptance-80c3c4fdc613/agent_acceptance_manifest.json`
+`/home/liuyang/文档/TensileAgent-acceptance/data/08_runtime/v4_1_acceptance_manifests/agent-acceptance-8a9ef687d7c7/agent_acceptance_manifest.json`
 
 下一阶段只能使用上述 manifest 执行 Stage G。21 条 held-out 仍只允许一次语义开封；
 Stage G 启动前不得修改 Agent、服务、配置、问题、scorer、输入清单或阈值。

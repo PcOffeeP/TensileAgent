@@ -1,7 +1,13 @@
 {
-  "agent_acceptance_id": "agent-acceptance-80c3c4fdc613",
-  "agent_acceptance_manifest_sha256": "a8be0b3aaf2303adb62d1ac8c2221c59025eced19f74070e5e91196296b10841",
-  "agent_runtime_commit": "f141d36114904fe7222dbd6076241fa46ba5b155",
+  "agent_acceptance_id": "agent-acceptance-8a9ef687d7c7",
+  "agent_acceptance_manifest_sha256": "6397cd3ee8e16dbba369fcbbb6683e2cd110cfdb07ba9db6006d8266e571129c",
+  "agent_runtime_commit": "50d0a9d4b463bca3db8a0a5837be6de1ee820fe4",
+  "batch_runner": {
+    "cli_sha256": "ad62ebbbc8c1974385ad363895e2957ee7507fedc798ef70fb3b271c6496f12e",
+    "implementation_sha256": "05821d00c2900e0ba18c3345277717da39977f35cdd76ddb3ecc1c746845abaa",
+    "protected_lists": ["all_110", "heldout_21"],
+    "required_authorization_schema": "tensile-agent/stage-g-authorization/v1"
+  },
   "config_sha256": "0e1b5518e01b87883d46d38c455d4a6f2f4919e223ee31108e2fd2edd8078856",
   "development_smoke": {
     "diagnostics_summary_sha256": "82e0dcb05f141de64d542e1d8deca79303b46d365d2a169cb4704e37deb2e4ab",
