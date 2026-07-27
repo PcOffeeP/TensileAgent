@@ -477,7 +477,7 @@ async def _queue_worker():
 
 
 def _normalize_result(result: Any) -> dict:
-    """Unpack only the public ``tensile-agent/result/v2`` envelope."""
+    """Unpack a versioned public TensileAgent result envelope."""
     if not result:
         return {"status": "unrecognized"}
     if isinstance(result, BaseModel):
@@ -501,6 +501,7 @@ def _normalize_result(result: Any) -> dict:
                 "confidence": res.get("confidence"),
                 "field_status": res.get("field_status"),
                 "visual_evidence": res.get("visual_evidence"),
+                "special_case": res.get("special_case"),
                 "unrecognized_reason": res.get("unrecognized_reason"),
                 "warnings": res.get("warnings", []),
                 "rounds": result.get("rounds", result.get("total_rounds")),
@@ -654,6 +655,11 @@ async def get_config():
         "mock": cfg.get("mock", False),
         "runtime_dir": "<redacted>",
         "max_rounds": agent_cfg.get("max_rounds", 10),
+        "visual_contract_version": cfg.get("backend", {}).get(
+            "contract_version",
+            "tensile-vlm/v2",
+        ),
+        "visual_api_url": cfg.get("backend", {}).get("api_url"),
         "active_digest": active_digest,
         "ollama_ok": local_status.get("ok", False),
         "reasoning_effort": local_cfg.get("reasoning_effort", "none"),

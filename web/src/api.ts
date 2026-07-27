@@ -1,13 +1,13 @@
 const API = "/api";
 
 export interface FinalResult {
-  schema_version: "tensile-agent/result/v2";
+  schema_version: "tensile-agent/result/v2" | "tensile-agent/result/v4.1";
   video_id: string;
   status: "fracture" | "no_fracture" | "unrecognized";
   has_fracture: boolean | null;
   time_range: [number, number] | null;
   fracture_type: string | null;
-  location: "inside_gauge" | "outside_gauge" | null;
+  location: "inside_gauge" | "outside_gauge" | "outside_gauge_non_root" | "grip_root" | null;
   field_status: Record<
     "has_fracture" | "time_range" | "fracture_type" | "location" | "confidence" | "visual_evidence",
     "available" | "unavailable" | "not_applicable"
@@ -32,6 +32,7 @@ export interface FinalResult {
       request_id: string | null;
     }>;
   };
+  special_case: "未夹紧" | "视频异常" | null;
   unrecognized_reason: string | null;
   warnings: string[];
   rounds?: number;
@@ -110,6 +111,10 @@ export interface AnalysisRound {
     fracture_between?: [number, number] | null;
     type?: string;
     location?: string | null;
+    clip_state?: "未断裂" | "临界未断裂" | "发生断裂" | "已断裂" | "无法判断";
+    fracture_mechanism?: string | null;
+    fracture_site?: "inside_gauge" | "outside_gauge_non_root" | "grip_root" | null;
+    special_case?: "未夹紧" | "视频异常" | null;
   } | null;
   inferredTimeRange?: [number, number] | null;
   inferredFrameRange?: [number, number] | null;
@@ -143,6 +148,8 @@ export interface AppConfig {
   mock: boolean;
   runtime_dir: string;
   max_rounds: number;
+  visual_contract_version?: "tensile-vlm/v2" | "tensile-vlm/v4.1";
+  visual_api_url?: string;
   active_digest?: string | null;
   ollama_ok?: boolean;
   reasoning_effort?: string;

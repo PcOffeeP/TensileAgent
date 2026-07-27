@@ -11,7 +11,7 @@ from typing import Any
 import requests
 
 from agent.config_util import get_inference_api_key, get_local_model_digest
-from agent.contract import visual_contract_hash
+from agent.contract import CONTRACT_VERSION, visual_contract_hash
 from agent.runner import load_config
 
 
@@ -19,6 +19,7 @@ def run_doctor(config_path: str | Path = "agent/config.yaml") -> dict[str, Any]:
     config = load_config(config_path)
     local = config.get("agent", {}).get("local", {})
     backend = config.get("backend", {})
+    contract_version = str(backend.get("contract_version") or CONTRACT_VERSION)
     checks: dict[str, dict[str, Any]] = {}
     for binary in ("ffmpeg", "ffprobe"):
         path = shutil.which(binary)
@@ -41,8 +42,8 @@ def run_doctor(config_path: str | Path = "agent/config.yaml") -> dict[str, Any]:
         payload = response.json()
         contract_ok = (
             response.ok
-            and payload.get("contract_version") == "tensile-vlm/v2"
-            and payload.get("contract_hash") == visual_contract_hash()
+            and payload.get("contract_version") == contract_version
+            and payload.get("contract_hash") == visual_contract_hash(contract_version)
         )
         checks["visual_service"] = {
             "ok": contract_ok,

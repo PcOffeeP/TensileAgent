@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from agent import runner
+from agent.contract import CONTRACT_VERSION, V4_1_CONTRACT_VERSION
 
 
 def _make_event_writer(run_id: str, events_dir: Path) -> Any:
@@ -100,6 +101,12 @@ def _parse_args() -> argparse.Namespace:
         default="请完整分析这段拉伸试验视频",
         help="Natural-language question about the video. It is parsed by the Agent and never forwarded to MiniCPM.",
     )
+    parser.add_argument(
+        "--contract-version",
+        choices=[CONTRACT_VERSION, V4_1_CONTRACT_VERSION],
+        default=None,
+        help="Pin the visual protocol for this process; no automatic fallback is performed.",
+    )
     return parser.parse_args()
 
 
@@ -108,6 +115,8 @@ def main() -> None:
 
     if args.mock:
         os.environ["INFERENCE_MOCK"] = "1"
+    if args.contract_version:
+        os.environ["INFERENCE_CONTRACT_VERSION"] = args.contract_version
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     work_dir = Path(args.work_dir)

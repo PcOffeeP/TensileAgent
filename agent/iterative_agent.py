@@ -41,10 +41,12 @@ from agent.schema import (
     LocationType,
     RunnerError,
     RunnerResult,
+    PUBLIC_RESULT_V4_1,
     SampleAndInferDiagnostics,
     SampleAndInferResult,
     ToolSampleAndInfer,
     ToolTerminate,
+    V4_1_FRACTURE_MECHANISMS,
     ValidationErrorInfo,
 )
 
@@ -614,6 +616,19 @@ class IterativeAgent:
 
         # -- fracture: check evidence threshold and convergence --
         if status == "fracture":
+            if self.visual_contract_version == "tensile-vlm/v4.1":
+                if (
+                    args.get("fracture_type") is not None
+                    and args["fracture_type"] not in V4_1_FRACTURE_MECHANISMS
+                ):
+                    return False, "V4.1 fracture_type 不在五种机制枚举内"
+                if args.get("location") not in {
+                    None,
+                    LocationType.INSIDE,
+                    LocationType.OUTSIDE_NON_ROOT,
+                    LocationType.GRIP_ROOT,
+                }:
+                    return False, "V4.1 location 不在三级 fracture_site 枚举内"
             evidence_rounds: list[int] = args.get("evidence_rounds") or []
             # evidence_rounds are stable 0-based history evidence_index values
             # explicitly shown to the decision model, not Agent loop rounds.
@@ -1058,6 +1073,9 @@ class IterativeAgent:
                 "location": None,
                 "confidence": None,
                 "unrecognized_reason": tool_args.get("unrecognized_reason", "max_rounds"),
+                "special_case": self._derive_special_case(
+                    tool_args.get("unrecognized_reason")
+                ),
             }
 
         if status == "no_fracture":
@@ -1130,7 +1148,11 @@ class IterativeAgent:
                 )
                 for r in positive_rounds
             ],
-            valid_set=FRACTURE_CLASSES,
+            valid_set=(
+                V4_1_FRACTURE_MECHANISMS
+                if self.visual_contract_version == "tensile-vlm/v4.1"
+                else FRACTURE_CLASSES
+            ),
         )
 
         voted_location = self._vote_field(
@@ -1249,6 +1271,11 @@ class IterativeAgent:
         """
         status = args.get("status", "no_fracture")
         output: dict[str, Any] = {
+            "schema_version": (
+                PUBLIC_RESULT_V4_1
+                if self.visual_contract_version == "tensile-vlm/v4.1"
+                else "tensile-agent/result/v2"
+            ),
             "video_id": self.video_meta.get("video_id", "unknown"),
             "status": status,
             "time_range": args.get("time_range") if status == "fracture" else None,
@@ -1256,6 +1283,7 @@ class IterativeAgent:
             "location": args.get("location") if status == "fracture" else None,
             "confidence": args.get("confidence"),
             "visual_evidence": self._build_visual_evidence(),
+            "special_case": args.get("special_case") if status == "unrecognized" else None,
             "unrecognized_reason": args.get("unrecognized_reason"),
         }
         # Validate against the contract schema; on failure, downgrade to unrecognized.
@@ -1270,6 +1298,7 @@ class IterativeAgent:
             output["location"] = None
             output["confidence"] = None
             output["visual_evidence"] = self._build_visual_evidence()
+            output["special_case"] = None
             output["unrecognized_reason"] = "invalid_model_output"
             output["downgrade_reason"] = reason
 
@@ -1286,6 +1315,22 @@ class IterativeAgent:
             output["frame_range"] = frame_range
 
         return output
+
+    def _derive_special_case(self, reason: Any) -> str | None:
+        """Project a confirmed V4.1 special case into the public result."""
+        if self.visual_contract_version != "tensile-vlm/v4.1":
+            return None
+        expected = {
+            "not_clamped": "未夹紧",
+            "video_anomaly": "视频异常",
+        }.get(reason)
+        if expected is None:
+            return None
+        for entry in reversed(self.history):
+            output = entry.get("result", {}).get("model_output") or {}
+            if output.get("special_case") == expected:
+                return expected
+        return None
 
     # ------------------------------------------------------------------
     # Aggregation helpers

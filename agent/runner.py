@@ -286,7 +286,7 @@ def run_one(
         _FO_FIELDS = {
             "schema_version", "video_id", "status", "has_fracture", "time_range",
             "fracture_type", "location", "confidence", "field_status",
-            "visual_evidence", "unrecognized_reason", "warnings",
+            "visual_evidence", "special_case", "unrecognized_reason", "warnings",
         }
         fo_dict = {k: v for k, v in raw_result.items() if k in _FO_FIELDS}
         # Historical agents returned a model-supplied scalar. It is not a
@@ -299,6 +299,17 @@ def run_one(
         envelope = RunnerResult(
             ok=True, result=FinalOutput(**fo_dict)
         ).model_dump()
+        envelope["runtime_identity"] = {
+            "visual_deployment": visual_snapshot,
+            "decision_model": {
+                "backend": config["agent"].get("backend"),
+                "model": config["agent"].get(
+                    config["agent"].get("backend", ""),
+                    {},
+                ).get("model"),
+                "digest": config["_runtime"].get("model_digest"),
+            },
+        }
         envelope["response"] = project_result(envelope["result"], intent)
         return envelope
     except Exception as exc:

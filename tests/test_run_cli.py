@@ -38,6 +38,21 @@ class TestRunCliArgs:
         assert args.video is None
         assert args.videos_dir is None
 
+    def test_contract_version_can_be_pinned(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "agent.run",
+                "--video",
+                "data/vid.mp4",
+                "--contract-version",
+                "tensile-vlm/v4.1",
+            ],
+        )
+        args = run_cli._parse_args()
+        assert args.contract_version == "tensile-vlm/v4.1"
+
     def test_video_and_input_list_are_mutually_exclusive(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:

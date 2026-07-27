@@ -67,3 +67,24 @@ def test_v4_1_unknown_never_creates_search_direction() -> None:
     agent._transition_v4_1(result, result["model_output"])
     assert agent.candidate == [20.0, 80.0]
     assert "v4_1_search_direction" not in result
+
+
+def test_v4_1_special_case_is_projected_from_matching_evidence() -> None:
+    agent = _agent()
+    agent.visual_contract_version = "tensile-vlm/v4.1"
+    agent.history = [
+        {
+            "result": {
+                "model_output": {
+                    "clip_state": "无法判断",
+                    "fracture_mechanism": None,
+                    "fracture_site": None,
+                    "special_case": "未夹紧",
+                }
+            }
+        }
+    ]
+    args = agent._build_final_args(
+        {"status": "unrecognized", "unrecognized_reason": "not_clamped"}
+    )
+    assert args["special_case"] == "未夹紧"

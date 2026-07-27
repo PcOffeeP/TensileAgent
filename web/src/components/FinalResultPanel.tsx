@@ -142,6 +142,8 @@ export default function FinalResultPanel({ result, error, response }: FinalResul
                 <div className="text-slate-900 font-mono text-sm font-medium">
                   {result.location === 'inside_gauge' ? '标距内 (Inside Gauge)' :
                    result.location === 'outside_gauge' ? '标距外 (Outside Gauge)' :
+                   result.location === 'outside_gauge_non_root' ? '标距外非齐根 (Outside Gauge, Non-root)' :
+                   result.location === 'grip_root' ? '夹具根部齐根 (Grip Root)' :
                    result.location || '未知'}
                 </div>
               </div>
@@ -192,7 +194,9 @@ export default function FinalResultPanel({ result, error, response }: FinalResul
             </h3>
             <p className="text-sm text-slate-600 mt-2 bg-slate-50/60 p-3 rounded-md border border-slate-200">
               <span className="font-semibold text-slate-700">原因：</span>
-              {result.unrecognized_reason || "视觉信息不足或超出 Agent 识别能力。"}
+              {result.special_case
+                ? `${result.special_case}（${result.unrecognized_reason}）`
+                : result.unrecognized_reason || "视觉信息不足或超出 Agent 识别能力。"}
             </p>
           </div>
         </div>

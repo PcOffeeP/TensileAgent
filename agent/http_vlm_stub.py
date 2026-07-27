@@ -10,13 +10,20 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict
 
-from agent.contract import load_visual_contract, visual_contract_hash
+from agent.contract import (
+    CONTRACT_VERSION,
+    V4_1_CONTRACT_VERSION,
+    load_visual_contract,
+    visual_contract_hash,
+)
 
 
-CONTRACT = load_visual_contract()
-
-
-def _deployment_manifest(*, drift: bool = False) -> dict[str, str]:
+def _deployment_manifest(
+    contract_version: str = CONTRACT_VERSION,
+    *,
+    drift: bool = False,
+) -> dict[str, str]:
+    contract = load_visual_contract(contract_version)
     return {
         "model_version": "tensile-http-stub/1",
         "adapter_version": "stub-adapter-drifted" if drift else "stub-adapter/1",
@@ -27,8 +34,8 @@ def _deployment_manifest(*, drift: bool = False) -> dict[str, str]:
         "config_fingerprint": "sha256:stub-config-v1",
         "runtime_device": "cpu",
         "runtime_dtype": "float32",
-        "contract_version": str(CONTRACT["contract_version"]),
-        "contract_hash": visual_contract_hash(),
+        "contract_version": str(contract["contract_version"]),
+        "contract_hash": visual_contract_hash(contract_version),
     }
 
 
@@ -40,7 +47,39 @@ class StubConfig(BaseModel):
     scenario: str = "fracture"
 
 
-def _scenario_output(scenario: str) -> str:
+def _scenario_output(
+    scenario: str,
+    contract_version: str = CONTRACT_VERSION,
+) -> str:
+    if contract_version == V4_1_CONTRACT_VERSION:
+        outputs = {
+            "fracture": (
+                '{"clip_state":"发生断裂","fracture_mechanism":"韧性断裂",'
+                '"fracture_site":"inside_gauge","special_case":null}'
+            ),
+            "partial": (
+                '{"clip_state":"发生断裂","fracture_mechanism":null,'
+                '"fracture_site":null,"special_case":null}'
+            ),
+            "no-fracture": (
+                '{"clip_state":"未断裂","fracture_mechanism":null,'
+                '"fracture_site":null,"special_case":null}'
+            ),
+            "not-clamped": (
+                '{"clip_state":"无法判断","fracture_mechanism":null,'
+                '"fracture_site":null,"special_case":"未夹紧"}'
+            ),
+            "unknown": (
+                '{"clip_state":"无法判断","fracture_mechanism":null,'
+                '"fracture_site":null,"special_case":"视频异常"}'
+            ),
+            "invalid": '{"clip_state":"发生断裂","unexpected":1}',
+            "drift": (
+                '{"clip_state":"发生断裂","fracture_mechanism":"韧性断裂",'
+                '"fracture_site":"inside_gauge","special_case":null}'
+            ),
+        }
+        return outputs.get(scenario, outputs["fracture"])
     outputs = {
         "fracture": (
             '{"has_fracture":true,"fracture_between":[2,3],'
@@ -107,17 +146,21 @@ def _frame_table(manifest: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"index": index, "timestamp": float(index)} for index in range(8)]
 
 
-def create_app(scenario: str = "fracture") -> FastAPI:
+def create_app(
+    scenario: str = "fracture",
+    contract_version: str = CONTRACT_VERSION,
+) -> FastAPI:
     """Create a deterministic stub app for one named failure/success scenario."""
+    contract = load_visual_contract(contract_version)
     app = FastAPI(title="Tensile VLM HTTP Stub")
     app.state.stub_config = StubConfig(scenario=scenario)
 
     @app.get("/v1/tensile/contract")
     def get_contract() -> dict[str, Any]:
         return {
-            "contract_version": CONTRACT["contract_version"],
-            "contract_hash": visual_contract_hash(),
-            "deployment_manifest": _deployment_manifest(),
+            "contract_version": contract["contract_version"],
+            "contract_hash": visual_contract_hash(contract_version),
+            "deployment_manifest": _deployment_manifest(contract_version),
             "capabilities": {"analysis": True, "evidence": True},
         }
 
@@ -131,7 +174,11 @@ def create_app(scenario: str = "fracture") -> FastAPI:
         messages = payload.get("messages") or []
         system_text = str(messages[0].get("content", "")) if messages else ""
         is_evidence = "视频观察助手" in system_text
-        content = "试样逐渐伸长并变细，随后可见连续性中断。" if is_evidence else _scenario_output(selected_scenario)
+        content = (
+            "试样逐渐伸长并变细，随后可见连续性中断。"
+            if is_evidence
+            else _scenario_output(selected_scenario, contract_version)
+        )
         request_id = f"stub-{uuid.uuid4()}"
         return {
             "id": request_id,
@@ -149,7 +196,10 @@ def create_app(scenario: str = "fracture") -> FastAPI:
                 "processor_version": "stub-processor/1",
                 "max_frames": 8,
                 "frames": frames,
-                "deployment_manifest": _deployment_manifest(drift=selected_scenario == "drift"),
+                "deployment_manifest": _deployment_manifest(
+                    contract_version,
+                    drift=selected_scenario == "drift",
+                ),
             },
         }
 
@@ -157,7 +207,7 @@ def create_app(scenario: str = "fracture") -> FastAPI:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the tensile-vlm/v2 HTTP stub")
+    parser = argparse.ArgumentParser(description="Run a version-pinned Tensile VLM HTTP stub")
     parser.add_argument(
         "--scenario",
         choices=[
@@ -168,10 +218,19 @@ def main() -> None:
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument(
+        "--contract-version",
+        choices=[CONTRACT_VERSION, V4_1_CONTRACT_VERSION],
+        default=CONTRACT_VERSION,
+    )
     args = parser.parse_args()
     import uvicorn
 
-    uvicorn.run(create_app(args.scenario), host=args.host, port=args.port)
+    uvicorn.run(
+        create_app(args.scenario, args.contract_version),
+        host=args.host,
+        port=args.port,
+    )
 
 
 if __name__ == "__main__":

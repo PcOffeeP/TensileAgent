@@ -42,6 +42,14 @@ FRACTURE_CLASSES: set[str] = {
     FractureType.BRITTLE_AND_ROOT,
 }
 
+V4_1_FRACTURE_MECHANISMS: set[str] = {
+    FractureType.TOUGH,
+    FractureType.BRITTLE,
+    FractureType.INTERFACE_DEBOND,
+    FractureType.EXPLOSIVE,
+    FractureType.MIXED,
+}
+
 NON_FRACTURE_CLASSES: set[str] = {
     FractureType.NO_FRACTURE,
     FractureType.NOT_CLAMPED,
@@ -73,6 +81,10 @@ class LocationType(StrEnum):
     OUTSIDE = "outside_gauge"
     OUTSIDE_NON_ROOT = "outside_gauge_non_root"
     GRIP_ROOT = "grip_root"
+
+
+PUBLIC_RESULT_V2 = "tensile-agent/result/v2"
+PUBLIC_RESULT_V4_1 = "tensile-agent/result/v4.1"
 
 
 # ---------------------------------------------------------------------------
@@ -503,11 +515,14 @@ class FieldStatus(BaseModel):
 
 
 class FinalOutput(BaseModel):
-    """Public ``tensile-agent/result/v2`` conclusion."""
+    """Versioned public conclusion for a pinned V2 or V4.1 visual task."""
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["tensile-agent/result/v2"] = "tensile-agent/result/v2"
+    schema_version: Literal[
+        "tensile-agent/result/v2",
+        "tensile-agent/result/v4.1",
+    ] = PUBLIC_RESULT_V2
     video_id: str
     status: Literal["fracture", "no_fracture", "unrecognized"]
     has_fracture: bool | None = None
@@ -516,6 +531,7 @@ class FinalOutput(BaseModel):
     location: str | None = None
     confidence: ConfidenceBreakdown | None = None
     visual_evidence: VisualEvidence = Field(default_factory=VisualEvidence)
+    special_case: Literal["未夹紧", "视频异常"] | None = None
     unrecognized_reason: str | None = None
     field_status: FieldStatus | None = None
     warnings: list[str] = Field(default_factory=list)
@@ -614,15 +630,36 @@ class FinalOutput(BaseModel):
                     raise ValueError("time_range must satisfy start < end")
                 if end - start > 1.0 + 1e-9:
                     raise ValueError("time_range width must be <= 1 second")
-            if self.fracture_type is not None and self.fracture_type not in FRACTURE_CLASSES:
+            allowed_fracture_types = (
+                V4_1_FRACTURE_MECHANISMS
+                if self.schema_version == PUBLIC_RESULT_V4_1
+                else FRACTURE_CLASSES
+            )
+            if (
+                self.fracture_type is not None
+                and self.fracture_type not in allowed_fracture_types
+            ):
                 raise ValueError("fracture_type must be null or one of the 8 fracture classes")
-            if self.location is not None and self.location not in {
-                LocationType.INSIDE,
-                LocationType.OUTSIDE,
-            }:
-                raise ValueError("location must be null, inside_gauge or outside_gauge")
+            allowed_locations = (
+                {
+                    LocationType.INSIDE,
+                    LocationType.OUTSIDE_NON_ROOT,
+                    LocationType.GRIP_ROOT,
+                }
+                if self.schema_version == PUBLIC_RESULT_V4_1
+                else {
+                    LocationType.INSIDE,
+                    LocationType.OUTSIDE,
+                }
+            )
+            if self.location is not None and self.location not in allowed_locations:
+                raise ValueError(
+                    "location is not valid for the selected public result schema"
+                )
             if self.unrecognized_reason is not None:
                 raise ValueError("unrecognized_reason must be null for fracture status")
+            if self.special_case is not None:
+                raise ValueError("special_case must be null for fracture status")
 
         elif self.status == "no_fracture":
             if self.has_fracture is not False:
@@ -635,6 +672,8 @@ class FinalOutput(BaseModel):
                 raise ValueError("location must be null for no_fracture status")
             if self.unrecognized_reason is not None:
                 raise ValueError("unrecognized_reason must be null for no_fracture status")
+            if self.special_case is not None:
+                raise ValueError("special_case must be null for no_fracture status")
 
         else:  # unrecognized
             if self.has_fracture is not None:
@@ -649,6 +688,12 @@ class FinalOutput(BaseModel):
                 raise ValueError("fracture_type must be null for unrecognized status")
             if self.location is not None:
                 raise ValueError("location must be null for unrecognized status")
+            if self.schema_version == PUBLIC_RESULT_V2 and self.special_case is not None:
+                raise ValueError("special_case is available only in the V4.1 result schema")
+            if self.special_case == "未夹紧" and self.unrecognized_reason != "not_clamped":
+                raise ValueError("未夹紧 requires unrecognized_reason=not_clamped")
+            if self.special_case == "视频异常" and self.unrecognized_reason != "video_anomaly":
+                raise ValueError("视频异常 requires unrecognized_reason=video_anomaly")
         assert self.field_status is not None
         availability_values = {
             "time_range": self.time_range,

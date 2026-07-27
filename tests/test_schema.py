@@ -359,6 +359,49 @@ def test_final_output_unrecognized():
     assert output.confidence is None
 
 
+def test_v4_1_final_output_supports_three_level_site_and_special_case():
+    fracture = FinalOutput(
+        schema_version="tensile-agent/result/v4.1",
+        video_id="v001",
+        status="fracture",
+        location="grip_root",
+    )
+    assert fracture.location == "grip_root"
+    with pytest.raises(ValidationError):
+        FinalOutput(
+            schema_version="tensile-agent/result/v4.1",
+            video_id="v001",
+            status="fracture",
+            fracture_type="齐根断裂",
+            location="grip_root",
+        )
+
+    special = FinalOutput(
+        schema_version="tensile-agent/result/v4.1",
+        video_id="v002",
+        status="unrecognized",
+        unrecognized_reason="not_clamped",
+        special_case="未夹紧",
+    )
+    assert special.special_case == "未夹紧"
+
+
+def test_v2_final_output_rejects_v4_1_only_location_and_special_case():
+    with pytest.raises(ValidationError):
+        FinalOutput(
+            video_id="v001",
+            status="fracture",
+            location="grip_root",
+        )
+    with pytest.raises(ValidationError):
+        FinalOutput(
+            video_id="v002",
+            status="unrecognized",
+            unrecognized_reason="not_clamped",
+            special_case="未夹紧",
+        )
+
+
 def test_tool_and_final_output_reject_unknown_unrecognized_reason():
     with pytest.raises(ValidationError):
         ToolTerminate(status="unrecognized", unrecognized_reason="arbitrary_reason")

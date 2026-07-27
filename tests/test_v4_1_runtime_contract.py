@@ -7,6 +7,8 @@ from agent.contract import (
     visual_contract_hash,
 )
 from agent.v4_1_parser import V4_1ResultParser
+from agent.http_vlm_stub import create_app
+from fastapi.testclient import TestClient
 
 
 def test_v4_1_runtime_contract_loads_promoted_prompt() -> None:
@@ -27,3 +29,10 @@ def test_v4_1_runtime_parser_accepts_exact_fields_and_rejects_synonyms() -> None
         '"fracture_site":"grip_root","special_case":null}'
     )
     assert invalid.ok is False
+
+
+def test_v4_1_http_stub_is_version_pinned() -> None:
+    client = TestClient(create_app(contract_version=V4_1_CONTRACT_VERSION))
+    payload = client.get("/v1/tensile/contract").json()
+    assert payload["contract_version"] == V4_1_CONTRACT_VERSION
+    assert payload["contract_hash"] == V4_1_EXPECTED_CONTRACT_HASH

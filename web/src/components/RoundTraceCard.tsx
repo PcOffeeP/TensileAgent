@@ -89,21 +89,50 @@ export default function RoundTraceCard({ round, isActive = false }: RoundTraceCa
                 <div className="flex flex-col gap-1.5">
                   <span className={sectionTitleClass}>模型输出</span>
                   <div className="bg-white border border-slate-200/80 rounded-md p-2.5 text-xs text-slate-700 space-y-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-slate-400">是否断裂</span>
-                      <span className="font-mono">{String(round.modelOutput.has_fracture)}</span>
-                    </div>
-                    {round.modelOutput.has_fracture && (
+                    {round.modelOutput.clip_state ? (
                       <>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-slate-400">断裂区间</span>
-                          <span className="font-mono">{JSON.stringify(round.modelOutput.fracture_between)}</span>
+                          <span className="text-slate-400">时序状态</span>
+                          <span className="font-mono">{round.modelOutput.clip_state}</span>
                         </div>
-                        {round.modelOutput.type && (
+                        {round.modelOutput.fracture_mechanism && (
                           <div className="flex items-center gap-1.5">
-                            <span className="text-slate-400">类型</span>
-                            <span>{round.modelOutput.type}</span>
+                            <span className="text-slate-400">断裂机制</span>
+                            <span>{round.modelOutput.fracture_mechanism}</span>
                           </div>
+                        )}
+                        {round.modelOutput.fracture_site && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-400">断裂位置</span>
+                            <span className="font-mono">{round.modelOutput.fracture_site}</span>
+                          </div>
+                        )}
+                        {round.modelOutput.special_case && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-400">特殊情况</span>
+                            <span>{round.modelOutput.special_case}</span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400">是否断裂</span>
+                          <span className="font-mono">{String(round.modelOutput.has_fracture)}</span>
+                        </div>
+                        {round.modelOutput.has_fracture && (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-400">断裂区间</span>
+                              <span className="font-mono">{JSON.stringify(round.modelOutput.fracture_between)}</span>
+                            </div>
+                            {round.modelOutput.type && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-slate-400">类型</span>
+                                <span>{round.modelOutput.type}</span>
+                              </div>
+                            )}
+                          </>
                         )}
                       </>
                     )}

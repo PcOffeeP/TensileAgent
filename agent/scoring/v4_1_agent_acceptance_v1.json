@@ -1,0 +1,52 @@
+{
+  "schema_version": "tensile-agent/scoring-spec/v1",
+  "scoring_version": "v4.1-agent-acceptance-v1",
+  "sealed_semantics_policy": "Implementation and synthetic tests are allowed in Stage F; real held-out labels and predictions remain unopened until the single Stage G run.",
+  "taxonomy": {
+    "outside_gauge": {
+      "source_type_contains_root_break": "grip_root",
+      "otherwise": "outside_gauge_non_root"
+    },
+    "界面脱粘、齐根断裂": {
+      "fracture_mechanism": "界面脱粘",
+      "fracture_site": "grip_root"
+    },
+    "齐根断裂": {
+      "fracture_mechanism": null,
+      "fracture_site": "grip_root",
+      "mechanism_denominator": false
+    },
+    "special_cases": {
+      "未夹紧": {
+        "status": "unrecognized",
+        "special_case": "未夹紧"
+      },
+      "视频异常": {
+        "status": "unrecognized",
+        "special_case": "视频异常"
+      }
+    }
+  },
+  "time_hit": {
+    "rule": "ground-truth timestamp is inside predicted interval expanded by max(1.0 seconds, duration * 0.05)",
+    "missing_ground_truth": "exclude from time denominator",
+    "missing_prediction": "failure"
+  },
+  "macro_f1": {
+    "mechanism_classes": ["韧性断裂", "脆性断裂", "界面脱粘", "爆炸性断裂", "半脆半韧断裂"],
+    "site_classes": ["inside_gauge", "outside_gauge_non_root", "grip_root"],
+    "unsupported_ground_truth_class": "exclude class from macro average"
+  },
+  "primary_subset": "source-held-out-21",
+  "descriptive_subsets": ["all-110", "development-89"],
+  "thresholds": {
+    "has_fracture_accuracy": 0.85,
+    "fracture_recall": 0.85,
+    "no_fracture_recall": 0.75,
+    "time_hit_rate": 0.80,
+    "mechanism_macro_f1": 0.70,
+    "site_macro_f1": 0.75,
+    "joint_success_rate": 0.65,
+    "special_case_exact": "5/5"
+  }
+}
