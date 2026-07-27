@@ -83,7 +83,7 @@
   "tests": {
     "local_python": "491 passed, 1 warning",
     "local_web_build": "passed",
-    "remote_python": "pending final evidence sync and rerun",
+    "remote_python": "491 passed",
     "remote_web_build": "not rerun because npm is not installed in the remote shell; local build passed and prior frozen remote acceptance build remains historical evidence"
   },
   "historical_quality_status": {

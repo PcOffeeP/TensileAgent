@@ -39,7 +39,7 @@
         "mvllm_local_delivery_tests": "3 passed",
         "mvllm_remote_delivery_tests": "3 passed",
         "agent_local_python": "491 passed, 1 warning",
-        "agent_remote_python": "pending final evidence sync and rerun",
+        "agent_remote_python": "491 passed",
         "agent_local_web_build": "passed"
       }
     },
