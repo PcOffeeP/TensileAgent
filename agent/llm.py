@@ -8,8 +8,12 @@ from __future__ import annotations
 
 import logging
 import os
+import json
+import re
 import time
+import uuid
 from abc import ABC, abstractmethod
+from types import SimpleNamespace
 
 from agent.config_util import get_api_key as _get_api_key
 from agent.config_util import get_local_model_digest, list_local_models
@@ -77,6 +81,187 @@ class LocalModelMissing(RuntimeError):
 
 class LocalModelDigestMismatch(RuntimeError):
     """The local model alias changed after a task pinned its digest."""
+
+
+class DeterministicPlanner(BaseAgentLLM):
+    """Acceptance-only planner driven by validated history and interval state.
+
+    The planner proposes tools but cannot approve its own conclusions:
+    ``IterativeAgent`` still owns forced ranges, evidence thresholds,
+    termination, projection, and all fail-closed checks.
+    """
+
+    def __init__(self, model: str = "v4.1-interval-policy-v1") -> None:
+        self._model = model
+
+    @property
+    def model_name(self) -> str:
+        return f"deterministic/{self._model}"
+
+    @staticmethod
+    def _tool_call(name: str, arguments: dict[str, Any]) -> Any:
+        function = SimpleNamespace(
+            name=name,
+            arguments=json.dumps(arguments, ensure_ascii=False),
+        )
+        call = SimpleNamespace(
+            id=f"deterministic-{uuid.uuid4()}",
+            function=function,
+        )
+        message = SimpleNamespace(
+            content="deterministic acceptance policy",
+            tool_calls=[call],
+        )
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+    @staticmethod
+    def _history(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        history: list[dict[str, Any]] = []
+        for message in messages:
+            if message.get("role") != "tool":
+                continue
+            try:
+                payload = json.loads(str(message.get("content", "")))
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict) and "model_output" in payload:
+                history.append(payload)
+        return history
+
+    @staticmethod
+    def _candidate(messages: list[dict[str, Any]]) -> list[float]:
+        for message in reversed(messages):
+            if message.get("role") != "user":
+                continue
+            match = re.search(
+                r"当前候选区间:\s*\[([0-9.eE+-]+),\s*([0-9.eE+-]+)\]",
+                str(message.get("content", "")),
+            )
+            if match:
+                return [float(match.group(1)), float(match.group(2))]
+        return [0.0, 1.0]
+
+    @staticmethod
+    def _same_range(left: Any, right: Any) -> bool:
+        return (
+            isinstance(left, list)
+            and isinstance(right, list)
+            and len(left) == len(right) == 2
+            and abs(float(left[0]) - float(right[0])) <= 1e-6
+            and abs(float(left[1]) - float(right[1])) <= 1e-6
+        )
+
+    def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> Any:
+        del tools, temperature, max_tokens
+        history = self._history(messages)
+        valid = [item for item in history if item.get("ok") is True]
+
+        if len(valid) >= 2:
+            current = valid[-1]
+            previous = valid[-2]
+            current_output = current.get("model_output") or {}
+            previous_output = previous.get("model_output") or {}
+            special = current_output.get("special_case")
+            if (
+                special in {"未夹紧", "视频异常"}
+                and previous_output.get("special_case") == special
+                and self._same_range(
+                    current.get("sample_range"),
+                    previous.get("sample_range"),
+                )
+            ):
+                return self._tool_call(
+                    "terminate",
+                    {
+                        "status": "unrecognized",
+                        "unrecognized_reason": (
+                            "not_clamped" if special == "未夹紧" else "video_anomaly"
+                        ),
+                    },
+                )
+            if (
+                current_output.get("clip_state") == "无法判断"
+                and previous_output.get("clip_state") == "无法判断"
+                and self._same_range(
+                    current.get("sample_range"),
+                    previous.get("sample_range"),
+                )
+            ):
+                return self._tool_call(
+                    "terminate",
+                    {
+                        "status": "unrecognized",
+                        "unrecognized_reason": "visual_indeterminate",
+                    },
+                )
+
+        negative_count = sum(
+            (item.get("model_output") or {}).get("clip_state") == "未断裂"
+            for item in valid
+        )
+        if negative_count >= 6:
+            return self._tool_call("terminate", {"status": "no_fracture"})
+
+        positive_indices = [
+            index
+            for index, item in enumerate(history)
+            if (item.get("model_output") or {}).get("clip_state")
+            in {"发生断裂", "已断裂"}
+        ]
+        localized = [
+            index
+            for index in positive_indices
+            if isinstance(history[index].get("inferred_time_range"), list)
+        ]
+        if len(positive_indices) >= 2 and len(localized) >= 2:
+            ranges = [history[index]["inferred_time_range"] for index in localized]
+            start = max(float(item[0]) for item in ranges)
+            end = min(float(item[1]) for item in ranges)
+            if start < end and end - start <= 1.0 + 1e-9:
+                outputs = [history[index].get("model_output") or {} for index in positive_indices]
+                mechanism = next(
+                    (
+                        output.get("fracture_mechanism")
+                        for output in reversed(outputs)
+                        if output.get("fracture_mechanism")
+                    ),
+                    None,
+                )
+                site = next(
+                    (
+                        output.get("fracture_site")
+                        for output in reversed(outputs)
+                        if output.get("fracture_site")
+                    ),
+                    None,
+                )
+                return self._tool_call(
+                    "terminate",
+                    {
+                        "status": "fracture",
+                        "fracture_type": mechanism,
+                        "location": site,
+                        "evidence_rounds": positive_indices,
+                    },
+                )
+
+        start, end = self._candidate(messages)
+        width = end - start
+        if width > 1.0:
+            margin = width * 0.25
+            sample_range = [start + margin, end - margin]
+        else:
+            sample_range = [start, end]
+        return self._tool_call(
+            "sample_and_infer",
+            {"sample_range": sample_range, "task_mode": "analyze"},
+        )
 
 
 class RemoteAPIClient(BaseAgentLLM):
@@ -222,7 +407,11 @@ class AgentLLMFactory:
         """
         agent_cfg = config.get("agent", {})
         backend = agent_cfg.get("backend", "remote")
-        selected_cfg = agent_cfg.get(backend, {}) if backend in {"local", "remote"} else {}
+        selected_cfg = (
+            agent_cfg.get(backend, {})
+            if backend in {"local", "remote", "deterministic"}
+            else {}
+        )
         runtime_cfg = config.get("_runtime", {})
         trace_recorder = None
         task_id = runtime_cfg.get("task_id")
@@ -292,6 +481,12 @@ class AgentLLMFactory:
                 trace_recorder=trace_recorder,
             )
 
+        if backend == "deterministic":
+            deterministic_cfg = agent_cfg.get("deterministic", {})
+            return DeterministicPlanner(
+                model=deterministic_cfg.get("model", "v4.1-interval-policy-v1")
+            )
+
         raise ValueError(
-            f"Unsupported backend: {backend}. Use 'remote' or 'local'."
+            f"Unsupported backend: {backend}. Use 'remote', 'local', or 'deterministic'."
         )

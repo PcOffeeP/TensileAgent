@@ -25,10 +25,19 @@ def run_doctor(config_path: str | Path = "agent/config.yaml") -> dict[str, Any]:
         path = shutil.which(binary)
         checks[binary] = {"ok": path is not None, "path": path}
 
-    model = str(local.get("model", ""))
-    base_url = str(local.get("base_url", "http://localhost:11434/v1"))
-    digest = get_local_model_digest(model, base_url)
-    checks["ollama"] = {"ok": digest is not None, "model": model, "digest": digest}
+    decision_backend = str(config.get("agent", {}).get("backend", "local"))
+    if decision_backend == "deterministic":
+        planner = config.get("agent", {}).get("deterministic", {})
+        checks["decision_backend"] = {
+            "ok": planner.get("model") == "v4.1-interval-policy-v1",
+            "backend": decision_backend,
+            "model": planner.get("model"),
+        }
+    else:
+        model = str(local.get("model", ""))
+        base_url = str(local.get("base_url", "http://localhost:11434/v1"))
+        digest = get_local_model_digest(model, base_url)
+        checks["ollama"] = {"ok": digest is not None, "model": model, "digest": digest}
 
     contract_url = f"{str(backend.get('api_url', 'http://localhost:8000/v1')).rstrip('/')}/tensile/contract"
     inference_api_key = get_inference_api_key()

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from agent.llm import (
+    DeterministicPlanner,
     AgentLLMFactory,
     BaseAgentLLM,
     LocalBackendUnavailable,
@@ -198,3 +200,57 @@ def test_remote_client_passes_max_tokens():
             temperature=0.5,
             max_tokens=100,
         )
+
+
+def _planner_tool(response: Any) -> tuple[str, dict[str, Any]]:
+    call = response.choices[0].message.tool_calls[0]
+    return call.function.name, json.loads(call.function.arguments)
+
+
+def test_factory_creates_acceptance_deterministic_planner():
+    client = AgentLLMFactory.create(
+        {
+            "agent": {
+                "backend": "deterministic",
+                "deterministic": {"model": "v4.1-interval-policy-v1"},
+            }
+        }
+    )
+    assert isinstance(client, DeterministicPlanner)
+    assert client.model_name == "deterministic/v4.1-interval-policy-v1"
+
+
+def test_deterministic_planner_bisects_candidate_and_terminates_special_case():
+    planner = DeterministicPlanner()
+    messages = [
+        {
+            "role": "user",
+            "content": "当前候选区间: [20.0, 80.0]\n请通过 tool_calls 输出你的下一步决策。",
+        }
+    ]
+    name, arguments = _planner_tool(planner.chat_with_tools(messages, []))
+    assert name == "sample_and_infer"
+    assert arguments["sample_range"] == [35.0, 65.0]
+
+    special = {
+        "ok": True,
+        "sample_range": [35.0, 65.0],
+        "model_output": {
+            "clip_state": "无法判断",
+            "fracture_mechanism": None,
+            "fracture_site": None,
+            "special_case": "未夹紧",
+        },
+    }
+    messages.extend(
+        [
+            {"role": "tool", "content": json.dumps(special, ensure_ascii=False)},
+            {"role": "tool", "content": json.dumps(special, ensure_ascii=False)},
+        ]
+    )
+    name, arguments = _planner_tool(planner.chat_with_tools(messages, []))
+    assert name == "terminate"
+    assert arguments == {
+        "status": "unrecognized",
+        "unrecognized_reason": "not_clamped",
+    }

@@ -12,6 +12,11 @@ sealed labels。
 `3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab`。
 其 analysis prompt 已采用本轮补全合法枚举和时间状态判定顺序后的版本。
 
+预验收配置使用 `v4.1-interval-policy-v1` 确定性 Planner。它只提出下一次工具调用；
+首轮全视频、覆盖/复查区间、候选更新、证据门和最终终止仍全部由
+`IterativeAgent`/Verifier 强制执行。这样不引入新权重或外部凭据，也避免决策模型与
+VLM 争用同一张 GPU。默认 V2/Qwen 配置保持不变。
+
 ## 单视频预验收
 
 训练机使用显式配置，禁止任务内自动回退到 V2：
