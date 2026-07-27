@@ -8,6 +8,7 @@ local path is sent to the model service.
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import math
 import os
@@ -17,16 +18,16 @@ from dataclasses import dataclass
 from typing import Any, Callable, Protocol, runtime_checkable
 
 from agent.config_util import get_inference_api_key
-from agent.contract import load_visual_contract, visual_contract_hash
-from agent.parser import ResultParser
-from agent.prompts import (
-    EVIDENCE_SYSTEM_PROMPT,
-    EVIDENCE_USER_PROMPT,
-    PRODUCTION_USER_PROMPT,
-    SYSTEM_PROMPT,
+from agent.contract import (
+    CONTRACT_VERSION,
+    V4_1_CONTRACT_VERSION,
+    load_visual_contract,
+    visual_contract_hash,
 )
+from agent.parser import ResultParser
 from agent.sampling import ClipBuildResult
-from agent.schema import ModelOutput, SampleAndInferDiagnostics, ValidationErrorInfo
+from agent.schema import SampleAndInferDiagnostics, ValidationErrorInfo
+from agent.v4_1_parser import V4_1ResultParser
 
 try:
     from openai import OpenAI
@@ -48,7 +49,6 @@ DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BACKOFF = 2.0
 DEFAULT_MIME_TYPE = "video/mp4"
 _VISUAL_CONTRACT = load_visual_contract()
-_GENERATION_CONFIG = _VISUAL_CONTRACT["analysis"]["generation"]
 _CONTRACT_MAX_FRAMES = int(_VISUAL_CONTRACT["video"]["max_frames"])
 _REQUIRED_DEPLOYMENT_FIELDS = {
     "model_version",
@@ -293,6 +293,7 @@ def _extract_preprocessing_from_response(response: Any) -> dict[str, Any] | None
 def _validate_deployment_manifest(
     deployment: Any,
     expected: dict[str, Any] | None = None,
+    contract: dict[str, Any] | None = None,
 ) -> str | None:
     """Validate a complete visual deployment identity and optional task pin."""
     if not isinstance(deployment, dict) or set(deployment) != _REQUIRED_DEPLOYMENT_FIELDS:
@@ -302,10 +303,16 @@ def _validate_deployment_manifest(
         for key in _REQUIRED_DEPLOYMENT_FIELDS
     ):
         return "missing_or_invalid_deployment_manifest"
-    contract = load_visual_contract()
-    if deployment["contract_version"] != contract["contract_version"]:
+    if contract is None and expected is not None:
+        expected_version = expected.get("contract_version")
+        expected_hash = expected.get("contract_hash")
+    else:
+        contract = contract or load_visual_contract()
+        expected_version = contract["contract_version"]
+        expected_hash = visual_contract_hash(str(expected_version))
+    if deployment["contract_version"] != expected_version:
         return "contract_version_mismatch"
-    if deployment["contract_hash"] != visual_contract_hash():
+    if deployment["contract_hash"] != expected_hash:
         return "contract_hash_mismatch"
     if expected is not None and deployment != expected:
         return "deployment_drift"
@@ -315,6 +322,7 @@ def _validate_deployment_manifest(
 def _validate_preprocessing_meta(
     meta: dict[str, Any] | None,
     expected_deployment: dict[str, Any] | None = None,
+    contract: dict[str, Any] | None = None,
 ) -> str | None:
     """Validate server-returned ``preprocessing`` metadata.
 
@@ -381,7 +389,11 @@ def _validate_preprocessing_meta(
             )
             return "non_monotonic_indices"
 
-    return _validate_deployment_manifest(meta.get("deployment_manifest"), expected_deployment)
+    return _validate_deployment_manifest(
+        meta.get("deployment_manifest"),
+        expected_deployment,
+        contract,
+    )
 
 
 class LlamaFactoryInferenceClient:
@@ -395,11 +407,22 @@ class LlamaFactoryInferenceClient:
         max_request_size: int = DEFAULT_MAX_REQUEST_SIZE,
         timeout: Any = _DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
+        contract_version: str = CONTRACT_VERSION,
     ) -> None:
         self.model = model
         self.base_url = base_url
         self.api_key = api_key
-        self.system_prompt = SYSTEM_PROMPT
+        self.contract = load_visual_contract(contract_version)
+        self.contract_version = contract_version
+        self.contract_hash = visual_contract_hash(contract_version)
+        self.analysis = self.contract["analysis"]
+        self.evidence = self.contract["evidence"]
+        self.system_prompt = str(self.analysis["system_prompt"])
+        self.result_parser = (
+            V4_1ResultParser
+            if contract_version == V4_1_CONTRACT_VERSION
+            else ResultParser
+        )
         self.max_request_size = max_request_size
         self.timeout = timeout
         self.max_retries = max_retries
@@ -434,15 +457,18 @@ class LlamaFactoryInferenceClient:
             raise RuntimeError(f"visual contract preflight failed: {exc}") from exc
         if not isinstance(payload, dict):
             raise RuntimeError("visual contract preflight returned a non-object")
-        if payload.get("contract_version") != _VISUAL_CONTRACT["contract_version"]:
+        if payload.get("contract_version") != self.contract_version:
             raise RuntimeError("visual contract preflight version mismatch")
-        if payload.get("contract_hash") != visual_contract_hash():
+        if payload.get("contract_hash") != self.contract_hash:
             raise RuntimeError("visual contract preflight hash mismatch")
         capabilities = payload.get("capabilities")
         if capabilities != {"analysis": True, "evidence": True}:
             raise RuntimeError("visual contract preflight capability mismatch")
         deployment = payload.get("deployment_manifest")
-        manifest_error = _validate_deployment_manifest(deployment)
+        manifest_error = _validate_deployment_manifest(
+            deployment,
+            contract=self.contract,
+        )
         if manifest_error is not None:
             raise RuntimeError(f"visual contract preflight invalid: {manifest_error}")
         self.deployment_snapshot = dict(deployment)
@@ -483,7 +509,7 @@ class LlamaFactoryInferenceClient:
                 "role": "user",
                 "content": [
                     {"type": "video_url", "video_url": {"url": data_url}},
-                        {"type": "text", "text": PRODUCTION_USER_PROMPT},
+                        {"type": "text", "text": self.analysis["user_prompt"]},
                 ],
             },
         ]
@@ -515,8 +541,8 @@ class LlamaFactoryInferenceClient:
                     kwargs: dict[str, Any] = {
                         "model": self.model,
                         "messages": current_messages,
-                        "temperature": float(_GENERATION_CONFIG["temperature"]),
-                        "max_tokens": int(_GENERATION_CONFIG["max_new_tokens"]),
+                        "temperature": float(self.analysis["generation"]["temperature"]),
+                        "max_tokens": int(self.analysis["generation"]["max_new_tokens"]),
                     }
                     if extra_body is not None:
                         kwargs["extra_body"] = extra_body
@@ -547,7 +573,9 @@ class LlamaFactoryInferenceClient:
         infer_start = time.perf_counter()
         response = _call_model(messages)
         _last_raw_response[0] = response
-        parse_result = ResultParser.parse(response.choices[0].message.content or "")
+        parse_result = self.result_parser.parse(
+            response.choices[0].message.content or ""
+        )
         infer_elapsed = time.perf_counter() - infer_start
 
         # Extract server-side preprocessing metadata.
@@ -558,7 +586,11 @@ class LlamaFactoryInferenceClient:
         if _last_raw_response[0] is not None:
             raw_pp = _extract_preprocessing_from_response(_last_raw_response[0])
             if raw_pp is not None:
-                err_code = _validate_preprocessing_meta(raw_pp, self.deployment_snapshot)
+                err_code = _validate_preprocessing_meta(
+                    raw_pp,
+                    self.deployment_snapshot,
+                    self.contract,
+                )
                 if err_code is None:
                     logger.info(
                         "Server preprocessing metadata OK: max_frames=%s, "
@@ -599,8 +631,8 @@ class LlamaFactoryInferenceClient:
             "request": {
                 "model": self.model,
                 "messages": _redact_messages(messages),
-                "temperature": float(_GENERATION_CONFIG["temperature"]),
-                "max_tokens": int(_GENERATION_CONFIG["max_new_tokens"]),
+                "temperature": float(self.analysis["generation"]["temperature"]),
+                "max_tokens": int(self.analysis["generation"]["max_new_tokens"]),
                 "extra_body": extra_body,
             },
             "response": _redact_dict_values(raw_response_dump),
@@ -668,17 +700,17 @@ class LlamaFactoryInferenceClient:
         kwargs: dict[str, Any] = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": EVIDENCE_SYSTEM_PROMPT},
+                {"role": "system", "content": self.evidence["system_prompt"]},
                 {
                     "role": "user",
                     "content": [
                         {"type": "video_url", "video_url": {"url": data_url}},
-                        {"type": "text", "text": EVIDENCE_USER_PROMPT},
+                        {"type": "text", "text": self.evidence["user_prompt"]},
                     ],
                 },
             ],
-            "temperature": float(_GENERATION_CONFIG["temperature"]),
-            "max_tokens": int(_GENERATION_CONFIG["max_new_tokens"]),
+            "temperature": float(self.evidence["generation"]["temperature"]),
+            "max_tokens": int(self.evidence["generation"]["max_new_tokens"]),
         }
         if manifest is not None:
             kwargs["extra_body"] = {"preprocessing": {"temp_video_manifest": manifest}}
@@ -690,7 +722,11 @@ class LlamaFactoryInferenceClient:
         if not summary:
             return EvidenceInferenceResult(ok=False, error="empty visual evidence")
         preprocessing = _extract_preprocessing_from_response(response)
-        metadata_error = _validate_preprocessing_meta(preprocessing, self.deployment_snapshot)
+        metadata_error = _validate_preprocessing_meta(
+            preprocessing,
+            self.deployment_snapshot,
+            self.contract,
+        )
         if metadata_error is not None:
             return EvidenceInferenceResult(
                 ok=False,
@@ -713,8 +749,20 @@ class MockInferenceClient:
     satisfy the model-output schema.
     """
 
-    def __init__(self, response: dict | str | Callable[..., Any]) -> None:
+    def __init__(
+        self,
+        response: dict | str | Callable[..., Any],
+        *,
+        contract_version: str = CONTRACT_VERSION,
+    ) -> None:
         self._response = response
+        self.contract_version = contract_version
+        self.contract = load_visual_contract(contract_version)
+        self.result_parser = (
+            V4_1ResultParser
+            if contract_version == V4_1_CONTRACT_VERSION
+            else ResultParser
+        )
         self.deployment_snapshot = {
             "model_version": "http-stub-model",
             "adapter_version": "http-stub-adapter",
@@ -725,14 +773,14 @@ class MockInferenceClient:
             "config_fingerprint": "sha256:http-stub-config",
             "runtime_device": "cpu",
             "runtime_dtype": "float32",
-            "contract_version": str(_VISUAL_CONTRACT["contract_version"]),
-            "contract_hash": visual_contract_hash(),
+            "contract_version": contract_version,
+            "contract_hash": visual_contract_hash(contract_version),
         }
 
     def preflight(self) -> dict[str, Any]:
         return {
-            "contract_version": str(_VISUAL_CONTRACT["contract_version"]),
-            "contract_hash": visual_contract_hash(),
+            "contract_version": self.contract_version,
+            "contract_hash": visual_contract_hash(self.contract_version),
             "capabilities": {"analysis": True, "evidence": True},
             "deployment_manifest": dict(self.deployment_snapshot),
         }
@@ -765,17 +813,23 @@ class MockInferenceClient:
             raw = self._response
 
         if isinstance(raw, dict):
-            try:
-                validated = ModelOutput(**raw).model_dump(mode="json")
-            except Exception as exc:
+            parsed_dict = self.result_parser.parse(
+                json.dumps(raw, ensure_ascii=False)
+            )
+            if not parsed_dict.ok:
                 return InferenceResult(
                     ok=False,
                     error=ParseError(
                         code=ResultParser.ERROR_INVALID_MODEL_OUTPUT,
-                        message=str(exc),
+                        message=(
+                            parsed_dict.error.message
+                            if parsed_dict.error
+                            else "invalid mock output"
+                        ),
                     ),
                     attempts=1,
                 )
+            validated = parsed_dict.data
             preprocessing = self._preprocessing(video_input)
             return InferenceResult(
                 ok=True,
@@ -791,7 +845,7 @@ class MockInferenceClient:
                 ),
             )
 
-        parsed = ResultParser.parse(raw)
+        parsed = self.result_parser.parse(raw)
         if parsed.ok:
             preprocessing = self._preprocessing(video_input)
             return InferenceResult(
@@ -810,16 +864,33 @@ def create_inference_client(config: dict[str, Any] | None = None) -> InferenceCl
     returning a harmless negative result is created so that unit tests and
     offline development do not require a running inference server.
     """
-    if os.getenv("INFERENCE_MOCK") == "1":
-        return MockInferenceClient({
-            "has_fracture": False,
-            "fracture_between": None,
-            "type": "未断裂",
-            "location": None,
-        })
-
     cfg = config or {}
     backend_cfg = cfg.get("backend", {})
+    contract_version = (
+        backend_cfg.get("contract_version")
+        or os.getenv("INFERENCE_CONTRACT_VERSION")
+        or CONTRACT_VERSION
+    )
+    if os.getenv("INFERENCE_MOCK") == "1":
+        response = (
+            {
+                "clip_state": "未断裂",
+                "fracture_mechanism": None,
+                "fracture_site": None,
+                "special_case": None,
+            }
+            if contract_version == V4_1_CONTRACT_VERSION
+            else {
+                "has_fracture": False,
+                "fracture_between": None,
+                "type": "未断裂",
+                "location": None,
+            }
+        )
+        return MockInferenceClient(
+            response,
+            contract_version=contract_version,
+        )
 
     # Priority: config file > environment variable > default
     base_url = (
@@ -834,4 +905,5 @@ def create_inference_client(config: dict[str, Any] | None = None) -> InferenceCl
         model=model,
         base_url=base_url,
         api_key=api_key,
+        contract_version=contract_version,
     )

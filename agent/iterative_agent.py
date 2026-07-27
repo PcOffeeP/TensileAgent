@@ -23,11 +23,13 @@ from agent.inference import (
     LlamaFactoryInferenceClient,
     MockInferenceClient,
     _validate_preprocessing_meta,
+    create_inference_client,
 )
 from agent.llm import BaseAgentLLM
 
 from agent.prompts import (
     TENSILE_AGENT_SYSTEM_PROMPT,
+    TENSILE_AGENT_V4_1_SYSTEM_PROMPT,
     build_tensile_agent_user_context,
     build_sample_and_infer_prompt,
 )
@@ -123,6 +125,11 @@ class IterativeAgent:
 
         self.clip_builder = clip_builder or FfmpegVideoClipBuilder()
         self.inference_client = inference_client or self._default_inference_client()
+        self.visual_contract_version = getattr(
+            self.inference_client,
+            "contract_version",
+            config.get("backend", {}).get("contract_version", "tensile-vlm/v2"),
+        )
         self.event_callback = event_callback
         self.work_dir = work_dir
         self.request_evidence = request_evidence
@@ -251,11 +258,13 @@ class IterativeAgent:
         elif validation_error is not None:
             diagnostics.error = ValidationErrorInfo(**validation_error)
 
-        # v2 represents a visually indeterminate round with four null fields.
+        # V2 and V4.1 both expose visually indeterminate rounds explicitly.
         model_output = result.get("model_output") or {}
         has_fracture = model_output.get("has_fracture")
-        if has_fracture is None:
-            diagnostics.video_anomaly_kind = "visual_indeterminate"
+        if has_fracture is None or model_output.get("clip_state") == "无法判断":
+            diagnostics.video_anomaly_kind = (
+                model_output.get("special_case") or "visual_indeterminate"
+            )
 
         return diagnostics
 
@@ -492,8 +501,13 @@ class IterativeAgent:
     # ------------------------------------------------------------------
     def _build_system_messages(self) -> list[dict[str, Any]]:
         """Return the initial message list with system + first user context."""
+        system_prompt = (
+            TENSILE_AGENT_V4_1_SYSTEM_PROMPT
+            if self.visual_contract_version == "tensile-vlm/v4.1"
+            else TENSILE_AGENT_SYSTEM_PROMPT
+        )
         return [
-            {"role": "system", "content": TENSILE_AGENT_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": build_tensile_agent_user_context(
@@ -676,6 +690,9 @@ class IterativeAgent:
             return
 
         model_output = result.get("model_output", {})
+        if isinstance(model_output, dict) and "clip_state" in model_output:
+            self._transition_v4_1(result, model_output)
+            return
         has_fracture = model_output.get("has_fracture", False)
         new_range = result.get("inferred_time_range")
         confidence_level = result.get("round_confidence_level", "不可信")
@@ -791,6 +808,107 @@ class IterativeAgent:
 
         self.last_round_confidence_level = confidence_level
 
+    def _transition_v4_1(
+        self,
+        result: dict[str, Any],
+        model_output: dict[str, Any],
+    ) -> None:
+        """Apply V4.1 directional clip-state semantics without model-owned time."""
+        state = model_output.get("clip_state")
+        sample_range = result.get("sample_range")
+        confidence_level = result.get("round_confidence_level", "不可信")
+        self.last_round_confidence_level = confidence_level
+        if (
+            state not in {"未断裂", "临界未断裂", "发生断裂", "已断裂", "无法判断"}
+            or not isinstance(sample_range, list)
+            or len(sample_range) != 2
+        ):
+            result["validation_error"] = {
+                "code": "invalid_v4_1_state",
+                "message": "V4.1 clip_state 或 sample_range 非法",
+                "field": "clip_state",
+            }
+            self.low_conf_count += 1
+            return
+
+        if state == "无法判断":
+            self._update_special_recheck(result)
+            return
+
+        if state == "未断裂":
+            if self.state == "COVERAGE":
+                expected = self._coverage_ranges()[self.coverage_index]
+                if self._same_range(sample_range, expected):
+                    self.coverage_index += 1
+                    self.no_fracture_count = self.coverage_index
+                    if self.coverage_index >= 5:
+                        self.state = "NO_FRACTURE"
+                return
+            is_global_scope = (
+                self.state == "INITIAL"
+                or (
+                    self.candidate[0] <= 0.0
+                    and self.candidate[1]
+                    >= self.video_meta.get("duration", 0.0)
+                )
+            )
+            if is_global_scope:
+                self.state = "COVERAGE"
+                self.coverage_index = 0
+                self.no_fracture_count = 0
+                return
+
+        if state in {"未断裂", "临界未断裂"}:
+            # Both states point later; incipient evidence can never count as a
+            # stable negative for final no-fracture coverage.
+            later_start = float(sample_range[1])
+            if later_start < float(self.candidate[1]) - 1e-9:
+                self.candidate = [later_start, float(self.candidate[1])]
+                self.state = "NARROWING"
+                result["v4_1_search_direction"] = "later"
+            else:
+                self.focus_miss_count += 1
+                self.candidate = self._expand_candidate(self.candidate)
+                result["fallback"] = "v4_1_later_boundary_expanded"
+            return
+
+        self.no_fracture_count = 0
+        self.pending_recheck_range = None
+        if state == "已断裂":
+            earlier_end = float(sample_range[0])
+            if earlier_end > float(self.candidate[0]) + 1e-9:
+                self.candidate = [float(self.candidate[0]), earlier_end]
+                self.state = "NARROWING"
+                result["v4_1_search_direction"] = "earlier"
+            else:
+                self.state = "LOCALIZING"
+                self.localization_index += 1
+                result["fallback"] = "v4_1_event_precedes_sample"
+            return
+
+        # 发生断裂 means the Agent owns the event interval: intersect the
+        # current candidate with the sampled clip, never accept model indexes.
+        event_range = [
+            max(float(self.candidate[0]), float(sample_range[0])),
+            min(float(self.candidate[1]), float(sample_range[1])),
+        ]
+        if event_range[0] >= event_range[1]:
+            result["validation_error"] = {
+                "code": "v4_1_empty_event_intersection",
+                "message": "发生断裂 clip 与候选区间没有有效交集",
+                "field": "clip_state",
+            }
+            self.conflict_count += 1
+            return
+        self.candidate = event_range
+        result["inferred_time_range"] = list(event_range)
+        result["v4_1_search_direction"] = "within"
+        self.state = (
+            "VERIFYING"
+            if event_range[1] - event_range[0] <= self.tolerance
+            else "NARROWING"
+        )
+
     def _expand_candidate(self, candidate: list[float]) -> list[float]:
         """Expand candidate interval by 1.5x around its center, clamped to [0, duration]."""
         width = candidate[1] - candidate[0]
@@ -812,7 +930,10 @@ class IterativeAgent:
         return (
             result.get("ok") is True
             and isinstance(model_output, dict)
-            and model_output.get("has_fracture", False) is True
+            and (
+                model_output.get("has_fracture", False) is True
+                or model_output.get("clip_state") in {"发生断裂", "已断裂"}
+            )
         )
 
     def _round_is_local_fracture(self, entry: dict[str, Any]) -> bool:
@@ -859,8 +980,13 @@ class IterativeAgent:
                 if (
                     result.get("ok") is True
                     and self._same_range(result.get("sample_range"), expected)
-                    and output.get("has_fracture") is False
-                    and output.get("type") == FractureType.NO_FRACTURE
+                    and (
+                        (
+                            output.get("has_fracture") is False
+                            and output.get("type") == FractureType.NO_FRACTURE
+                        )
+                        or output.get("clip_state") == "未断裂"
+                    )
                 ):
                     matched = True
                     break
@@ -876,11 +1002,26 @@ class IterativeAgent:
             output = result.get("model_output") or {}
             is_match = (
                 reason in {"video_anomaly", "visual_indeterminate"}
-                and output.get("has_fracture") is None
-            ) or (reason == "not_clamped" and output.get("type") == FractureType.NOT_CLAMPED)
+                and (
+                    output.get("has_fracture") is None
+                    or output.get("clip_state") == "无法判断"
+                )
+            ) or (
+                reason == "not_clamped"
+                and (
+                    output.get("type") == FractureType.NOT_CLAMPED
+                    or output.get("special_case") == "未夹紧"
+                )
+            )
             if result.get("ok") is True and is_match:
                 matches.append(
-                    (result.get("sample_range"), (output.get("has_fracture"), output.get("type")))
+                    (
+                        result.get("sample_range"),
+                        (
+                            output.get("has_fracture", output.get("clip_state")),
+                            output.get("type", output.get("special_case")),
+                        ),
+                    )
                 )
         for index, (sample_range, signature) in enumerate(matches):
             if any(
@@ -982,13 +1123,30 @@ class IterativeAgent:
             best_frame_range = self._time_range_to_frame_range(best_frames, best_time_range)
 
         voted_type = self._vote_field(
-            [r["result"]["model_output"].get("type") for r in positive_rounds],
+            [
+                r["result"]["model_output"].get(
+                    "type",
+                    r["result"]["model_output"].get("fracture_mechanism"),
+                )
+                for r in positive_rounds
+            ],
             valid_set=FRACTURE_CLASSES,
         )
 
         voted_location = self._vote_field(
-            [r["result"]["model_output"].get("location") for r in positive_rounds],
-            valid_set={LocationType.INSIDE, LocationType.OUTSIDE},
+            [
+                r["result"]["model_output"].get(
+                    "location",
+                    r["result"]["model_output"].get("fracture_site"),
+                )
+                for r in positive_rounds
+            ],
+            valid_set={
+                LocationType.INSIDE,
+                LocationType.OUTSIDE,
+                LocationType.OUTSIDE_NON_ROOT,
+                LocationType.GRIP_ROOT,
+            },
         )
 
         return {
@@ -1443,6 +1601,18 @@ class IterativeAgent:
             model_output.get("has_fracture") is True
             and model_output.get("fracture_between") is not None
         )
+        if "clip_state" in model_output:
+            if model_output.get("clip_state") == "发生断裂":
+                result["inferred_time_range"] = list(sample_range)
+                result["v4_1_search_direction"] = "within"
+            elif model_output.get("clip_state") == "未断裂":
+                result["v4_1_search_direction"] = "later"
+            elif model_output.get("clip_state") == "临界未断裂":
+                result["v4_1_search_direction"] = "later"
+            elif model_output.get("clip_state") == "已断裂":
+                result["v4_1_search_direction"] = "earlier"
+            # 无法判断 intentionally carries no direction.
+            return _finalize(result)
 
         # ------------------------------------------------------------------
         # Case 1: Preprocessing present and valid — use server frames.
@@ -1599,13 +1769,4 @@ class IterativeAgent:
     # ------------------------------------------------------------------
     def _default_inference_client(self) -> InferenceClient:
         """Create a default inference client from config or environment."""
-        if os.getenv("INFERENCE_MOCK") == "1":
-            return MockInferenceClient({
-                "has_fracture": False,
-                "fracture_between": None,
-                "type": "未断裂",
-                "location": None,
-            })
-        return LlamaFactoryInferenceClient(
-            model=self.config.get("backend", {}).get("name", "minicpmv4_5"),
-        )
+        return create_inference_client(self.config)

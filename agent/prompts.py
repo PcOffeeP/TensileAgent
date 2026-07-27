@@ -95,6 +95,21 @@ TENSILE_AGENT_SYSTEM_PROMPT = (
     "- 不要编造模型输出，所有推理必须基于历史迭代记录。"
 )
 
+TENSILE_AGENT_V4_1_SYSTEM_PROMPT = (
+    "你是一名材料拉伸试验视频分析协调者。你只能通过 sample_and_infer 与 terminate "
+    "两个工具工作，视觉 Prompt 由程序固定，禁止传入或改写。\n\n"
+    "视觉模型返回 tensile-vlm/v4.1 四字段：clip_state、fracture_mechanism、"
+    "fracture_site、special_case。必须按以下确定性方向推进：未断裂和临界未断裂只向"
+    "更晚区间搜索；发生断裂表示事件在当前 clip 内，继续收缩当前区间；已断裂只向更早"
+    "区间搜索；无法判断不提供任何搜索方向，只能同区间重试或报告证据不足。"
+    "fracture_mechanism 与 fracture_site 只用于最终汇总，临界未断裂中的值是 prospective "
+    "线索，必须由发生断裂或已断裂证据确认。special_case 非 null 时不得输出普通阴性。\n\n"
+    "断裂时间完全由 Agent 根据 clip 边界、搜索轨迹和多轮证据确定；模型不输出且不得"
+    "推测 fracture_between。所有 sample_range 必须位于视频 [0,duration]，冲突、覆盖、"
+    "收缩、预算和终止由程序兜底。无法判断不得产生搜索方向，基础设施失败不得记为未断裂。"
+    "必须使用 function calling，每轮只能调用一个工具，不得直接文本作答。"
+)
+
 
 def build_tensile_agent_user_context(
     video_meta: dict,
@@ -145,15 +160,26 @@ def build_tensile_agent_user_context(
         lines.append("")
 
     width = candidate[1] - candidate[0]
+    contract_version = (
+        config.get("backend", {}).get("contract_version")
+        or "tensile-vlm/v2"
+    )
+    mapping_note = (
+        "> **V4.1 搜索说明**: 时间区间由 Agent 根据 clip 边界和搜索轨迹确定。"
+        "`未断裂/临界未断裂`向后、`已断裂`向前、`发生断裂`在当前 clip 内收缩、"
+        "`无法判断`没有方向；模型不提供 `fracture_between`。"
+        if contract_version == "tensile-vlm/v4.1"
+        else "> **换算说明**: 微调模型处理器最多选择 8 帧。`fracture_between = [i, i+1]` "
+        "表示断裂发生在模型返回的第 i 帧与第 i+1 帧之间，实际时间区间由服务返回的"
+        "帧表直接映射，不依赖理论 FPS。"
+    )
     lines.extend(
         [
             "[当前状态]",
             f"当前候选区间: {candidate}s",
             f"区间宽度: {width:.2f}s",
             "",
-            "> **换算说明**: 微调模型处理器最多选择 8 帧。`fracture_between = [i, i+1]` "
-            "表示断裂发生在模型返回的第 i 帧与第 i+1 帧之间，实际时间区间由服务返回的"
-            "帧表直接映射，不依赖理论 FPS。",
+            mapping_note,
             "",
             "请通过 tool_calls 输出你的下一步决策。",
         ]

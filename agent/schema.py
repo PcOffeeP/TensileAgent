@@ -71,6 +71,8 @@ class LocationType(StrEnum):
 
     INSIDE = "inside_gauge"
     OUTSIDE = "outside_gauge"
+    OUTSIDE_NON_ROOT = "outside_gauge_non_root"
+    GRIP_ROOT = "grip_root"
 
 
 # ---------------------------------------------------------------------------
@@ -203,8 +205,16 @@ class ToolTerminate(BaseModel):
     )
     location: str | None = Field(
         default=None,
-        description="status=fracture 时只能是 inside_gauge 或 outside_gauge；其他 status 省略此字段",
-        json_schema_extra={"enum": ["inside_gauge", "outside_gauge", None]},
+        description="status=fracture 时只能是合法 V2 location 或 V4.1 fracture_site；其他 status 省略此字段",
+        json_schema_extra={
+            "enum": [
+                "inside_gauge",
+                "outside_gauge",
+                "outside_gauge_non_root",
+                "grip_root",
+                None,
+            ]
+        },
     )
     unrecognized_reason: str | None = Field(
         default=None,
@@ -248,8 +258,13 @@ class ToolTerminate(BaseModel):
         if self.status == "fracture":
             if self.fracture_type is not None and self.fracture_type not in FRACTURE_CLASSES:
                 raise ValueError("fracture_type must be null or one of the 8 fracture classes")
-            if self.location is not None and self.location not in {LocationType.INSIDE, LocationType.OUTSIDE}:
-                raise ValueError("location must be null, inside_gauge or outside_gauge")
+            if self.location is not None and self.location not in {
+                LocationType.INSIDE,
+                LocationType.OUTSIDE,
+                LocationType.OUTSIDE_NON_ROOT,
+                LocationType.GRIP_ROOT,
+            }:
+                raise ValueError("location must be null or a supported fracture site")
             if self.unrecognized_reason is not None:
                 raise ValueError("unrecognized_reason must be null for fracture status")
             if not self.evidence_rounds:
