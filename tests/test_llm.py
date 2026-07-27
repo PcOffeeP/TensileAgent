@@ -254,3 +254,40 @@ def test_deterministic_planner_bisects_candidate_and_terminates_special_case():
         "status": "unrecognized",
         "unrecognized_reason": "not_clamped",
     }
+
+
+def test_deterministic_planner_does_not_count_search_negatives_as_coverage():
+    planner = DeterministicPlanner()
+    outputs = ["未断裂"] * 5 + ["发生断裂", "未断裂"]
+    messages = [
+        {
+            "role": "user",
+            "content": "当前候选区间: [30.0, 40.0]\n请通过 tool_calls 输出你的下一步决策。",
+        },
+        *[
+            {
+                "role": "tool",
+                "content": json.dumps(
+                    {
+                        "ok": True,
+                        "sample_range": [float(index), float(index + 1)],
+                        "model_output": {
+                            "clip_state": state,
+                            "fracture_mechanism": None,
+                            "fracture_site": None,
+                            "special_case": None,
+                        },
+                        "inferred_time_range": (
+                            [float(index), float(index + 1)]
+                            if state == "发生断裂"
+                            else None
+                        ),
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+            for index, state in enumerate(outputs)
+        ],
+    ]
+    name, _ = _planner_tool(planner.chat_with_tools(messages, []))
+    assert name == "sample_and_infer"

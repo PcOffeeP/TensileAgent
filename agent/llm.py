@@ -201,11 +201,13 @@ class DeterministicPlanner(BaseAgentLLM):
                     },
                 )
 
-        negative_count = sum(
+        # The program owns five fixed coverage windows. A mere count can be
+        # polluted by earlier search negatives, so only propose no-fracture
+        # when the latest five successful rounds are all strict negatives.
+        if len(valid) >= 6 and all(
             (item.get("model_output") or {}).get("clip_state") == "未断裂"
-            for item in valid
-        )
-        if negative_count >= 6:
+            for item in valid[-5:]
+        ):
             return self._tool_call("terminate", {"status": "no_fracture"})
 
         positive_indices = [
