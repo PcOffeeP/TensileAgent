@@ -1,0 +1,41 @@
+{
+  "agent_acceptance_id": "agent-acceptance-80c3c4fdc613",
+  "agent_acceptance_manifest_sha256": "a8be0b3aaf2303adb62d1ac8c2221c59025eced19f74070e5e91196296b10841",
+  "agent_runtime_commit": "f141d36114904fe7222dbd6076241fa46ba5b155",
+  "config_sha256": "0e1b5518e01b87883d46d38c455d4a6f2f4919e223ee31108e2fd2edd8078856",
+  "development_smoke": {
+    "diagnostics_summary_sha256": "82e0dcb05f141de64d542e1d8deca79303b46d365d2a169cb4704e37deb2e4ab",
+    "result_sha256": "9419584f79eb65b87bd58cd22260005611c5499f856af7e6720891b5ddc030f0",
+    "rounds": 6,
+    "status": "no_fracture",
+    "video_id": "video_0002"
+  },
+  "heldout_semantics_opened": false,
+  "input_lists": {
+    "all_110": {
+      "count": 110,
+      "sha256": "4a1e9dfdae5938df877b245a24c30f64247b32422377a7787fc1153e6f794d08"
+    },
+    "heldout_21": {
+      "count": 21,
+      "sha256": "67d7d7bac9a3952561035e1f91112feb9c4736e231686c1703deacadfe5289d5"
+    },
+    "heldout_21_ids_sha256": "13afad2137f6b6f6da3c23b224ac6fa397a89a6012a2dc65f5ad8437f4bf42cf"
+  },
+  "model_disposition": "intermediate_development_model",
+  "python_freeze_sha256": "53008c20355b2b4ed85994f24dfce559ae06b2328761fa1b574bf86e597d4bb7",
+  "scoring": {
+    "implementation_sha256": "70104ba5af96540081fb4fe824c204ecf8b724c3c9e7cc1bcb37bd5dbe01a52d",
+    "spec_sha256": "5782de22218d0bb5b121808e16ad69eb86b8a0b73bc35925126f5a6e796e75e5"
+  },
+  "service_contract_snapshot_sha256": "450f3d6045ed31a1b95091d6ab5f4c05861c1e01eed37212989bdb3fa86fef95",
+  "stage_b_intermediate_acceptance_id": "stage-b-intermediate-8e1fdb09f8e6",
+  "status": "stage_f_pre_acceptance_passed",
+  "tests": {
+    "local_python": "462 passed",
+    "remote_python": "462 passed",
+    "web_build": "passed"
+  },
+  "visual_contract_hash": "3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab",
+  "visual_contract_version": "tensile-vlm/v4.1"
+}
