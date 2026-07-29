@@ -1,15 +1,15 @@
 {
-  "bundle_name": "v4.1-intermediate-development-2026-07-27",
+  "bundle_name": "v4.1-agent-pipeline-fold0-r1",
   "canonical_sources": {
     "model": {
       "path": "delivery/model_component.json",
       "repository": "mVllm_2",
-      "sha256": "b68a59880a580bb623507358a6f7857c2f860dc8c7960262745d2809382cf0dc"
+      "sha256": "8ffb53aa7f380e2a8afd2974f2752eec3882f037d3e05d0de95058678cb43b87"
     },
     "service": {
       "path": "delivery/service_component.json",
       "repository": "mVllm_2",
-      "sha256": "17b1ead07efacc2a6402847aaebc04e62710a185de90b70d1ec960308932495e"
+      "sha256": "acb850ee60407377a725f9210635ff364cbbd7a6d66eaa41be3ac36539c77abd"
     }
   },
   "components": {
@@ -23,7 +23,7 @@
     },
     "model": {
       "path": "delivery/components/model_component.json",
-      "sha256": "b68a59880a580bb623507358a6f7857c2f860dc8c7960262745d2809382cf0dc"
+      "sha256": "8ffb53aa7f380e2a8afd2974f2752eec3882f037d3e05d0de95058678cb43b87"
     },
     "performance": {
       "path": "docs/results/v4_1_stage_g_intermediate/performance_snapshot.json",
@@ -31,7 +31,7 @@
     },
     "service": {
       "path": "delivery/components/service_component.json",
-      "sha256": "17b1ead07efacc2a6402847aaebc04e62710a185de90b70d1ec960308932495e"
+      "sha256": "acb850ee60407377a725f9210635ff364cbbd7a6d66eaa41be3ac36539c77abd"
     }
   },
   "delivery_gate": {
@@ -52,7 +52,7 @@
   "documentation": {
     "product_card": {
       "path": "delivery/current/PRODUCT_CARD.md",
-      "sha256": "591610350912b924231588276354a0eae8e9688236fa3cda5effa56b8520e423"
+      "sha256": "65134de491986de5828df5ac7b40b42419547b249903f09227740687f778adce"
     },
     "v2_rollback": {
       "path": "delivery/rollback/V2_ROLLBACK.md",

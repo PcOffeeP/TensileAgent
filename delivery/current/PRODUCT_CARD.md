@@ -3,7 +3,8 @@
 ## 用途
 
 该交付点用于受控开发、演示准备和本机到训练机的远程 GPU 联调。模型为
-coverage-first seed3407 merged BF16，Agent 使用 `tensile-vlm/v4.1` 契约。
+当前模型正式身份为 `v4.1-agent-pipeline-fold0-r1`，来源是 coverage-first seed3407
+Fold0 merged BF16。它用于 Agent 链路验证，Agent 使用 `tensile-vlm/v4.1` 契约。
 
 ## 已验证范围
 

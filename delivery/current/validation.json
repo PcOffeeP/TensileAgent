@@ -1,63 +1,55 @@
 {
   "schema_version": "tensile-delivery/validation/v2",
-  "validated_at": "2026-07-27T21:27:40+08:00",
+  "validated_at": "2026-07-29T10:38:00+08:00",
   "bundle": {
-    "sha256": "bf2bebceccb986711e8426ed06bc04d9641922745589eaca46783d2298afcf73",
+    "name": "v4.1-agent-pipeline-fold0-r1",
+    "sha256": "40b1cc2dc1b15b5c71ce4fbf5c608beb72ea3e88ed9ad63554e81d4a154a8335",
     "cross_repository_validation_passed": true
   },
   "git_sync": {
-    "agent_source_commit": "ecb8f5231e06e1e931358eaf24f5ab51f8b5ae58",
-    "agent_local_remote_matched": true,
-    "mvllm_source_commit": "71405d9ca6f2714b6a12144662cc017d8ff7a1c2",
-    "mvllm_local_remote_matched": true,
-    "sync_transport": "git_bundle",
+    "agent_runtime_commit": "806e1f026656fad75efeb0b258dd828e171b85c2",
+    "mvllm_training_machine_commit": "98e95aefb5d8297578b8abd777b9b809f2651c9a",
+    "sync_transport": "git_format_patch",
     "long_term_remote_pushed": false
   },
   "model": {
+    "name": "v4.1-agent-pipeline-fold0-r1",
     "tier": "intermediate_development_model",
+    "managed_path": "workspace/models/releases/v4.1-agent-pipeline-fold0-r1",
+    "current_path": "workspace/models/current",
     "hash_mode": "full",
-    "aggregate_sha256": "1f75e4f91db487273588c1e1c8bf867b20acdfc565c191d914915b366c4c1b1c",
-    "file_count": 17,
-    "safetensors_count": 10,
-    "total_size_bytes": 17391991837,
-    "matched_component_manifest": true
+    "merged_aggregate_sha256": "1f75e4f91db487273588c1e1c8bf867b20acdfc565c191d914915b366c4c1b1c",
+    "adapter_aggregate_sha256": "74842170d69a5a17f466a9f560db27cdc1aafde83730b71807d2996471d43aa7",
+    "full_hash_verified": true
   },
   "remote_service": {
     "host": "127.0.0.1",
     "port": 8002,
-    "process_id_at_validation": 183971,
     "contract_version": "tensile-vlm/v4.1",
     "contract_hash": "3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab",
-    "contract_snapshot_sha256": "450f3d6045ed31a1b95091d6ab5f4c05861c1e01eed37212989bdb3fa86fef95",
+    "model_version": "v4.1-agent-pipeline-fold0-r1",
     "model_aggregate_sha256": "1f75e4f91db487273588c1e1c8bf867b20acdfc565c191d914915b366c4c1b1c",
     "runtime_device": "cuda:0",
     "runtime_dtype": "bfloat16",
-    "loopback_only": true
+    "loopback_only": true,
+    "real_media_smoke_passed": true
   },
-  "local_tunnel_smoke": {
-    "local_host": "127.0.0.1",
-    "local_port": 18002,
-    "remote_port": 8002,
+  "agent_pipeline_smoke": {
+    "workspace": "/home/liuyang/文档/TensileAgent-acceptance",
     "doctor_passed": true,
-    "doctor_report_sha256": "b5addeb31ffd9093422bfd7b9c94705ed33cd572a6b96a0384172bb246ed0818",
-    "development_video_id": "video_0002",
-    "development_video_sha256": "b2dccaf9a98020d661adfd0665f8320436abd04a52ac87f8165184f157a24f29",
+    "development_video_id": "video_0002_0.00_1.62",
     "real_gpu_call_passed": true,
     "result_schema": "tensile-agent/result/v4.1",
-    "response_status": "answered",
-    "result_sha256": "f1b28ec03e84d7cc3df6fc6a195def176deae7d4bb95cd7a3f314ee00b341706",
-    "deployment_identity_matched": true,
-    "tunnel_restored_after_failure_test": true
+    "response_status": "no_fracture",
+    "result_sha256": "14fa8991681d18fb77c82cb38fc1fed201ea3a5af3e6e11fc90d7e411bf6c5b2",
+    "deployment_identity_matched": true
   },
-  "fail_closed": {
-    "tunnel_was_explicitly_disconnected": true,
-    "doctor_exit_code": 1,
-    "doctor_report_sha256": "cf985da81ef14539f38d89b20a680ffde03e4c474544dcd7888054512cf8f2bf",
-    "agent_exit_code": 1,
-    "failure_stage": "visual_contract_preflight",
-    "result_file_created": false,
-    "protocol_fallback_observed": false,
-    "passed": true
+  "asset_inventory": {
+    "base_models": 1,
+    "merged_models": 22,
+    "adapter_roots": 23,
+    "checkpoints": 108,
+    "checkpoint_policy": "moved_with_adapter_not_deleted"
   },
   "delivery_gate": {
     "overall_passed": true,
@@ -83,8 +75,8 @@
   "tests": {
     "local_python": "491 passed, 1 warning",
     "local_web_build": "passed",
-    "remote_python": "491 passed",
-    "remote_web_build": "not rerun because npm is not installed in the remote shell; local build passed and prior frozen remote acceptance build remains historical evidence"
+    "remote_agent_doctor": "passed",
+    "remote_real_video_agent_smoke": "passed"
   },
   "historical_quality_status": {
     "stage_b_passed": false,

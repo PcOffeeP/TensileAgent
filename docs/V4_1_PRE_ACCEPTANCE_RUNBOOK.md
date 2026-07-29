@@ -3,7 +3,8 @@
 ## 当前授权边界
 
 当前 V4.1 服务消费 Stage B 冻结的
-`stage-b-intermediate-8e1fdb09f8e6` 中间开发模型。原 Stage B 质量门和 LOSO
+`v4.1-agent-pipeline-fold0-r1` 中间开发模型，来源身份为
+`stage-b-intermediate-8e1fdb09f8e6`。原 Stage B 质量门和 LOSO
 门仍为失败；本路线只授权 Stage E pre-acceptance、Stage F Agent 集成和 Stage G
 一次性联合验收准备，不代表模型质量门通过，不授权重训、正式别名、生产切换或读取
 sealed labels。

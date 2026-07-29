@@ -58,7 +58,7 @@ def generate(root: Path, mvllm_root: Path) -> dict[str, Any]:
     }
     bundle = {
         "schema_version": "tensile-delivery/bundle/v2",
-        "bundle_name": "v4.1-intermediate-development-2026-07-27",
+        "bundle_name": "v4.1-agent-pipeline-fold0-r1",
         "disposition": "intermediate_development_model",
         "components": {
             name: {"path": path, "sha256": sha256(root / path)}
