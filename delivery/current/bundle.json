@@ -52,7 +52,7 @@
   "documentation": {
     "product_card": {
       "path": "delivery/current/PRODUCT_CARD.md",
-      "sha256": "65134de491986de5828df5ac7b40b42419547b249903f09227740687f778adce"
+      "sha256": "8c4637379859b31d0325fac3c2465dbc64321f677393de0aa7e8365a925a375a"
     },
     "v2_rollback": {
       "path": "delivery/rollback/V2_ROLLBACK.md",

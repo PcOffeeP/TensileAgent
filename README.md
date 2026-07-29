@@ -6,15 +6,18 @@ TensileAgent 已完成 `tensile-vlm/v4.1` 中间模型的 Agent 集成和一次�
 110 视频运行。当前中间交付以整体链路为硬门，已经通过；模型质量仍单独记录和优化，
 不能用链路通过替代效果验收。当前唯一允许的处置级别为
 `intermediate_development_model`：训练机发布
-`v4.1-agent-pipeline-fold0-r1`，服务只监听 loopback，本机通过 SSH tunnel 联调。
+了一个 V4.1 推理模型，服务只监听 loopback，本机通过 SSH tunnel 联调。具体权重、
+fold、seed 和发布目录由 mVllm_2 的机器清单管理，不作为 Agent 使用说明。
 
 | 层 | 当前状态 |
 | --- | --- |
 | Agent Runner、状态机、HTTP 客户端 | V4.1 中间集成已完成 |
-| 当前视觉服务 | `v4.1-agent-pipeline-fold0-r1`，`127.0.0.1:8002`，非生产 |
+| 当前视觉服务 | V4.1 中间推理服务，`127.0.0.1:8002`，非生产 |
 | V4.1 consumer artifact | 已冻结：`agent/contracts/tensile_vlm_v4_1.json` |
 | 中间交付链路门 | 通过 |
 | 性能策略 | 不阻断当前中间交付；新模型在 mVllm_2 中独立实验和晋级 |
+| 全量 110 条性能 | 断裂准确率/联合成功率 40.91%，断裂召回 31.11%，未断裂召回 85.00% |
+| Held-out 21 条性能 | 断裂准确率/联合成功率 42.86%，断裂召回 35.29%，未断裂召回 75.00% |
 | Stage B | 历史质量门失败 |
 | Stage C | 延期，未执行 full-data 训练 |
 | Stage D | 历史质量门失败 |

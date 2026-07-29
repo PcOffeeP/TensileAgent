@@ -2,12 +2,15 @@
 
 ## 当前授权边界
 
-当前 V4.1 服务消费 Stage B 冻结的
-`v4.1-agent-pipeline-fold0-r1` 中间开发模型，来源身份为
-`stage-b-intermediate-8e1fdb09f8e6`。原 Stage B 质量门和 LOSO
-门仍为失败；本路线只授权 Stage E pre-acceptance、Stage F Agent 集成和 Stage G
+当前已经部署一个 V4.1 中间推理服务。具体模型身份由 mVllm_2 的 deployment manifest
+和模型注册表管理，TensileAgent 只冻结并校验服务返回的完整 deployment identity。
+原 Stage B 质量门和 LOSO 门仍为失败；本路线只授权 Stage E pre-acceptance、Stage F
+Agent 集成和 Stage G
 一次性联合验收准备，不代表模型质量门通过，不授权重训、正式别名、生产切换或读取
 sealed labels。
+
+当前冻结性能：全量 110 条的断裂准确率/联合成功率为 40.91%，断裂召回 31.11%，
+未断裂召回 85.00%；held-out 21 条分别为 42.86%、35.29% 和 75.00%。
 
 运行时视觉契约为 `tensile-vlm/v4.1`，hash 为
 `3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab`。

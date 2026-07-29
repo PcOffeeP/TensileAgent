@@ -3,7 +3,7 @@
 > 状态：已批准
 >
 > 实施状态（2026-07-27）：V4.1 中间模型、Agent 集成和一次冻结的 110 视频运行已完成；
-> 当前中间交付以端到端链路为硬门并已通过，性能指标只记录、不阻断、暂定不优化；
+> 当前中间交付以 Agent 链路为硬门并已通过，性能指标单独记录且不阻断该交付；
 > 历史 Stage B、Stage D、Stage G 质量门失败事实保留，Stage C 延期。当前仅允许
 > `intermediate_development_model` 处置，通过 loopback 服务与 SSH tunnel 联调；
 > 不构成 final、full-data、independent-test-passed 或生产批准。
@@ -30,10 +30,10 @@ TensileAgent 面向项目研究人员、演示人员和本地评测使用者，�
 该状态携带的机制和位置属于 `prospective` 预测线索，不能单独形成最终断裂类型、位置或已断裂
 结论；必须由后续 `发生断裂` 或 `已断裂` 证据确认。普通 `未断裂` 的附加字段仍必须为 null。
 
-阶段 A 的设计、artifact、Prompt 和契约测试已完成。用户已决定保留 coverage-first
-seed3407 merged BF16 作为本版本中间训练产物，不再为本轮重新训练。V4.1 schema、
-Prompt、Stub、HTTP 契约、Verifier、结果投影和 Web 展示已完成中间集成，并完成冻结的
-110 视频运行。该运行链路完整、无运行时失败，但质量门失败；冻结 scorer 还缺少部分中文
+阶段 A 的设计、artifact、Prompt 和契约测试已完成。当前已经部署一个 V4.1 中间推理
+服务；具体权重身份由 mVllm_2 管理。V4.1 schema、Prompt、Stub、HTTP 契约、Verifier、
+结果投影和 Web 展示已完成中间集成，并完成冻结的 110 视频运行。该运行链路完整、
+无运行时失败，但质量门失败；冻结 scorer 还缺少部分中文
 权威列名映射，使时间、机制、位置和特殊样例分母为 0。官方门禁不做事后重算，存在性指标
 本身也未达阈值。V2 继续作为回滚对象保留。
 

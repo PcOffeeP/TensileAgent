@@ -1,8 +1,7 @@
 # V4.1 视觉推理服务接入说明
 
-> 当前接入对象是 `v4.1-agent-pipeline-fold0-r1` 中间开发模型。它已通过服务与 Agent
-> 链路验证，但不是 final、full-data、independent-test-passed 或 production-approved
-> 模型。
+> 当前已经部署一个符合 `tensile-vlm/v4.1` 的中间推理服务。Agent 只依赖服务契约、
+> 能力和性能边界；具体模型名称、fold、seed 与权重目录由 mVllm_2 管理。
 
 ## 当前身份
 
@@ -10,7 +9,6 @@
 | --- | --- |
 | 训练机 | `100.70.83.68` |
 | 训练机监听 | `127.0.0.1:8002` |
-| 模型身份 | `v4.1-agent-pipeline-fold0-r1` |
 | Agent 模型名 | `tensile-vlm` |
 | 契约 | `tensile-vlm/v4.1` |
 | 契约预检 | `GET /v1/tensile/contract` |
@@ -34,10 +32,6 @@ backend:
 
 视觉服务使用独立的 `INFERENCE_API_KEY`，不能与决策模型的 `LLM_API_KEY` 混用。
 
-训练机凭据：
-
-`/home/liuyang/文档/mVllm_2/finetune/run_logs/v4_1_agent_pipeline_fold0_r1/service.env`
-
 TensileAgent 可以通过环境变量或 Git 忽略的 `agent/.env` 提供：
 
 ```dotenv
@@ -51,10 +45,7 @@ INFERENCE_API_KEY=与训练机 API_KEY 相同的值
 ```bash
 cd '/home/liuyang/文档/TensileAgent-acceptance'
 
-set -a
-source '/home/liuyang/文档/mVllm_2/finetune/run_logs/v4_1_agent_pipeline_fold0_r1/service.env'
-set +a
-export INFERENCE_API_KEY="${API_KEY}"
+export INFERENCE_API_KEY='由部署方提供的服务密钥'
 
 /home/liuyang/miniconda3/envs/agent/bin/python \
   -m agent.doctor \
@@ -114,6 +105,20 @@ Agent 公共结果 schema：
 
 `临界未断裂`中的机制和位置只是 prospective 线索，需要后续真实断裂证据确认。服务
 返回合法 JSON、Agent 成功结束或 HTTP 200 都不能单独证明模型效果达标。
+
+## 当前性能快照
+
+冻结 Stage G 结果：
+
+| 范围 | 样本 | 断裂准确率 / joint | 断裂召回 | 未断裂召回 |
+| --- | ---: | ---: | ---: | ---: |
+| 全量 | 110 | 40.91% | 31.11% | 85.00% |
+| Held-out | 21 | 42.86% | 35.29% | 75.00% |
+| Development | 89 | 40.45% | 30.14% | 87.50% |
+
+该结果显示服务更容易识别未断裂样本，对断裂正例仍有明显漏检。冻结 scorer 没有正确
+映射部分中文权威列，因此时间命中率、机制宏 F1、位置宏 F1 和特殊样例准确率当前不可用。
+不可用不能解释为通过。
 
 ## Key 轮换
 
