@@ -3,18 +3,18 @@
 ## 当前版本边界
 
 TensileAgent 已完成 `tensile-vlm/v4.1` 中间模型的 Agent 集成和一次冻结的
-110 视频运行。当前中间交付以整体链路为硬门，已经通过；模型性能只记录最新快照，
-不作为中间交付门、不触发优化或重训。当前唯一允许的处置级别为
-`intermediate_development_model`：训练机保留 coverage-first seed3407 merged
-BF16 模型，服务只监听 loopback，本机通过 SSH tunnel 联调。
+110 视频运行。当前中间交付以整体链路为硬门，已经通过；模型质量仍单独记录和优化，
+不能用链路通过替代效果验收。当前唯一允许的处置级别为
+`intermediate_development_model`：训练机发布
+`v4.1-agent-pipeline-fold0-r1`，服务只监听 loopback，本机通过 SSH tunnel 联调。
 
 | 层 | 当前状态 |
 | --- | --- |
 | Agent Runner、状态机、HTTP 客户端 | V4.1 中间集成已完成 |
-| 当前视觉服务 | V4.1 中间模型，`127.0.0.1:8002`，非生产 |
+| 当前视觉服务 | `v4.1-agent-pipeline-fold0-r1`，`127.0.0.1:8002`，非生产 |
 | V4.1 consumer artifact | 已冻结：`agent/contracts/tensile_vlm_v4_1.json` |
 | 中间交付链路门 | 通过 |
-| 性能策略 | 只记录、不阻断、暂定不优化 |
+| 性能策略 | 不阻断当前中间交付；新模型在 mVllm_2 中独立实验和晋级 |
 | Stage B | 历史质量门失败 |
 | Stage C | 延期，未执行 full-data 训练 |
 | Stage D | 历史质量门失败 |
@@ -405,15 +405,13 @@ pytest tests/test_schema.py -v
 |------|------|
 | **[mVllm_2](../mVllm_2)** | MiniCPM-V 4.5 数据、微调、评测与视觉服务仓库 |
 
-`mVllm_2/main` 当前维护 `tensile-vlm/v4.1` 数据与训练链路；V2 数据已在独立 archive
-中冻结。TensileAgent 生产运行仍使用 V2 权威 artifact，单轮返回
-`has_fracture`、`fracture_between`、`type`、`location`，并在多轮证据基础上形成
-`tensile-agent/result/v2`。confidence 未完成源视频隔离校准前只显示证据等级，数值保持
-`null`。
+`mVllm_2/main` 当前维护 `tensile-vlm/v4.1` 数据、训练、发布模型和推理服务；V2
+数据与模型已在 archive 中冻结。当前 V4.1 中间服务单轮返回
+`clip_state`、`fracture_mechanism`、`fracture_site`、`special_case`，Agent 形成
+`tensile-agent/result/v4.1`。V2 只作为历史回滚协议。
 
-V4.1 目标输出为 `clip_state`、`fracture_mechanism`、`fracture_site`、
-`special_case`。其中 `临界未断裂` 的机制和位置属于 prospective 线索，必须由后续真实
-断裂证据确认；这套语义要等服务和 Agent 整体迁移后才会成为运行时行为。
+`临界未断裂` 的机制和位置属于 prospective 线索，必须由后续真实断裂证据确认。当前
+服务和 Agent 已使用这套语义，但模型本身仍未通过任务质量门。
 
 生产服务的 `deployment_manifest` 必须完整携带模型、adapter、base model、processor、框架、配置、runtime、`contract_version` 和 `contract_hash`。Agent 在任务预检时冻结完整快照；缺失、变化或不一致时拒绝使用该轮结果。
 

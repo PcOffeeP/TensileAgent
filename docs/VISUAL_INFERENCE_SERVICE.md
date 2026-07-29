@@ -1,97 +1,133 @@
-# 视觉推理服务接入说明
+# V4.1 视觉推理服务接入说明
 
-> **当前仅适用于 V2。** V4.1 consumer artifact、数据发布和三折训练不会自动改变本文的
-> 服务地址或协议。完成 V4.1 模型效果验收、服务部署和 Agent 整体迁移前，仍应按本文
-> 连接 `tensile-vlm/v2`，不要把 V4.1 模型伪装成 V2 服务。
+> 当前接入对象是 `v4.1-agent-pipeline-fold0-r1` 中间开发模型。它已通过服务与 Agent
+> 链路验证，但不是 final、full-data、independent-test-passed 或 production-approved
+> 模型。
 
-TensileAgent 当前连接训练机上的全量微调模型服务。模型协议固定为
-`tensile-vlm/v2`，实际部署参数如下：
+## 当前身份
 
 | 项目 | 当前值 |
 | --- | --- |
 | 训练机 | `100.70.83.68` |
-| Agent Base URL | `http://100.70.83.68:8001/v1` |
-| 模型名 | `tensile-vlm` |
+| 训练机监听 | `127.0.0.1:8002` |
+| 模型身份 | `v4.1-agent-pipeline-fold0-r1` |
+| Agent 模型名 | `tensile-vlm` |
+| 契约 | `tensile-vlm/v4.1` |
 | 契约预检 | `GET /v1/tensile/contract` |
-| 分析与 Evidence | `POST /v1/chat/completions` |
-| 契约版本 | `tensile-vlm/v2` |
+| 分析 | `POST /v1/chat/completions` |
+| 访问策略 | 同机 loopback 或 SSH tunnel |
 
-协议路径和契约是程序固定的；主机、端口和 API Key 属于部署配置。当前地址已经写入
-`agent/config.yaml`。如果训练机地址或端口变化，应修改 `backend.api_url`，不要修改
-客户端内部的 `/tensile/contract` 或 `/chat/completions` 路径。
+权威 Agent 配置：
 
-## API Key
-
-推理服务使用独立的 `INFERENCE_API_KEY`，不能与决策模型的 `LLM_API_KEY` 混用。
-真实 Key 只保存在以下两个被 Git 忽略的位置：
-
-- 训练机：`/home/liuyang/文档/mVllm_2/finetune/run_logs/tensile_vlm_service.env`
-- TensileAgent 当前机器：`agent/.env`
-
-初始化本机配置：
-
-```bash
-cp agent/.env.example agent/.env
-```
-
-然后只在 `agent/.env` 中填写：
-
-```dotenv
-INFERENCE_API_KEY=与训练机相同的值
-```
-
-禁止把真实 Key 写入 `agent/config.yaml`、README、测试、日志或 Git 提交。环境变量
-`INFERENCE_API_KEY` 的优先级高于 `agent/.env`。
-
-## 配置优先级
-
-推理服务地址和模型名按以下顺序选择：
-
-1. 有效配置中的 `backend.api_url` 和 `backend.model`；
-2. `INFERENCE_BASE_URL` 和 `INFERENCE_MODEL`；
-3. 本地开发默认值。
-
-标准项目配置已经指向训练机：
+`agent/config.v4_1.pre_acceptance.yaml`
 
 ```yaml
 backend:
-  api_url: http://100.70.83.68:8001/v1
+  api_url: http://127.0.0.1:8002/v1
+  contract_version: tensile-vlm/v4.1
   model: tensile-vlm
 ```
 
-被 Git 忽略的 `agent/config.local.yaml` 可以覆盖上述地址，适合临时切换到本地 Stub。
+`agent/config.yaml` 保留 V2 回滚与旧默认行为，不得在同一任务中从 V4.1 静默降级。
 
-## 连通性检查
+## API Key
 
-确保训练机服务已经启动，并在 TensileAgent 仓库根目录执行：
+视觉服务使用独立的 `INFERENCE_API_KEY`，不能与决策模型的 `LLM_API_KEY` 混用。
 
-```bash
-python3 -m agent.doctor
+训练机凭据：
+
+`/home/liuyang/文档/mVllm_2/finetune/run_logs/v4_1_agent_pipeline_fold0_r1/service.env`
+
+TensileAgent 可以通过环境变量或 Git 忽略的 `agent/.env` 提供：
+
+```dotenv
+INFERENCE_API_KEY=与训练机 API_KEY 相同的值
 ```
 
-`checks.visual_service` 应满足：
+真实 Key 不得写入 YAML、README、测试、日志或 Git。
 
-- `ok: true`
-- `auth_configured: true`
-- URL 为 `http://100.70.83.68:8001/v1/tensile/contract`
-- contract version/hash 与本仓 artifact 一致
-
-直接运行 Agent 时不需要额外拼接接口路径：
+## 同训练机检查
 
 ```bash
-python3 -m agent.run --video /path/to/video.mp4
+cd '/home/liuyang/文档/TensileAgent-acceptance'
+
+set -a
+source '/home/liuyang/文档/mVllm_2/finetune/run_logs/v4_1_agent_pipeline_fold0_r1/service.env'
+set +a
+export INFERENCE_API_KEY="${API_KEY}"
+
+/home/liuyang/miniconda3/envs/agent/bin/python \
+  -m agent.doctor \
+  --config agent/config.v4_1.pre_acceptance.yaml
 ```
 
-任务启动时客户端会先预检并锁定 deployment manifest；后续响应发生模型、adapter、
-processor、runtime 或契约漂移时会 fail closed。
+`checks.visual_service` 必须包含：
+
+- `ok: true`；
+- `auth_configured: true`；
+- `contract_version: tensile-vlm/v4.1`；
+- 与 consumer artifact 一致的 contract hash。
+
+## 跨机器 SSH tunnel
+
+训练机服务只监听 loopback。开发机需要建立 tunnel：
+
+```bash
+ssh -N -L 18002:127.0.0.1:8002 100.70.83.68
+```
+
+然后使用本地覆盖配置：
+
+```yaml
+backend:
+  api_url: http://127.0.0.1:18002/v1
+  contract_version: tensile-vlm/v4.1
+  model: tensile-vlm
+```
+
+不要为了省略 tunnel 而把训练机 8002 暴露为生产接口。
+
+## 运行 Agent
+
+```bash
+python3 -m agent.run \
+  --video /absolute/path/video.mp4 \
+  --config agent/config.v4_1.pre_acceptance.yaml \
+  --contract-version tensile-vlm/v4.1
+```
+
+任务启动时会先冻结完整 deployment identity。后续响应中的模型、adapter、processor、
+runtime、contract version 或 contract hash 发生变化时，客户端必须 fail closed。
+
+## 当前结果语义
+
+V4.1 单轮视觉输出：
+
+- `clip_state`；
+- `fracture_mechanism`；
+- `fracture_site`；
+- `special_case`。
+
+Agent 公共结果 schema：
+
+`tensile-agent/result/v4.1`
+
+`临界未断裂`中的机制和位置只是 prospective 线索，需要后续真实断裂证据确认。服务
+返回合法 JSON、Agent 成功结束或 HTTP 200 都不能单独证明模型效果达标。
 
 ## Key 轮换
 
-1. 在训练机停止 `tensile-vlm` 服务；
-2. 更新训练机 `finetune/run_logs/tensile_vlm_service.env`；
-3. 使用新 Key 重启并通过预检；
-4. 更新本机 `agent/.env` 的 `INFERENCE_API_KEY`；
-5. 运行 `python3 -m agent.doctor`；
-6. 确认成功后再提交视频任务。
+1. 停止训练机 V4.1 服务；
+2. 更新权限 `0600` 的 `service.env`；
+3. 使用新 Key 重启并完成 service smoke；
+4. 更新 Agent 的 `INFERENCE_API_KEY`；
+5. 运行 V4.1 doctor；
+6. 成功后再提交视频任务。
 
-只更新其中一端会得到 HTTP `401`。不要为了绕过鉴权而把服务改成无 Key 模式。
+只更新一端会得到 HTTP 401。不得通过关闭鉴权规避配置问题。
+
+## V2 历史回滚
+
+V2 使用 `agent/config.yaml` 和 `tensile-vlm/v2` consumer artifact。回滚必须在新任务中
+显式完成，并与 V4.1 服务使用不同的运行身份；不能把 V2 响应解释为 V4.1，也不能在
+V4.1 任务失败后自动回退。
