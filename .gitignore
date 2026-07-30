@@ -37,7 +37,4 @@ web/dist/
 uv.lock
 
 # Local competition submission materials
-/docs/COMPETITION_PROJECT_DESCRIPTION_DRAFT.md
-/docs/TensileAgent_参赛项目说明书*.docx
-/docs/~$*.docx
-/scripts/build_competition_docx.py
+docs/comp-mat
