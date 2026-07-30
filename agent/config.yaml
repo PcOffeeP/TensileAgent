@@ -14,5 +14,7 @@ agent:
   temperature: 0.2
   tolerance_seconds: 1.0
 backend:
-  api_url: http://100.70.83.68:8001/v1
+  api_url: http://127.0.0.1:18002/v1
+  contract_version: tensile-vlm/v4.1
+  max_request_size: 536870912
   model: tensile-vlm
