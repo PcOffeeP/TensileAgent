@@ -49,6 +49,7 @@ from agent.schema import (
     V4_1_FRACTURE_MECHANISMS,
     ValidationErrorInfo,
 )
+from agent.v4_1_evidence import V41EventBounds
 
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,7 @@ class IterativeAgent:
         self.state = "INITIAL"
         duration = video_meta.get("duration", 0.0)
         self.candidate: list[float] = [0.0, duration]
+        self.event_bounds = V41EventBounds(0.0, float(duration))
         self.no_fracture_count = 0
         self.low_conf_count = 0
         self.conflict_count = 0
@@ -652,6 +654,14 @@ class IterativeAgent:
                 return False, "至少一轮正证据必须来自严格局部 clip"
 
             # Localization is verified independently from fracture existence.
+            if self.visual_contract_version == "tensile-vlm/v4.1":
+                event_bounds = self._ensure_event_bounds()
+                if event_bounds.publishable(self.tolerance):
+                    return True, "断裂存在性已确认，单调事件边界已收敛"
+                if self.localization_index >= 5:
+                    return True, "断裂存在性已确认；局部复查完成但时间字段不可用"
+                return False, "断裂存在性已确认，单调事件边界尚未收敛"
+
             evidence_ranges: list[list[float]] = []
             for r_idx in positive_evidence:
                 rng = self.history[r_idx]["result"].get("inferred_time_range")
@@ -873,56 +883,63 @@ class IterativeAgent:
                 self.no_fracture_count = 0
                 return
 
+        event_bounds = self._ensure_event_bounds()
+        update = event_bounds.apply(state, sample_range)
+        result["event_bounds"] = event_bounds.interval
+        result["event_bounds_update"] = update.as_dict()
+        if update.conflict:
+            self.conflict_count = event_bounds.conflict_count
+            result["conflict_handled"] = "event_bounds_update_rejected"
+            return
+        if update.conflict_resolved:
+            self.conflict_count = event_bounds.conflict_count
+
         if state in {"未断裂", "临界未断裂"}:
             # Both states point later; incipient evidence can never count as a
             # stable negative for final no-fracture coverage.
-            later_start = float(sample_range[1])
-            if later_start < float(self.candidate[1]) - 1e-9:
-                self.candidate = [later_start, float(self.candidate[1])]
+            result["v4_1_search_direction"] = "later"
+            if update.changed:
+                self.candidate = event_bounds.interval
                 self.state = "NARROWING"
-                result["v4_1_search_direction"] = "later"
             else:
                 self.focus_miss_count += 1
                 self.candidate = self._expand_candidate(self.candidate)
-                result["fallback"] = "v4_1_later_boundary_expanded"
+                result["fallback"] = "v4_1_later_no_op_expanded_sampling_range"
             return
 
         self.no_fracture_count = 0
         self.pending_recheck_range = None
         if state == "已断裂":
-            earlier_end = float(sample_range[0])
-            if earlier_end > float(self.candidate[0]) + 1e-9:
-                self.candidate = [float(self.candidate[0]), earlier_end]
+            result["v4_1_search_direction"] = "earlier"
+            if update.changed:
+                self.candidate = event_bounds.interval
                 self.state = "NARROWING"
-                result["v4_1_search_direction"] = "earlier"
             else:
                 self.state = "LOCALIZING"
                 self.localization_index += 1
-                result["fallback"] = "v4_1_event_precedes_sample"
+                result["fallback"] = "v4_1_earlier_no_op_localizing"
             return
 
-        # 发生断裂 means the Agent owns the event interval: intersect the
-        # current candidate with the sampled clip, never accept model indexes.
-        event_range = [
-            max(float(self.candidate[0]), float(sample_range[0])),
-            min(float(self.candidate[1]), float(sample_range[1])),
-        ]
-        if event_range[0] >= event_range[1]:
-            result["validation_error"] = {
-                "code": "v4_1_empty_event_intersection",
-                "message": "发生断裂 clip 与候选区间没有有效交集",
-                "field": "clip_state",
-            }
-            self.conflict_count += 1
-            return
-        self.candidate = event_range
-        result["inferred_time_range"] = list(event_range)
+        # 发生断裂 means the program-owned event interval is the authoritative
+        # intersection; model indexes are never accepted in V4.1.
+        self.candidate = event_bounds.interval
+        result["inferred_time_range"] = event_bounds.interval
         result["v4_1_search_direction"] = "within"
         self.state = (
             "VERIFYING"
-            if event_range[1] - event_range[0] <= self.tolerance
+            if event_bounds.publishable(self.tolerance)
             else "NARROWING"
         )
+
+    def _ensure_event_bounds(self) -> V41EventBounds:
+        """Return task event bounds, initializing legacy test agents lazily."""
+        event_bounds = getattr(self, "event_bounds", None)
+        if isinstance(event_bounds, V41EventBounds):
+            return event_bounds
+        duration = float(self.video_meta.get("duration", 0.0))
+        event_bounds = V41EventBounds(0.0, duration)
+        self.event_bounds = event_bounds
+        return event_bounds
 
     def _expand_candidate(self, candidate: list[float]) -> list[float]:
         """Expand candidate interval by 1.5x around its center, clamped to [0, duration]."""
@@ -1121,22 +1138,32 @@ class IterativeAgent:
         best_model_output = best_result.get("model_output", {})
         best_frames = best_result.get("manifest") or best_result.get("frames", [])
 
-        # --- Fix 3b: use intersection of all positive evidence time ranges ---
-        all_ranges: list[list[float]] = []
-        for r in positive_rounds:
-            rng = r["result"].get("inferred_time_range")
-            if rng and len(rng) == 2:
-                all_ranges.append(rng)
-
         best_time_range: list[float] | None = None
-        if len(all_ranges) >= 2:
-            inter_start = max(r[0] for r in all_ranges)
-            inter_end = min(r[1] for r in all_ranges)
-            if inter_start < inter_end and inter_end - inter_start <= self.tolerance + 1e-9:
-                best_time_range = [inter_start, inter_end]
+        if self.visual_contract_version == "tensile-vlm/v4.1":
+            event_bounds = self._ensure_event_bounds()
+            if event_bounds.publishable(self.tolerance):
+                best_time_range = event_bounds.interval
+        else:
+            all_ranges: list[list[float]] = []
+            for r in positive_rounds:
+                rng = r["result"].get("inferred_time_range")
+                if rng and len(rng) == 2:
+                    all_ranges.append(rng)
+            if len(all_ranges) >= 2:
+                inter_start = max(r[0] for r in all_ranges)
+                inter_end = min(r[1] for r in all_ranges)
+                if (
+                    inter_start < inter_end
+                    and inter_end - inter_start <= self.tolerance + 1e-9
+                ):
+                    best_time_range = [inter_start, inter_end]
 
         # Frame range: inferred from best round.
-        best_frame_range = best_result.get("inferred_frame_range")
+        best_frame_range = (
+            best_result.get("inferred_frame_range")
+            if best_time_range is not None
+            else None
+        )
         if best_frame_range is None and best_time_range is not None and len(best_frames) >= 2:
             best_frame_range = self._time_range_to_frame_range(best_frames, best_time_range)
 
