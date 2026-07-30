@@ -23,7 +23,8 @@ wheels/
 .pytest_cache/
 
 # Runtime artifacts
-/data/08_runtime/
+/data/08_runtime/*
+!/data/08_runtime/README.md
 
 # API key file
 agent/.env
