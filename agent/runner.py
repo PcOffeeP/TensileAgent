@@ -151,6 +151,7 @@ def run_one(
     question: str | None = None,
     trace_task_id: str | None = None,
     agent_config_snapshot: dict[str, Any] | None = None,
+    include_internal_trace: bool = False,
 ) -> dict[str, Any]:
     """Run the agent on a single video and return a ``RunnerResult`` dict.
 
@@ -310,6 +311,11 @@ def run_one(
                 "digest": config["_runtime"].get("model_digest"),
             },
         }
+        if include_internal_trace:
+            envelope["evaluation_trace"] = {
+                "rounds": int(raw_result.get("rounds", len(raw_result.get("history", [])))),
+                "history": raw_result.get("history", []),
+            }
         envelope["response"] = project_result(envelope["result"], intent)
         return envelope
     except Exception as exc:

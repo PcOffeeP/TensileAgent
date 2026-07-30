@@ -25,18 +25,27 @@ def normalize_ground_truth(row: dict[str, Any]) -> dict[str, Any]:
         row.get("source_type")
         or row.get("type")
         or row.get("fracture_type")
+        or row.get("断裂模式")
         or ""
     ).strip()
-    source_location = row.get("location_canonical", row.get("location"))
+    source_location = row.get(
+        "location_canonical",
+        row.get("location", row.get("断裂位置")),
+    )
     special_case = source_type if source_type in SPECIAL_CASES else None
     if "界面脱粘" in source_type:
         mechanism = "界面脱粘"
     elif source_type == "齐根断裂":
         mechanism = None
-    elif source_type in FRACTURE_MECHANISMS:
-        mechanism = source_type
     else:
-        mechanism = None
+        mechanism = next(
+            (
+                value
+                for value in sorted(FRACTURE_MECHANISMS, key=len, reverse=True)
+                if value in source_type
+            ),
+            None,
+        )
 
     if "齐根断裂" in source_type:
         site = "grip_root"
@@ -69,10 +78,10 @@ def normalize_ground_truth(row: dict[str, Any]) -> dict[str, Any]:
         "fracture_site": site,
         "special_case": special_case,
         "fracture_time": _optional_number(
-            row.get("fracture_time", row.get("break_time"))
+            row.get("fracture_time", row.get("break_time", row.get("断裂时间点")))
         ),
         "duration": _optional_number(
-            row.get("duration", row.get("duration_seconds"))
+            row.get("duration", row.get("duration_seconds", row.get("视频时长")))
         ),
     }
 
@@ -81,7 +90,7 @@ def _optional_number(value: Any) -> float | None:
     if value is None or value == "":
         return None
     try:
-        return float(value)
+        return float(str(value).strip().removesuffix("s").strip())
     except (TypeError, ValueError):
         return None
 
