@@ -104,6 +104,10 @@ TENSILE_AGENT_V4_1_SYSTEM_PROMPT = (
     "区间搜索；无法判断不提供任何搜索方向，只能同区间重试或报告证据不足。"
     "fracture_mechanism 与 fracture_site 只用于最终汇总，临界未断裂中的值是 prospective "
     "线索，必须由发生断裂或已断裂证据确认。special_case 非 null 时不得输出普通阴性。\n\n"
+    "初始全视频 clip 仍只会稀疏选择最多 8 帧，一次全局“未断裂”不能证明整个视频无断裂。"
+    "全局“未断裂”后，程序会直接接管并依次执行五个固定重叠窗口的阴性覆盖；覆盖阶段无需"
+    "也不允许你自行选择采样区间或请求 terminate(no_fracture)。只有五个窗口都得到合法"
+    "“未断裂”后，程序才会直接生成 no_fracture 结果。\n\n"
     "terminate 为 fracture 时，fracture_type 只能是韧性断裂、脆性断裂、界面脱粘、"
     "爆炸性断裂、半脆半韧断裂之一，location 只能是 inside_gauge、"
     "outside_gauge_non_root、grip_root 之一，并引用至少两个有效 evidence_rounds。"
@@ -122,6 +126,10 @@ def build_tensile_agent_user_context(
     current_round: int,
     candidate: list[float],
     history: list[dict],
+    *,
+    state: str | None = None,
+    coverage_index: int = 0,
+    next_forced_sample_range: list[float] | None = None,
 ) -> str:
     """Build the per-round user prompt for the TensileAgent."""
     duration = video_meta.get("duration", 0.0)
@@ -183,6 +191,20 @@ def build_tensile_agent_user_context(
             "[当前状态]",
             f"当前候选区间: {candidate}s",
             f"区间宽度: {width:.2f}s",
+        ]
+    )
+    if state is not None:
+        lines.append(f"内部状态: {state}")
+    if state == "COVERAGE":
+        lines.extend(
+            [
+                f"覆盖进度: {coverage_index}/5",
+                f"下一固定窗口: {next_forced_sample_range}s",
+                "下一动作由程序直接执行，无需 Planner 决策。",
+            ]
+        )
+    lines.extend(
+        [
             "",
             mapping_note,
             "",

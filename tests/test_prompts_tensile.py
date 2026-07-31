@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from agent.prompts import (
     TENSILE_AGENT_SYSTEM_PROMPT,
+    TENSILE_AGENT_V4_1_SYSTEM_PROMPT,
     build_tensile_agent_user_context,
     build_sample_and_infer_prompt,
 )
@@ -12,6 +13,12 @@ def test_tensile_agent_system_prompt_contains_rules():
     assert "sample_and_infer" in TENSILE_AGENT_SYSTEM_PROMPT
     assert "terminate" in TENSILE_AGENT_SYSTEM_PROMPT
     assert "必须通过 `tool_calls` 输出你的决策" in TENSILE_AGENT_SYSTEM_PROMPT
+
+
+def test_v4_1_system_prompt_explains_program_owned_negative_coverage():
+    assert "五个固定重叠窗口" in TENSILE_AGENT_V4_1_SYSTEM_PROMPT
+    assert "一次全局“未断裂”不能证明整个视频无断裂" in TENSILE_AGENT_V4_1_SYSTEM_PROMPT
+    assert "覆盖阶段无需也不允许你自行选择采样区间" in TENSILE_AGENT_V4_1_SYSTEM_PROMPT
 
 
 def test_build_tensile_agent_user_context_contains_video_meta():
@@ -55,6 +62,31 @@ def test_build_tensile_agent_user_context_includes_history():
     assert "evidence_index" in TENSILE_AGENT_SYSTEM_PROMPT
     assert "[0.0, 100.0]s" in context
     assert "[48.57, 51.43]s" in context
+
+
+def test_v4_1_coverage_context_exposes_progress_and_next_window():
+    context = build_tensile_agent_user_context(
+        video_meta={
+            "video_id": "v001",
+            "duration": 40.0,
+            "fps": 30.0,
+            "total_frames": 1200,
+        },
+        config={
+            "agent": {"tolerance_seconds": 1.0, "max_rounds": 10},
+            "backend": {"contract_version": "tensile-vlm/v4.1"},
+        },
+        current_round=2,
+        candidate=[0.0, 40.0],
+        history=[],
+        state="COVERAGE",
+        coverage_index=0,
+        next_forced_sample_range=[0.0, 10.0],
+    )
+    assert "内部状态: COVERAGE" in context
+    assert "覆盖进度: 0/5" in context
+    assert "下一固定窗口: [0.0, 10.0]s" in context
+    assert "下一动作由程序直接执行" in context
 
 
 def test_build_sample_and_infer_prompt_has_required_elements():

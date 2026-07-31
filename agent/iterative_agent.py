@@ -294,6 +294,36 @@ class IterativeAgent:
                 state=self.state,
                 candidate=list(self.candidate),
             )
+            scheduled = self._next_program_owned_sample()
+            if scheduled is not None:
+                sample_range, scheduler_source = scheduled
+                internal_result = self._execute_sample_round(
+                    round_idx=round_idx,
+                    tool_args={
+                        "sample_range": sample_range,
+                        "task_mode": "analyze",
+                    },
+                    message=None,
+                    source=scheduler_source,
+                )
+                terminal_result = self._program_owned_terminal_result(internal_result)
+                if terminal_result is not None:
+                    self._persist_summary(terminal_result)
+                    self._emit("video_finished", result=terminal_result)
+                    return terminal_result
+
+                current_context = {
+                    "role": "user",
+                    "content": self._build_user_context(
+                        current_round=min(round_idx + 2, self.max_rounds)
+                    ),
+                }
+                if messages and messages[-1].get("role") == "user":
+                    messages[-1] = current_context
+                else:
+                    messages.append(current_context)
+                continue
+
             try:
                 response = self.llm.chat_with_tools(
                     messages=messages,
@@ -418,39 +448,12 @@ class IterativeAgent:
                     tool_args["sample_range"] = self._coverage_ranges()[self.coverage_index]
                 elif self.state == "LOCALIZING" and self.localization_index < 5:
                     tool_args["sample_range"] = self._coverage_ranges()[self.localization_index]
-                sample_range = list(tool_args["sample_range"])
-                self._emit(
-                    "sample_and_infer_started",
-                    round=round_idx,
-                    display_round=round_idx + 1,
-                    sample_range=sample_range,
+                internal_result = self._execute_sample_round(
+                    round_idx=round_idx,
+                    tool_args=tool_args,
+                    message=message,
+                    source="planner",
                 )
-
-                internal_result = self._execute_sample_and_infer(tool_args, round_idx)
-                self._emit(
-                    "sample_and_infer_finished",
-                    round=round_idx,
-                    display_round=round_idx + 1,
-                    model_output=self._to_json_value(internal_result.get("model_output")),
-                    inferred_time_range=internal_result.get("inferred_time_range"),
-                    inferred_frame_range=internal_result.get("inferred_frame_range"),
-                    validation_error=internal_result.get("validation_error"),
-                    round_confidence_level=internal_result.get("round_confidence_level"),
-                )
-
-                previous_state = self.state
-                previous_candidate = list(self.candidate)
-                self._transition(internal_result, round_idx)
-                self._emit(
-                    "state_updated",
-                    round=round_idx,
-                    display_round=round_idx + 1,
-                    previous_state=previous_state,
-                    state=self.state,
-                    previous_candidate=previous_candidate,
-                    candidate=list(self.candidate),
-                )
-                self._log_round(round_idx, message, internal_result)
 
                 # Build compact result for LLM tool response.
                 compact = self._build_compact_result(internal_result)
@@ -473,12 +476,8 @@ class IterativeAgent:
 
                 messages.append({
                     "role": "user",
-                    "content": build_tensile_agent_user_context(
-                        video_meta=self.video_meta,
-                        config=self.config,
-                        current_round=min(round_idx + 2, self.max_rounds),
-                        candidate=self.candidate,
-                        history=self.history,
+                    "content": self._build_user_context(
+                        current_round=min(round_idx + 2, self.max_rounds)
                     ),
                 })
                 continue
@@ -503,6 +502,21 @@ class IterativeAgent:
     # ------------------------------------------------------------------
     # Message builders
     # ------------------------------------------------------------------
+    def _build_user_context(self, current_round: int) -> str:
+        next_forced_range = None
+        if self.state == "COVERAGE" and self.coverage_index < 5:
+            next_forced_range = self._coverage_ranges()[self.coverage_index]
+        return build_tensile_agent_user_context(
+            video_meta=self.video_meta,
+            config=self.config,
+            current_round=current_round,
+            candidate=self.candidate,
+            history=self.history,
+            state=self.state,
+            coverage_index=self.coverage_index,
+            next_forced_sample_range=next_forced_range,
+        )
+
     def _build_system_messages(self) -> list[dict[str, Any]]:
         """Return the initial message list with system + first user context."""
         system_prompt = (
@@ -514,15 +528,117 @@ class IterativeAgent:
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": build_tensile_agent_user_context(
-                    video_meta=self.video_meta,
-                    config=self.config,
-                    current_round=1,
-                    candidate=self.candidate,
-                    history=self.history,
-                ),
+                "content": self._build_user_context(current_round=1),
             },
         ]
+
+    def _next_program_owned_sample(self) -> tuple[list[float], str] | None:
+        """Return the next V4.1 sample that must bypass the decision model."""
+        if self.visual_contract_version != "tensile-vlm/v4.1":
+            return None
+        if self.pending_recheck_range is not None:
+            return list(self.pending_recheck_range), "mandatory_recheck"
+        if self.state == "COVERAGE" and self.coverage_index < 5:
+            return self._coverage_ranges()[self.coverage_index], "coverage_scheduler"
+        return None
+
+    def _execute_sample_round(
+        self,
+        round_idx: int,
+        tool_args: dict[str, Any],
+        message: Any | None,
+        source: str,
+    ) -> dict[str, Any]:
+        """Execute, transition and record one planner- or program-owned sample."""
+        sample_range = list(tool_args["sample_range"])
+        if source != "planner":
+            self._emit(
+                "scheduler_action",
+                round=round_idx,
+                display_round=round_idx + 1,
+                source=source,
+                tool_name="sample_and_infer",
+                tool_args=self._to_json_value(tool_args),
+            )
+        self._emit(
+            "sample_and_infer_started",
+            round=round_idx,
+            display_round=round_idx + 1,
+            source=source,
+            sample_range=sample_range,
+        )
+
+        internal_result = self._execute_sample_and_infer(tool_args, round_idx)
+        self._emit(
+            "sample_and_infer_finished",
+            round=round_idx,
+            display_round=round_idx + 1,
+            source=source,
+            model_output=self._to_json_value(internal_result.get("model_output")),
+            inferred_time_range=internal_result.get("inferred_time_range"),
+            inferred_frame_range=internal_result.get("inferred_frame_range"),
+            validation_error=internal_result.get("validation_error"),
+            round_confidence_level=internal_result.get("round_confidence_level"),
+        )
+
+        previous_state = self.state
+        previous_candidate = list(self.candidate)
+        self._transition(internal_result, round_idx)
+        self._emit(
+            "state_updated",
+            round=round_idx,
+            display_round=round_idx + 1,
+            source=source,
+            previous_state=previous_state,
+            state=self.state,
+            previous_candidate=previous_candidate,
+            candidate=list(self.candidate),
+        )
+        self._log_round(
+            round_idx,
+            message,
+            internal_result,
+            scheduled_tool=(
+                {
+                    "name": "sample_and_infer",
+                    "arguments": self._to_json_value(tool_args),
+                    "source": source,
+                }
+                if message is None
+                else None
+            ),
+        )
+        return internal_result
+
+    def _program_owned_terminal_result(
+        self,
+        internal_result: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Finalize states whose terminal decision is fully code-owned."""
+        if self.state in {"TERMINATED", "NO_FRACTURE"}:
+            return self._force_terminate()
+
+        output = internal_result.get("model_output") or {}
+        if output.get("clip_state") != "无法判断":
+            return None
+
+        special_case = output.get("special_case")
+        if special_case == "未夹紧":
+            reason = "not_clamped"
+        elif special_case == "视频异常":
+            reason = "video_anomaly"
+        else:
+            reason = "visual_indeterminate"
+        if not self._has_consistent_special_recheck(reason):
+            return None
+        return self._finalize(
+            self._build_final_args(
+                {
+                    "status": "unrecognized",
+                    "unrecognized_reason": reason,
+                }
+            )
+        )
 
     def _assistant_tool_message(
         self,
@@ -1813,22 +1929,32 @@ class IterativeAgent:
     def _log_round(
         self,
         round_idx: int,
-        message: Any,
+        message: Any | None,
         result: dict[str, Any] | None = None,
+        *,
+        scheduled_tool: dict[str, Any] | None = None,
     ) -> None:
         """Record one round for final output and debugging."""
-        log_entry: dict[str, Any] = {
-            "round": round_idx,
-            "model": self.llm.model_name,
-            "reasoning": message.content or "",
-            "tool_calls": [
-                {
-                    "name": tc.function.name,
-                    "arguments": json.loads(tc.function.arguments),
-                }
-                for tc in (message.tool_calls or [])
-            ],
-        }
+        if message is None:
+            log_entry: dict[str, Any] = {
+                "round": round_idx,
+                "model": "program/scheduler",
+                "reasoning": "",
+                "tool_calls": [scheduled_tool] if scheduled_tool is not None else [],
+            }
+        else:
+            log_entry = {
+                "round": round_idx,
+                "model": self.llm.model_name,
+                "reasoning": message.content or "",
+                "tool_calls": [
+                    {
+                        "name": tc.function.name,
+                        "arguments": json.loads(tc.function.arguments),
+                    }
+                    for tc in (message.tool_calls or [])
+                ],
+            }
         if result is not None:
             # Freeze this round as a snapshot so later candidate/state updates
             # cannot rewrite accepted evidence.
