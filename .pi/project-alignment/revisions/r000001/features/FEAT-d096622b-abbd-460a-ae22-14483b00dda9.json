@@ -1,0 +1,57 @@
+{
+  "candidateId": "CAND-015",
+  "stableKey": "job:scripts/run_strategy_ab.py + score_strategy_ab.py + run_local_model_ab.py",
+  "name": "Agent 策略 A/B/C 与本地模型对照实验",
+  "featureId": "FEAT-d096622b-abbd-460a-ae22-14483b00dda9",
+  "status": "active",
+  "aliases": [],
+  "derivedFrom": [],
+  "entryPoints": [
+    {
+      "kind": "job",
+      "path": "scripts/run_strategy_ab.py"
+    },
+    {
+      "kind": "job",
+      "path": "scripts/score_strategy_ab.py"
+    },
+    {
+      "kind": "job",
+      "path": "scripts/run_local_model_ab.py"
+    }
+  ],
+  "claims": {
+    "observed": [
+      {
+        "claimId": "CLM-L80-MARKER-OBS01",
+        "kind": "observed",
+        "statement": "LOCKED80 一次性由代码强制：首次启动创建 LOCKED80_STARTED.json 标记并绑定 results_root，root 不同即拒绝二次主运行，首启必须显式携带确认标志。",
+        "evidenceRefs": [
+          {
+            "kind": "source",
+            "path": "scripts/run_strategy_ab.py",
+            "statement": "run_strategy_ab.py:88-108 _guard_locked_run",
+            "sha256": "6c8a3763fb61b38ad4d958f0e58c5ecf319ccf14634b9643ce7b625f693de50c"
+          }
+        ],
+        "confidence": "high",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "45b2ed3e46fe89a012742a10c3f740f21ecb7b6066ef207743190313942eb9cd"
+      }
+    ],
+    "expected": [],
+    "inference": [],
+    "unknown": []
+  },
+  "assessments": {
+    "logicCompleteness": {
+      "judgment": "aligned",
+      "evidenceRefs": [
+        "scripts/run_strategy_ab.py:88-108"
+      ],
+      "confidence": "medium",
+      "recommendation": "keep"
+    }
+  },
+  "gaps": []
+}

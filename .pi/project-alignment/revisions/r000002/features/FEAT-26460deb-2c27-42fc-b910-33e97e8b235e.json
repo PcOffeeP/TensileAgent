@@ -1,0 +1,98 @@
+{
+  "candidateId": "CAND-001",
+  "stableKey": "cli:agent/run.py --video",
+  "name": "CLI 单视频断裂分析",
+  "featureId": "FEAT-26460deb-2c27-42fc-b910-33e97e8b235e",
+  "status": "active",
+  "aliases": [],
+  "derivedFrom": [],
+  "entryPoints": [
+    {
+      "kind": "cli",
+      "path": "agent/run.py"
+    }
+  ],
+  "claims": {
+    "observed": [
+      {
+        "claimId": "CLM-CLI-FAIL-OBS01",
+        "kind": "observed",
+        "statement": "CLI 单视频分析失败时 exit 1 且不写结果文件，但 events 目录与裁剪片段等部分产物无论成败都会残留。",
+        "evidenceRefs": [
+          {
+            "kind": "source",
+            "path": "agent/run.py",
+            "statement": "run.py:67-80 失败 exit1 不写 output；67-69 events 始终写入",
+            "sha256": "19ba6d7a58ab8ffac33f894608613da47369f5d6da2c2b562167934d5a08011a"
+          }
+        ],
+        "confidence": "high",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "1df27b241bd417c303f5fa745c7f92149fada22e15d8927be8a5db81564cfc2a"
+      },
+      {
+        "claimId": "CLM-CLI-UNREC-OBS02",
+        "kind": "observed",
+        "statement": "存在同词两义：输入层拒绝（unsupported_intent/prompt_injection）导致 ok=False exit 1 不落盘；视频层证据不足 status=unrecognized 被包为 ok=True exit 0 正常落盘。",
+        "evidenceRefs": [
+          {
+            "kind": "source",
+            "path": "agent/interaction.py",
+            "statement": "interaction.py:52-99 输入层意图拒绝",
+            "sha256": "9459403a7b3e717b81fec46f14c8fa1fc127b52462e98f8d8da98c736cda3a82"
+          },
+          {
+            "kind": "source",
+            "path": "agent/runner.py",
+            "statement": "runner.py:266-290 视频层 unrecognized 包为 ok=True",
+            "sha256": "194f66899dac43c6aa16e4a32f3296a3de5202350f49a23776c1098df4453061"
+          }
+        ],
+        "confidence": "high",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "d9322ab3ab477dcaf1bbfe72e7404c1878e589b4d361ed2282f1fe21ac6942bb"
+      }
+    ],
+    "expected": [
+      {
+        "claimId": "CLM-CLI-UNREC-EXP01",
+        "kind": "expected",
+        "statement": "用户预期：当前 unrecognized 主要指视频层无法从视频中分析出有效结果；输入层拒绝（无关问题/prompt 注入）与视频层无法识别应在结果与输出中更明确地区分（如不同 status 值或明确说明）。",
+        "evidenceRefs": [],
+        "confidence": "high",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "109025c936c06182e3bcef26bf244343d619a134e7729a7abc12af78f334459b"
+      }
+    ],
+    "inference": [],
+    "unknown": []
+  },
+  "assessments": {
+    "testValidity": {
+      "judgment": "partial",
+      "evidenceRefs": [
+        "tests/test_run_cli.py"
+      ],
+      "confidence": "high",
+      "recommendation": "deepen"
+    },
+    "goalAlignment": {
+      "judgment": "partial",
+      "evidenceRefs": [
+        "GAP-UNRECOGNIZED-SEMANTICS"
+      ],
+      "confidence": "high",
+      "recommendation": "hloop"
+    }
+  },
+  "gaps": [
+    {
+      "gapId": "GAP-UNRECOGNIZED-SEMANTICS",
+      "classification": "Confirmed Gap",
+      "featureRef": "CAND-001",
+      "observedClaimId": "CLM-CLI-UNREC-OBS02",
+      "expectedClaimId": "CLM-CLI-UNREC-EXP01",
+      "rationale": "已观察：同词两义、退出码与落盘语义不同；用户已确认预期：两类无法识别应更明确区分，且视频层语义保持。二者冲突。"
+    }
+  ]
+}

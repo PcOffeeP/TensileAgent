@@ -1,0 +1,134 @@
+{
+  "candidateId": "CAND-005",
+  "stableKey": "ui:web/src/components/UploadPanel.tsx 批量",
+  "name": "Web 批量上传分析（后台排队）",
+  "featureId": "FEAT-e7e3976e-6f5f-4574-805b-2de7b0c6e20d",
+  "status": "active",
+  "aliases": [],
+  "derivedFrom": [],
+  "entryPoints": [
+    {
+      "kind": "ui",
+      "path": "web/src/components/UploadPanel.tsx"
+    },
+    {
+      "kind": "api",
+      "path": "agent/web_api.py"
+    }
+  ],
+  "claims": {
+    "observed": [
+      {
+        "claimId": "CLM-BATCH-NOROLLBACK-OBS01",
+        "kind": "observed",
+        "statement": "POST /api/tasks/batch 在一次请求内顺序创建任务并入同一串行队列；循环无逐文件 try/except，中途异常时整体报错且已创建任务不回滚、无逐文件失败回报，前端仅 alert。",
+        "evidenceRefs": [
+          {
+            "kind": "source",
+            "path": "agent/web_api.py",
+            "statement": "web_api.py:871-907 batch 端点无部分失败处理",
+            "sha256": "2a51abfc0f402d419271951a00d2063f47ed7edd2d9d747620d7538e30bba88b"
+          }
+        ],
+        "confidence": "high",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "5e78383d000f841c63d4c8a66e56943a774d549a805f39765e5f10dfc7f0dc2b"
+      },
+      {
+        "claimId": "CLM-BATCH-NOGROUP-OBS02",
+        "kind": "observed",
+        "statement": "批量创建的任务没有任何批次标识/分组记录；UI 明示批量模式不提供实时过程可视化，创建后仅刷新任务列表。",
+        "evidenceRefs": [
+          {
+            "kind": "source",
+            "path": "web/src/components/UploadPanel.tsx",
+            "statement": "UploadPanel.tsx:63-66 仅 onTaskCreated 刷新；186 文案明示无实时可视化",
+            "sha256": "6e52e31cb2882e3508869c1b2b15370e69aa0ff1af8bcdb0536f60940bedaeb7"
+          }
+        ],
+        "confidence": "high",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "5bfece210a9cdda173a38574b3d23dd0fe4fd52f1887b57ae48de2981c6ce4e1"
+      }
+    ],
+    "expected": [
+      {
+        "claimId": "CLM-BATCH-GROUP-EXP01",
+        "kind": "expected",
+        "statement": "用户预期：批量创建不回滚可以接受，但必须完整保存记录；同一批次的任务必须有批次标识，且在 Web 界面可以清楚地看到批次分组（不仅是后台记录）。",
+        "evidenceRefs": [],
+        "confidence": "high",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "41236af85f88230cb53de8b7fe8b05e5e00bfbb001765494e122def2694b7232"
+      }
+    ],
+    "inference": [],
+    "unknown": []
+  },
+  "assessments": {
+    "goalAlignment": {
+      "judgment": "partial",
+      "evidenceRefs": [
+        "GAP-BATCH-VISIBILITY"
+      ],
+      "confidence": "high",
+      "recommendation": "hloop"
+    },
+    "logicCompleteness": {
+      "judgment": "partial",
+      "evidenceRefs": [
+        "agent/web_api.py:884-905"
+      ],
+      "confidence": "high",
+      "recommendation": "deepen"
+    }
+  },
+  "logicContract": {
+    "actors": [
+      "项目研究人员"
+    ],
+    "outcome": "多文件批量创建任务，后台串行执行",
+    "preconditions": [
+      "配置完成"
+    ],
+    "branches": [
+      "整体成功",
+      "中途异常整体报错（已建任务保留）"
+    ],
+    "permissions": [
+      "无鉴权"
+    ],
+    "stateTransitions": [
+      "每任务 queued -> running -> completed/failed"
+    ],
+    "sideEffects": [
+      "上传文件落盘",
+      "运行时产物"
+    ],
+    "failureSemantics": [
+      "快照无效整体 503",
+      "中途失败无回滚无逐项回报"
+    ],
+    "externalDependencies": [
+      "外部视觉推理服务"
+    ],
+    "invariants": [
+      "与单任务共用同一串行队列",
+      "同批共用同一模型快照"
+    ],
+    "limitations": [
+      "无批次标识",
+      "无实时可视化"
+    ]
+  },
+  "gaps": [
+    {
+      "gapId": "GAP-BATCH-VISIBILITY",
+      "classification": "Confirmed Gap",
+      "featureRef": "CAND-005",
+      "observedClaimId": "CLM-BATCH-NOGROUP-OBS02",
+      "expectedClaimId": "CLM-BATCH-GROUP-EXP01",
+      "rationale": "已观察：批量任务无批次标识、无分组可见性；用户已确认预期：需批次标识且 Web 界面清晰可见。二者冲突。"
+    }
+  ]
+}

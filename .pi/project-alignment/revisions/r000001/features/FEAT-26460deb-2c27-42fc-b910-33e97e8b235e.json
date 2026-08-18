@@ -1,0 +1,23 @@
+{
+  "candidateId": "CAND-001",
+  "stableKey": "cli:agent/run.py --video",
+  "name": "CLI 单视频断裂分析",
+  "featureId": "FEAT-26460deb-2c27-42fc-b910-33e97e8b235e",
+  "status": "active",
+  "aliases": [],
+  "derivedFrom": [],
+  "entryPoints": [
+    {
+      "kind": "cli",
+      "path": "agent/run.py"
+    }
+  ],
+  "claims": {
+    "observed": [],
+    "expected": [],
+    "inference": [],
+    "unknown": []
+  },
+  "assessments": {},
+  "gaps": []
+}

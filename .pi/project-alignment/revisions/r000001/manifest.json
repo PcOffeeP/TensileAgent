@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "alignmentRevision": 1,
+  "createdAt": "2026-08-18T03:46:55.019Z",
+  "sourceRevision": {
+    "gitRootHash": "a872c3aab55c99c9e4df06e0eb6a62b1d9169c32fa034b0ed7d917bc5325ae27",
+    "head": "4467174b45f10be858322f088df87abf88d49d39",
+    "branchHash": "0d6e4079e36703ebd37c00722f5891d28b0e2811dc114b129215123adcce3605",
+    "dirty": true,
+    "sourceHash": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+    "contextHash": "b1750a380378626807ad94c526cbb5406aa71a1eb36ac139f748b66029a7f924",
+    "fileCount": 170
+  },
+  "proposalDigest": "42a208cf4e6a6073d2d001d9e89ca3c688c930b1732e89c52abc423654fe50b6",
+  "configHash": "fd1d32dafc65aa38324fcdfdc10aa2a7f76065c37d48a65c3aa0228579d2660b",
+  "artifacts": [
+    {
+      "path": "confirmations.json",
+      "sha256": "a37b8c735f5f9b303f284a0d057a242d58c917dcbbedf26d51f9c4d53951b0a7",
+      "size": 1521
+    },
+    {
+      "path": "feature-index.json",
+      "sha256": "26b5335c6d3ffc7c12347b34e4b98f9dc0a416b97b86c08c0c9c8de98eecdef6",
+      "size": 4425
+    },
+    {
+      "path": "features/FEAT-0cf89152-6539-4879-af66-2530e8c40fd7.json",
+      "sha256": "237df351c76beec209fc6e10cedafc9fb64d792462ac07438f5f3baf8a7d4e06",
+      "size": 591
+    },
+    {
+      "path": "features/FEAT-1bfd397b-d89b-462b-bd0e-e24f0815a727.json",
+      "sha256": "f406418b949fef9e61addce1e66b8c4131c6d3e0445b98df45f4e62f4e781d70",
+      "size": 593
+    },
+    {
+      "path": "features/FEAT-26460deb-2c27-42fc-b910-33e97e8b235e.json",
+      "sha256": "c759bb2c428fac2edc2ead2e15a4f2c62caf49801972c467724e58e24111eb12",
+      "size": 453
+    },
+    {
+      "path": "features/FEAT-447dd794-3bec-48e7-bf9f-4d3bf50f73c3.json",
+      "sha256": "f54f81070f4b8b2494db88473886260c4fc661277de4611d888c0d11824f3ccd",
+      "size": 472
+    },
+    {
+      "path": "features/FEAT-635ea75d-dff3-4bfa-bce5-d709d96dc49e.json",
+      "sha256": "f00b46837853f845a8dbf4f3f33f5fd88fec62a2fe3178cd4a88d10f6d52b88a",
+      "size": 4816
+    },
+    {
+      "path": "features/FEAT-678a0dd2-2096-44a8-aafc-17cdafb53e99.json",
+      "sha256": "039952633ed1fd69e9a2e39111c53d2b7b1d5a351257d246d66fbb69180b189d",
+      "size": 488
+    },
+    {
+      "path": "features/FEAT-8241f2ff-425b-421a-b745-037461d35580.json",
+      "sha256": "77d1ba6108408b84e2645a7e41ce999b9961edef42bd46d0b154f04c29897a5e",
+      "size": 452
+    },
+    {
+      "path": "features/FEAT-8fa2baff-0681-444a-abf6-9a1b38da5a21.json",
+      "sha256": "a7078f10705f2b791b569338bf418911e1842fc191b41e97f45d13d8536a0844",
+      "size": 463
+    },
+    {
+      "path": "features/FEAT-996f6cfb-ef72-4cf8-ad29-600ad1b15a66.json",
+      "sha256": "3054c7c49d6af4226d412852d5e949984b33caddf5d07aa6da200590e924928f",
+      "size": 803
+    },
+    {
+      "path": "features/FEAT-a7db687c-ad15-4571-b9f2-802b23e2c374.json",
+      "sha256": "0c1450793bb2852006ea7012748965a40ce085d642ec8a1e5f98c82d24f23049",
+      "size": 2056
+    },
+    {
+      "path": "features/FEAT-bd53ebed-98ed-4dc7-a785-6bd33895bdc9.json",
+      "sha256": "97c4572ace47a90ac09103fb3fa1afd98ae1010e6780eef9872cda2f235732ae",
+      "size": 3388
+    },
+    {
+      "path": "features/FEAT-bf2e3c72-3e35-4821-9cb2-1fc1b6f51f3d.json",
+      "sha256": "4d44dbe0f9ae22d74c374d9f8299996ba0e23a1a196da81fb8e503516f3dbb31",
+      "size": 468
+    },
+    {
+      "path": "features/FEAT-bfa32065-3a6e-433e-a368-26a236d068b2.json",
+      "sha256": "d28fdb4e71105dba2e88197ffe3dfdd893475dfabad488892b70617257b97dc6",
+      "size": 5391
+    },
+    {
+      "path": "features/FEAT-d096622b-abbd-460a-ae22-14483b00dda9.json",
+      "sha256": "aa57e57104fd9de60b536c2917ae42389a191a5d48d8bea56e8acb7ba7e8e2fd",
+      "size": 1719
+    },
+    {
+      "path": "features/FEAT-da15b771-1082-45c7-97d0-c8db338bc824.json",
+      "sha256": "9850e313b41d2a3d2e5af21c86092325d26aef291004ff62050638884e5162fb",
+      "size": 5054
+    },
+    {
+      "path": "features/FEAT-e7e3976e-6f5f-4574-805b-2de7b0c6e20d.json",
+      "sha256": "3d3f4e652ac182d6bd9095938e370544b4e996353cf9d85aeaeb2239b609b0fc",
+      "size": 4479
+    },
+    {
+      "path": "handoffs/HANDOFF-BATCH-VISIBILITY.json",
+      "sha256": "7a15e621dfcabac413b3b360c0aecf4906ccbf9536cae9d647ae103411e31f56",
+      "size": 2371
+    },
+    {
+      "path": "handoffs/HANDOFF-DEL-CONFIRM.json",
+      "sha256": "1c0864ec4b8f19098a09f80bc6f3684299282dc062bc4257c9b792571a74ebc0",
+      "size": 2582
+    },
+    {
+      "path": "handoffs/HANDOFF-WEB-CONCURRENCY.json",
+      "sha256": "81f91c400b0930d54e21038e762c722397a614aa0257770d21b0948ba53e8353",
+      "size": 2421
+    },
+    {
+      "path": "reports/alignment.md",
+      "sha256": "2ebc50aa43af4cab3559af3982fafd7e8a74df169e890c85380e63cadcc39e67",
+      "size": 1179
+    }
+  ]
+}

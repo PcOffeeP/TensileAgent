@@ -1,0 +1,35 @@
+{
+  "candidateId": "CAND-016",
+  "stableKey": "job:scripts/run_v2_comparison_batch.py + scripts/generate_delivery_bundle.py",
+  "name": "V2 回滚对比与交付 bundle 生成/验证",
+  "featureId": "FEAT-996f6cfb-ef72-4cf8-ad29-600ad1b15a66",
+  "status": "active",
+  "aliases": [],
+  "derivedFrom": [],
+  "entryPoints": [
+    {
+      "kind": "job",
+      "path": "scripts/run_v2_comparison_batch.py"
+    },
+    {
+      "kind": "job",
+      "path": "scripts/finalize_v2_comparison.py"
+    },
+    {
+      "kind": "job",
+      "path": "scripts/generate_delivery_bundle.py"
+    },
+    {
+      "kind": "job",
+      "path": "scripts/validate_delivery_bundle.py"
+    }
+  ],
+  "claims": {
+    "observed": [],
+    "expected": [],
+    "inference": [],
+    "unknown": []
+  },
+  "assessments": {},
+  "gaps": []
+}

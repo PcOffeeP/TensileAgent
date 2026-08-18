@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "alignmentRevision": 2,
+  "features": [
+    {
+      "featureId": "FEAT-26460deb-2c27-42fc-b910-33e97e8b235e",
+      "stableKey": "cli:agent/run.py --video",
+      "name": "CLI 单视频断裂分析",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-bf2e3c72-3e35-4821-9cb2-1fc1b6f51f3d",
+      "stableKey": "cli:agent/run.py --videos-dir/--input-list",
+      "name": "CLI 批量断裂分析",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-447dd794-3bec-48e7-bf9f-4d3bf50f73c3",
+      "stableKey": "cli:agent/run.py --mock",
+      "name": "CLI Mock 模式分析（无需真实服务）",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-bfa32065-3a6e-433e-a368-26a236d068b2",
+      "stableKey": "ui:web/src/components/UploadPanel.tsx 单视频",
+      "name": "Web 单视频分析工作台",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-e7e3976e-6f5f-4574-805b-2de7b0c6e20d",
+      "stableKey": "ui:web/src/components/UploadPanel.tsx 批量",
+      "name": "Web 批量上传分析（后台排队）",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-635ea75d-dff3-4bfa-bce5-d709d96dc49e",
+      "stableKey": "ui:web/src/components/HistoryView.tsx",
+      "name": "Web 历史任务列表（搜索/筛选/查看/删除）",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-1bfd397b-d89b-462b-bd0e-e24f0815a727",
+      "stableKey": "ui:web/src/components/ActiveAnalysisWorkspace.tsx 导出",
+      "name": "Web 分析结果导出 (JSON/CSV)",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-a7db687c-ad15-4571-b9f2-802b23e2c374",
+      "stableKey": "ui:web/src/components/ConfigView.tsx + SetupDialog.tsx",
+      "name": "Web 决策模型配置与切换",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-0cf89152-6539-4879-af66-2530e8c40fd7",
+      "stableKey": "ui:web/src/components/DiagnosticsPanel.tsx LLM传输回放",
+      "name": "Web LLM 传输记录回放与导出",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-8241f2ff-425b-421a-b745-037461d35580",
+      "stableKey": "cli:agent/setup.py",
+      "name": "CLI 决策模型配置向导",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-8fa2baff-0681-444a-abf6-9a1b38da5a21",
+      "stableKey": "cli:agent/doctor.py",
+      "name": "运行时预检/健康检查 (Doctor)",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-678a0dd2-2096-44a8-aafc-17cdafb53e99",
+      "stableKey": "cli:agent/http_vlm_stub.py",
+      "name": "本地视觉协议 Stub 服务（联调工具）",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-bd53ebed-98ed-4dc7-a785-6bd33895bdc9",
+      "stableKey": "job:scripts/run_v4_1_acceptance_batch.py",
+      "name": "V4.1 批量验收批处理（可恢复）",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-da15b771-1082-45c7-97d0-c8db338bc824",
+      "stableKey": "job:scripts/score_v4_1_acceptance.py + finalize_v4_1_stage_g.py + verify_v4_1_acceptance.py",
+      "name": "V4.1 验收验证/评分/Stage G 结题",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-d096622b-abbd-460a-ae22-14483b00dda9",
+      "stableKey": "job:scripts/run_strategy_ab.py + score_strategy_ab.py + run_local_model_ab.py",
+      "name": "Agent 策略 A/B/C 与本地模型对照实验",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    },
+    {
+      "featureId": "FEAT-996f6cfb-ef72-4cf8-ad29-600ad1b15a66",
+      "stableKey": "job:scripts/run_v2_comparison_batch.py + scripts/generate_delivery_bundle.py",
+      "name": "V2 回滚对比与交付 bundle 生成/验证",
+      "status": "active",
+      "aliases": [],
+      "derivedFrom": []
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "candidateId": "CAND-012",
+  "stableKey": "cli:agent/http_vlm_stub.py",
+  "name": "本地视觉协议 Stub 服务（联调工具）",
+  "featureId": "FEAT-678a0dd2-2096-44a8-aafc-17cdafb53e99",
+  "status": "active",
+  "aliases": [],
+  "derivedFrom": [],
+  "entryPoints": [
+    {
+      "kind": "cli",
+      "path": "agent/http_vlm_stub.py"
+    }
+  ],
+  "claims": {
+    "observed": [],
+    "expected": [],
+    "inference": [],
+    "unknown": []
+  },
+  "assessments": {},
+  "gaps": []
+}

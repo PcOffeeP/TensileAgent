@@ -1,0 +1,90 @@
+{
+  "candidateId": "CAND-013",
+  "stableKey": "job:scripts/run_v4_1_acceptance_batch.py",
+  "name": "V4.1 批量验收批处理（可恢复）",
+  "featureId": "FEAT-bd53ebed-98ed-4dc7-a785-6bd33895bdc9",
+  "status": "active",
+  "aliases": [],
+  "derivedFrom": [],
+  "entryPoints": [
+    {
+      "kind": "job",
+      "path": "scripts/run_v4_1_acceptance_batch.py"
+    }
+  ],
+  "claims": {
+    "observed": [
+      {
+        "claimId": "CLM-SG-AUTH-OBS01",
+        "kind": "observed",
+        "statement": "Stage G 授权校验由代码强制：schema/status/manifest id+hash 精确匹配、list 白名单、heldout_semantics_opened 必须为 False；但授权文件本身从不被代码写入/标记消耗，一次性消耗由仓库外流程保证。",
+        "evidenceRefs": [
+          {
+            "kind": "source",
+            "path": "agent/acceptance_batch.py",
+            "statement": "acceptance_batch.py:102-142 授权校验；无写入消耗逻辑",
+            "sha256": "05821d00c2900e0ba18c3345277717da39977f35cdd76ddb3ecc1c746845abaa"
+          }
+        ],
+        "confidence": "high",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "8de6e5975afe14d9df3b83f0052522a16a9059207e4e8592e6171bb0e10bdb9a"
+      },
+      {
+        "claimId": "CLM-SG-RESUME-OBS02",
+        "kind": "observed",
+        "statement": "批处理可恢复：成功结果不可覆盖（hash 不匹配即抛错），失败保留默认跳过仅 --retry-failed 重跑，中断后重建任务目录重跑，全部原子写。",
+        "evidenceRefs": [
+          {
+            "kind": "source",
+            "path": "agent/acceptance_batch.py",
+            "statement": "acceptance_batch.py:207-268 恢复语义与原子写",
+            "sha256": "05821d00c2900e0ba18c3345277717da39977f35cdd76ddb3ecc1c746845abaa"
+          }
+        ],
+        "confidence": "high",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "85e3f1e15badc4bfc23ea399b9649c34085304cf5492938e77d81907ff01e764"
+      }
+    ],
+    "expected": [],
+    "inference": [
+      {
+        "claimId": "CLM-SG-CONSUME-INF01",
+        "kind": "inference",
+        "statement": "推断：授权的一次性消耗（语义开封状态翻转）由仓库外流程维护，仓库内无对应写入逻辑，信任边界未被代码封闭。",
+        "evidenceRefs": [
+          {
+            "kind": "source",
+            "path": "agent/acceptance_batch.py",
+            "statement": "全文件无授权写入路径",
+            "sha256": "05821d00c2900e0ba18c3345277717da39977f35cdd76ddb3ecc1c746845abaa"
+          }
+        ],
+        "confidence": "medium",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "93db20475008c934319448c096a9ed7d8f10ef6e7a02a70e6ecd73fce91a3aab"
+      }
+    ],
+    "unknown": []
+  },
+  "assessments": {
+    "logicCompleteness": {
+      "judgment": "aligned",
+      "evidenceRefs": [
+        "agent/acceptance_batch.py:102-268"
+      ],
+      "confidence": "high",
+      "recommendation": "keep"
+    },
+    "evidenceCredibility": {
+      "judgment": "partial",
+      "evidenceRefs": [
+        "CLM-SG-CONSUME-INF01"
+      ],
+      "confidence": "medium",
+      "recommendation": "confirm"
+    }
+  },
+  "gaps": []
+}

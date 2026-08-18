@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "handoffId": "HANDOFF-BATCH-VISIBILITY",
+  "alignmentRevision": 2,
+  "manifestHash": "20e4578bfbc6b9dfb7d961bdc76bc15b53511e442d438adcc73dd76f264ef362",
+  "sourceRevision": {
+    "gitRootHash": "a872c3aab55c99c9e4df06e0eb6a62b1d9169c32fa034b0ed7d917bc5325ae27",
+    "head": "4467174b45f10be858322f088df87abf88d49d39",
+    "branchHash": "0d6e4079e36703ebd37c00722f5891d28b0e2811dc114b129215123adcce3605",
+    "dirty": true,
+    "sourceHash": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+    "contextHash": "b1750a380378626807ad94c526cbb5406aa71a1eb36ac139f748b66029a7f924",
+    "fileCount": 170
+  },
+  "featureId": "FEAT-e7e3976e-6f5f-4574-805b-2de7b0c6e20d",
+  "gapId": "GAP-BATCH-VISIBILITY",
+  "observedClaim": {
+    "claimId": "CLM-BATCH-NOGROUP-OBS02",
+    "claimHash": "5bfece210a9cdda173a38574b3d23dd0fe4fd52f1887b57ae48de2981c6ce4e1"
+  },
+  "expectedClaim": {
+    "claimId": "CLM-BATCH-GROUP-EXP01",
+    "claimHash": "41236af85f88230cb53de8b7fe8b05e5e00bfbb001765494e122def2694b7232"
+  },
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "statement": "批量创建生成批次标识并持久化到每个任务记录"
+    },
+    {
+      "id": "AC-2",
+      "statement": "批次内逐文件创建结果（成功/失败及原因）完整记录"
+    },
+    {
+      "id": "AC-3",
+      "statement": "Web 界面可按批次查看/筛选任务，批次分组清晰可见"
+    },
+    {
+      "id": "AC-4",
+      "statement": "中途失败不回滚的语义保持并在界面/文档明示"
+    }
+  ],
+  "evidenceRefs": [
+    {
+      "kind": "source",
+      "path": "web/src/components/UploadPanel.tsx",
+      "statement": "UploadPanel.tsx:63-66 仅 onTaskCreated 刷新；186 文案明示无实时可视化",
+      "sha256": "6e52e31cb2882e3508869c1b2b15370e69aa0ff1af8bcdb0536f60940bedaeb7"
+    }
+  ],
+  "unknowns": [],
+  "limitations": [
+    "仅覆盖批量创建与展示，不改变单任务执行语义"
+  ],
+  "userConfirmation": {
+    "claimId": "CLM-BATCH-GROUP-EXP01",
+    "claimHash": "41236af85f88230cb53de8b7fe8b05e5e00bfbb001765494e122def2694b7232",
+    "decision": "confirmed",
+    "confirmationToken": "ALIGN-DCFF15300C42C4E3",
+    "confirmedAt": "2026-08-18T05:23:15.043Z",
+    "confirmationId": "CONF-90e51f45-40d7-4816-b1b8-ed6b48fd4648",
+    "actor": "user"
+  },
+  "recommendedHloopEntry": "goal"
+}

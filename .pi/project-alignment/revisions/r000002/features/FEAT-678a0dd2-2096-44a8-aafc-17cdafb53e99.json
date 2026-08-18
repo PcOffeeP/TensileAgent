@@ -1,0 +1,49 @@
+{
+  "candidateId": "CAND-012",
+  "stableKey": "cli:agent/http_vlm_stub.py",
+  "name": "本地视觉协议 Stub 服务（联调工具）",
+  "featureId": "FEAT-678a0dd2-2096-44a8-aafc-17cdafb53e99",
+  "status": "active",
+  "aliases": [],
+  "derivedFrom": [],
+  "entryPoints": [
+    {
+      "kind": "cli",
+      "path": "agent/http_vlm_stub.py"
+    }
+  ],
+  "claims": {
+    "observed": [
+      {
+        "claimId": "CLM-STUB-OBS01",
+        "kind": "observed",
+        "statement": "stub 服务默认监听 127.0.0.1:8000，支持 8 种 scenario 返回固定 JSON，供无真实服务联调。",
+        "evidenceRefs": [
+          {
+            "kind": "source",
+            "path": "agent/http_vlm_stub.py",
+            "statement": "http_vlm_stub.py:186-219 scenario 与监听配置",
+            "sha256": "c616db76bfdb505d858fb4f257927805d4b78d1c0e9323afc7cab19c82b72162"
+          }
+        ],
+        "confidence": "high",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "1d72213413710d5504de32cb64df7faa5a7847976b531392e7e714030573b946"
+      }
+    ],
+    "expected": [],
+    "inference": [],
+    "unknown": []
+  },
+  "assessments": {
+    "logicCompleteness": {
+      "judgment": "aligned",
+      "evidenceRefs": [
+        "agent/http_vlm_stub.py:87-232"
+      ],
+      "confidence": "medium",
+      "recommendation": "keep"
+    }
+  },
+  "gaps": []
+}

@@ -1,0 +1,68 @@
+{
+  "candidateId": "CAND-008",
+  "stableKey": "ui:web/src/components/ConfigView.tsx + SetupDialog.tsx",
+  "name": "Web 决策模型配置与切换",
+  "featureId": "FEAT-a7db687c-ad15-4571-b9f2-802b23e2c374",
+  "status": "active",
+  "aliases": [],
+  "derivedFrom": [],
+  "entryPoints": [
+    {
+      "kind": "ui",
+      "path": "web/src/components/SetupDialog.tsx"
+    },
+    {
+      "kind": "api",
+      "path": "agent/web_api.py"
+    }
+  ],
+  "claims": {
+    "observed": [
+      {
+        "claimId": "CLM-CFG-LOCK-OBS01",
+        "kind": "observed",
+        "statement": "模型切换门禁由后端强制：存在 queued/running 任务时三个配置写入口均 409，且 legacy 路径无法绕过（有测试覆盖）。",
+        "evidenceRefs": [
+          {
+            "kind": "source",
+            "path": "agent/web_api.py",
+            "statement": "web_api.py:621-623 检测；1006-1135 三个写入口加锁",
+            "sha256": "2a51abfc0f402d419271951a00d2063f47ed7edd2d9d747620d7538e30bba88b"
+          },
+          {
+            "kind": "test",
+            "path": "tests/test_web_api.py",
+            "statement": "test_web_api.py:1214-1238 legacy 路径不可绕过",
+            "sha256": "cfc2b00e1c45aff27367341ca5903898a65c16e20e59fed882a169b1e7aac386"
+          }
+        ],
+        "confidence": "high",
+        "sourceRevision": "692e1ce1162cf8989df0bc50d162539045b9406ebd383fd9eecb7bbe1eda6ab1",
+        "claimHash": "eb55968e3f7425dfd6687b6bb9180b380f250fdec0a2b41f93a5b8e2f5070af9"
+      }
+    ],
+    "expected": [],
+    "inference": [],
+    "unknown": []
+  },
+  "assessments": {
+    "permissionBoundary": {
+      "judgment": "aligned",
+      "evidenceRefs": [
+        "agent/web_api.py:621-623",
+        "tests/test_web_api.py:1214-1238"
+      ],
+      "confidence": "high",
+      "recommendation": "keep"
+    },
+    "goalAlignment": {
+      "judgment": "aligned",
+      "evidenceRefs": [
+        "agent/web_api.py:1006-1135"
+      ],
+      "confidence": "medium",
+      "recommendation": "keep"
+    }
+  },
+  "gaps": []
+}

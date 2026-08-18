@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "alignmentRevision": 1,
+  "confirmations": [
+    {
+      "claimId": "CLM-WEB-CONCUR-EXP01",
+      "claimHash": "955f6a4228034ea1c8040bec444c634df39fc6996ab072ba287518118651d425",
+      "decision": "confirmed",
+      "confirmationToken": "ALIGN-42A208CF4E6A6073",
+      "confirmedAt": "2026-08-18T03:46:45Z",
+      "confirmationId": "CONF-5d993621-6779-4564-aa24-98452a7136b2",
+      "actor": "user"
+    },
+    {
+      "claimId": "CLM-BATCH-GROUP-EXP01",
+      "claimHash": "41236af85f88230cb53de8b7fe8b05e5e00bfbb001765494e122def2694b7232",
+      "decision": "confirmed",
+      "confirmationToken": "ALIGN-42A208CF4E6A6073",
+      "confirmedAt": "2026-08-18T03:46:45Z",
+      "confirmationId": "CONF-962b1177-d4ba-4aab-9267-bfdabf98d5a6",
+      "actor": "user"
+    },
+    {
+      "claimId": "CLM-DEL-CONFIRM-EXP01",
+      "claimHash": "f5cd8a8f92eee71e50b028efb9ba9d1a69394e9c5a339631b58c6e01f1b1a88e",
+      "decision": "confirmed",
+      "confirmationToken": "ALIGN-42A208CF4E6A6073",
+      "confirmedAt": "2026-08-18T03:46:45Z",
+      "confirmationId": "CONF-6e7633fc-4080-4aea-9acc-415bd9e3be2c",
+      "actor": "user"
+    },
+    {
+      "claimId": "CLM-QG-FUTURE-EXP01",
+      "claimHash": "540eb7bfa58c82aa32ebf8b632df94109484a07178c8dece3d8d536e1d001d6e",
+      "decision": "confirmed",
+      "confirmationToken": "ALIGN-42A208CF4E6A6073",
+      "confirmedAt": "2026-08-18T03:46:45Z",
+      "confirmationId": "CONF-bd762e3a-1652-4293-b30b-5a8c3090e872",
+      "actor": "user"
+    }
+  ]
+}
