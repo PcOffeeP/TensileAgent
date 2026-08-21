@@ -57,6 +57,13 @@ Agent 的逐轮诊断 JSON 和任务汇总 JSON。常见文件包括：
 
 开发诊断和一次性实验的汇总目录。当前主要包含：
 
+- `run.jsonl`：CLI 默认结果输出文件，是**最新结果快照 / latest-result snapshot**。
+  默认每次 CLI 运行都会以覆盖写模式重新生成它，不会自动保留上一次最终结果的归档；
+  批量模式（`--videos-dir` 或 `--input-list`）也会把本次批量的整体结果写入该文件，
+  同样覆盖上一次批量结果。如需保留历史，应在每次运行时使用 `--output` 显式指定带
+  `run_id` 或实验标识的不同路径。注意：`events/`、`diagnostics/`、`llm_traces/`
+  以及 `web_workbench/history/` 记录的是运行过程事件、逐轮诊断、模型传输追踪或
+  Web 平台历史，它们不是 `run.jsonl` 的默认 CLI 结果归档。
 - `cli_v4_1_accuracy30_*`：30 条 CLI 诊断集的逐视频结果、日志、CSV 和指标；
 - `cli_v4_1_all110_*`：110 条视频批量运行结果；
 - `isolation_oracle_clip_*`：使用真值附近 clip 测量视觉模型能力上限的实验；
