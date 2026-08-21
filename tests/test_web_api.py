@@ -774,6 +774,83 @@ class TestEndpoints:
         assert row[message_idx] == "missing <path:redacted>"
         assert "/secret" not in content
 
+    def test_export_json_failed_task_includes_redacted_error(self, client):
+        task = TaskModel(
+            id="t1",
+            video_id="demo",
+            video_name="demo.mp4",
+            video_path="/secret/demo.mp4",
+            created_at="now",
+            status=web_api.TASK_STATUS_FAILED,
+            result={},
+            error={
+                "stage": "runner",
+                "code": "file_not_found",
+                "message": "missing /secret/demo.mp4",
+            },
+        )
+        web_api.tasks["t1"] = task
+        web_api._save_task(task)
+
+        resp = client.get("/api/tasks/t1/export?fmt=json")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["result"] == {}
+        assert data["error"]["stage"] == "runner"
+        assert data["error"]["code"] == "file_not_found"
+        assert data["error"]["message"] == "missing <path:redacted>"
+        assert "/secret" not in json.dumps(data)
+
+    def test_export_jsonl_failed_task_includes_redacted_error(self, client):
+        task = TaskModel(
+            id="t1",
+            video_id="demo",
+            video_name="demo.mp4",
+            video_path="/secret/demo.mp4",
+            created_at="now",
+            status=web_api.TASK_STATUS_FAILED,
+            result={},
+            error={
+                "stage": "runner",
+                "code": "file_not_found",
+                "message": "missing /secret/demo.mp4",
+            },
+        )
+        web_api.tasks["t1"] = task
+        web_api._save_task(task)
+
+        resp = client.get("/api/tasks/t1/export?fmt=jsonl")
+        assert resp.status_code == 200
+        line = resp.text.strip().splitlines()[0]
+        data = json.loads(line)
+        assert data["result"] == {}
+        assert data["error"]["stage"] == "runner"
+        assert data["error"]["code"] == "file_not_found"
+        assert data["error"]["message"] == "missing <path:redacted>"
+        assert "/secret" not in json.dumps(data)
+
+    def test_export_json_successful_task_no_error_field(self, client):
+        task = TaskModel(
+            id="t1",
+            video_id="demo",
+            video_name="demo.mp4",
+            video_path="/secret/demo.mp4",
+            created_at="now",
+            status=web_api.TASK_STATUS_COMPLETED,
+            result={
+                "video_id": "demo",
+                "status": "fracture",
+            },
+        )
+        web_api.tasks["t1"] = task
+        web_api._save_task(task)
+
+        resp = client.get("/api/tasks/t1/export?fmt=json")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "error" not in data
+        assert data["status"] == "fracture"
+
     def test_batch_returns_public_tasks(self, client):
         files = [
             ("files", ("a.mp4", io.BytesIO(b"video1"), "video/mp4")),

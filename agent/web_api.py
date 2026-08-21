@@ -830,9 +830,14 @@ async def export_result(task_id: str, fmt: str = Query("json", pattern="^(json|j
     error = _sanitize_event_data(task.error or {})
 
     if fmt == "json":
+        if error:
+            return JSONResponse({"result": result, "error": error})
         return JSONResponse(result)
     elif fmt == "jsonl":
-        lines = [json.dumps(result, ensure_ascii=False)]
+        if error:
+            lines = [json.dumps({"result": result, "error": error}, ensure_ascii=False)]
+        else:
+            lines = [json.dumps(result, ensure_ascii=False)]
         return Response("\n".join(lines), media_type="application/x-ndjson")
     else:  # csv
         output = io.StringIO()
