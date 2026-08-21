@@ -1,6 +1,6 @@
 <!-- explain-project
-verified_commit: c2144117d50689e70b377b5f3c57659fc4e43398
-verified_worktree: aea13bce4abe37ce39ea12f64209126b97f42c0b72f54eb02def17287efe0401
+verified_commit: 066dd5a77a6f6f344ac107453702dafabb4b371e
+verified_worktree: clean
 -->
 
 # TensileAgent 项目导览
@@ -28,7 +28,7 @@ TensileAgent 是材料拉伸断裂视频分析系统：接收用户的一段自�
 | 节点 | 职责 | 接收 | 产出 | 去向 |
 |---|---|---|---|---|
 | 1. 用户输入 | 解析用户意图与拒绝注入 | 视频路径 + 自然语言问题 | `UserIntent`（请求字段、是否需证据、语言等） | Runner |
-| 2. Runner 初始化 | 加载配置、装配依赖、冻结后端/模型/视觉契约 | 配置、视频元数据、用户意图 | LLM 客户端、推理客户端、ClipBuilder、带 digest 的运行时身份 | `IterativeAgent` |
+| 2. Runner 初始化 | 按 stage 装配依赖、冻结后端/模型/视觉契约、生成初始化失败信封 | 配置、视频元数据、用户意图 | 装配完成的依赖与冻结的运行时身份，或按 stage 返回初始化失败信封 | `IterativeAgent` |
 | 3. 迭代决策循环 | 维护状态机，调用决策模型选择动作 | 当前状态、候选区间、历史证据 | Function Call（`sample_and_infer` / `terminate`） | 采样/终止校验 |
 | 4. 视频采样与视觉推理 | 裁剪临时 MP4、编码为 Base64 data URL、调用 MiniCPM-V | `sample_range`、`task_mode` | 解析后的四字段输出 + diagnostics | 状态/边界更新 |
 | 5. 状态与事件边界更新 | 根据 clip_state 或 V2 输出更新候选区间、覆盖计数、冲突计数 | 单轮模型输出 | 新状态、`V41EventBounds`、冲突记录 | 下一轮决策或终止 |
@@ -36,6 +36,17 @@ TensileAgent 是材料拉伸断裂视频分析系统：接收用户的一段自�
 | 7. 结果投影 | 把公共结论映射为用户请求字段，生成可读回答 | `FinalOutput` + `UserIntent` | 用户可见的回答与字段可用性说明 | 外部调用方 |
 
 ## 关键细节
+
+### Runner 初始化
+
+- **装配顺序**：意图解析（`agent/runner.py:145`）→ 配置加载（`:157`）→ `_runtime` 元数据（`:195`）→ 视频元数据（`:207`，先 `ffprobe`、失败后 `cv2` 回退）→ LLM 后端（`:210` → `agent/llm.py:281`）→ 推理客户端（`:212` → `agent/inference.py:684`）+ 预检（`:213` → `agent/inference.py:472`）→ `ClipBuilder`（`:216`）→ `IterativeAgent`（`:220-229`）。
+- **失败信封**：任一 stage 失败即停止，返回带 stage 标签的失败信封，顺序为 `configuration` → `input` → `decision_backend` → `inference_transport` → `sampling` → `internal`。
+- **产物语义**：装配成功后，运行时身份（`agent_config_snapshot`、local 模型 digest、`deployment_snapshot`）和依赖实例在后续迭代中保持冻结。
+
+代码入口：
+- `agent/runner.py` — `run_one`
+- `agent/llm.py` — `AgentLLMFactory`
+- `agent/inference.py` — `LlamaFactoryInferenceClient.__init__` / `preflight`
 
 ### V4.1 方向语义与单调事件边界
 
@@ -88,23 +99,34 @@ TensileAgent 是材料拉伸断裂视频分析系统：接收用户的一段自�
 
 ### 配置与契约版本
 
-- `agent/config.yaml` 决定决策后端（`local`/`remote`/`deterministic`）、视觉服务地址与契约版本。
-- `INFERENCE_CONTRACT_VERSION` 环境变量或 `--contract-version` 可显式固定本次任务版本；**不允许运行时自动从 V4.1 降级到 V2**。
+- **配置合并**：默认路径下，`_SESSION_OVERRIDES` > `config.local.yaml` > `config.yaml` 逐层 `deep-merge`；自定义 `--config <path>` 为裸读，不参与 local 合并。
+- **契约版本**：优先级为 `config` > 环境变量 `INFERENCE_CONTRACT_VERSION` > 默认 `V2`；**不允许运行时自动从 V4.1 降级到 V2**。
+- **Mock 模式**：`INFERENCE_MOCK=1` 在进程级启用 `MockInferenceClient`，无需真实视觉服务即可验证链路。
+- **请求大小限制**：`max_request_size` 默认 `32 MiB`，必须为大于 0 的整数。
+- **预检契约**：`LlamaFactoryInferenceClient` 初始化期发起 `GET /tensile/contract`，校验 version、hash、capabilities、deployment_manifest；失败视为推理传输层错误。
 - 视觉契约 JSON 通过 SHA256 校验；任务预检时冻结 deployment manifest，漂移则拒绝。
 
 代码入口：
 - `agent/config.yaml`
+- `agent/config_util.py` — 配置加载与合并
 - `agent/contract.py`
 - `agent/run.py` — CLI 参数解析
+- `agent/inference.py` — `LlamaFactoryInferenceClient.preflight`
 
 ### LLM 后端与身份冻结
 
-- 支持本地 Ollama（默认 `tensile-qwen35:9b`）、远程 DashScope（`qwen3.7-max`）和验收用的 `DeterministicPlanner`。
-- Web API 在创建任务时锁定 `agent_config_snapshot`，防止运行中配置变更影响已排队任务。
+- **三种决策后端**：
+  - `remote`：必须提供 `model`、`base_url`、`api_key`，缺一即初始化失败。
+  - `local`：eager 探测 Ollama；离线、模型缺失或 digest 不符均 fail-closed。
+  - `deterministic`：仅用于验收/测试，按固定规则返回动作。
+- **身份冻结三机制**：
+  1. Web API 创建任务时捕获 `agent_config_snapshot`，后续运行以该快照为决策配置来源。
+  2. Preflight 的 `deployment_snapshot` 在运行期校验 deployment drift，漂移即拒绝。
+  3. Local 模型加载后固化其 digest，作为模型权重身份校验依据。
 
 代码入口：
 - `agent/llm.py` — `AgentLLMFactory`
-- `agent/runner.py` — `run_one` 中 snapshot 校验
+- `agent/runner.py` — `run_one` 中 snapshot 校验与装配顺序
 
 ### 错误隔离
 
@@ -156,10 +178,12 @@ TensileAgent 是材料拉伸断裂视频分析系统：接收用户的一段自�
 
 ## 当前限制与未知
 
+- **默认值不一致**：决策模型 `temperature` 的代码兜底默认值为 `0.7`，而 `config.yaml` 中默认写为 `0.2`；两者当前独立生效。
+- **local 回退 remote**：`config.yaml` 将决策后端默认写为 `local`，但当 Ollama 本地配置缺失/探测失败时，代码会兜底使用 `remote`。
 - 当前交付为 `tensile-vlm/v4.1` 中间模型集成，README 明确说明**不能宣称为 final / full-data / production-passed**；Stage G 全量 110 条性能是中间结果，历史质量门仍失败。
 - 决策模型与视觉模型质量仍在独立优化；本仓库只负责 Agent 端。
 - `confidence` 数值保持 `null`，`evidence_level` 是确定性分类；校准版本尚未接入。
 - `visual_evidence` 标记为 `experimental`，可靠性未经验证。
 - 用户意图识别当前为纯正则匹配，未调用决策模型；该差异已记录在 `docs/PROJECT_TODO.md`。
-- 工作区存在未提交变更（见顶部指纹），其中 `.pi/` 下文件删除与 Agent 状态相关，不影响项目源码；Agent 实现层面的真实源码变更以 `git status` 中的 `agent/`、`tests/` 等路径为准。
+- 工作区当前为 clean 状态（见顶部 `verified_worktree`）；历史 `.pi/` 下文件删除已清理，不再影响项目源码。
 - `agent/langgraph_agent/` 为未跟踪目录，当前指南未纳入核心链路说明。
