@@ -145,7 +145,7 @@ class FakeInferenceClient:
         self.responses = responses
         self.index = 0
 
-    def infer(self, video_input, prompt) -> InferenceResult:
+    def infer(self, video_input) -> InferenceResult:
         resp = self.responses[self.index]
         self.index = min(self.index + 1, len(self.responses) - 1)
 
@@ -2277,34 +2277,6 @@ def test_max_rounds_rejects_non_converged_candidate():
     # Detection can still close while localization remains a partial field.
     assert result["status"] == "fracture"
     assert result["has_fracture"] is True
-
-
-def test_runtime_max_prompt_length_config_override():
-    """Runtime config max_prompt_length can be stricter than the schema max_length."""
-    video_meta = {"video_id": "v900", "duration": 100.0, "video_path": "v900.mp4"}
-    config = make_config()
-    config["agent"]["max_prompt_length"] = 10
-
-    llm = StaticLLM([])
-    agent = IterativeAgent(
-        llm_client=llm,
-        video_meta=video_meta,
-        config=config,
-        clip_builder=FakeClipBuilder(),
-        inference_client=FakeInferenceClient([]),
-    )
-
-    result = agent._execute_sample_and_infer(
-        {
-            "sample_range": [0.0, 100.0],
-            "prompt": "this prompt is way too long",
-        },
-        round_idx=0,
-    )
-    assert result["ok"] is False
-    assert result["validation_error"]["code"] == "prompt_too_long"
-    assert result["validation_error"]["field"] == "prompt"
-    assert "max_prompt_length" in result["validation_error"]["message"]
 
 
 # ---------------------------------------------------------------------------

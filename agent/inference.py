@@ -101,8 +101,8 @@ class EvidenceInferenceResult:
 class InferenceClient(Protocol):
     """Protocol for clients that call the fine-tuned MiniCPM-V model."""
 
-    def infer(self, video_input: str | ClipBuildResult, prompt: str) -> InferenceResult:
-        """Run inference on ``video_input`` with ``prompt``.
+    def infer(self, video_input: str | ClipBuildResult) -> InferenceResult:
+        """Run inference on ``video_input``.
 
         ``video_input`` may be a local temporary MP4 path or a
         ``ClipBuildResult`` produced by ``FfmpegVideoClipBuilder``.  When a
@@ -486,12 +486,8 @@ class LlamaFactoryInferenceClient:
             "deployment_manifest": dict(deployment),
         }
 
-    def infer(self, video_input: str | ClipBuildResult, prompt: str) -> InferenceResult:
+    def infer(self, video_input: str | ClipBuildResult) -> InferenceResult:
         """Call the model and return the parsed JSON output plus diagnostics."""
-        # ``prompt`` is retained only for transport-interface compatibility.
-        # Production visual text is program-owned and cannot be overridden by
-        # a caller, Planner, or natural-language user request.
-        del prompt
         video_path, manifest = _resolve_video_input(video_input)
 
         if not os.path.exists(video_path):
@@ -751,9 +747,9 @@ class LlamaFactoryInferenceClient:
 class MockInferenceClient:
     """Test-friendly inference client that returns a canned response.
 
-    The ``response`` callable receives ``(video_input, prompt)`` and should
-    return either a raw text string or a dict.  Dicts are returned as-is;
-    strings are parsed by ``ResultParser``.  For strings, an unsuccessful
+    The ``response`` callable receives ``(video_input)`` and should return
+    either a raw text string or a dict.  Dicts are returned as-is; strings are
+    parsed by ``ResultParser``.  For strings, an unsuccessful
     ``InferenceResult`` is returned when the text cannot be parsed or does not
     satisfy the model-output schema.
     """
@@ -818,9 +814,9 @@ class MockInferenceClient:
             "deployment_manifest": dict(self.deployment_snapshot),
         }
 
-    def infer(self, video_input: str | ClipBuildResult, prompt: str) -> InferenceResult:
+    def infer(self, video_input: str | ClipBuildResult) -> InferenceResult:
         if callable(self._response):
-            raw = self._response(video_input, prompt)
+            raw = self._response(video_input)
         else:
             raw = self._response
 

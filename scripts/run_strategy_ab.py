@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from agent.prompts import build_sample_and_infer_prompt
 from agent.config_util import get_active_model_config, get_local_model_digest
 from agent.runner import (
     build_video_meta,
@@ -34,7 +33,6 @@ def _visual_round(
     *,
     video_path: Path,
     sample_range: list[float],
-    config: dict[str, Any],
     inference_client: Any,
     clip_builder: Any,
 ) -> dict[str, Any]:
@@ -50,10 +48,7 @@ def _visual_round(
             source_video=str(video_path),
             sample_range=sample_range,
         )
-        result = inference_client.infer(
-            clip,
-            build_sample_and_infer_prompt(sample_range, config),
-        )
+        result = inference_client.infer(clip)
         record["ok"] = result.ok
         record["model_output"] = result.model_output
         record["attempts"] = result.attempts
@@ -280,7 +275,6 @@ def main() -> None:
         a_round = _visual_round(
             video_path=video_path,
             sample_range=ranges[0],
-            config=config,
             inference_client=inference_client,
             clip_builder=clip_builder,
         )
@@ -288,7 +282,6 @@ def main() -> None:
             _visual_round(
                 video_path=video_path,
                 sample_range=sample_range,
-                config=config,
                 inference_client=inference_client,
                 clip_builder=clip_builder,
             )

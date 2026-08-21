@@ -99,7 +99,7 @@ class V41InferenceClient:
         self.outputs = outputs
         self.index = 0
 
-    def infer(self, video_input: ClipBuildResult, prompt: str) -> InferenceResult:
+    def infer(self, video_input: ClipBuildResult) -> InferenceResult:
         output = self.outputs[self.index]
         self.index += 1
         return InferenceResult(

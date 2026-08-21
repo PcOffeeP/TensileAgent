@@ -14,7 +14,6 @@ from agent.prompts import (
     TENSILE_AGENT_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     build_tensile_agent_user_context,
-    build_sample_and_infer_prompt,
     build_user_prompt,
 )
 from agent.sampling import (
@@ -61,7 +60,6 @@ __all__ = [
     "TOOLS_SCHEMA",
     "VideoClipBuilder",
     "build_tensile_agent_user_context",
-    "build_sample_and_infer_prompt",
     "build_user_prompt",
     "fracture_between_to_frame_range",
     "fracture_between_to_time_range",

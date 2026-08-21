@@ -30,26 +30,6 @@
 - **待决定或后续动作**：补充典型场景、异常路径和回归用例的验证机制，明确完成标准。
 - **记录版本**：`c2144117`（工作区存在未提交变更）
 
-### 简化视觉 Prompt 传输链路
-
-- **关联主题**：`sample_and_infer` 工具 → 视觉推理 HTTP 客户端 → 冻结视觉契约
-- **开发者期望**：移除上游为 `sample_and_infer` 构造并传递、随后又被 HTTP 推理客户端丢弃的冗余 `prompt` 参数；由推理客户端直接根据冻结的视觉契约选择并发送固定、版本化的主分析 Prompt（以及按需的固定 Evidence Prompt），同步收紧接口、schema 与测试，确保用户原话和决策模型内容仍不会进入视觉模型请求。
-- **当前实现**：
-  - 视觉 Prompt 已完全由冻结契约提供：`LlamaFactoryInferenceClient.infer` 接受 `prompt` 参数后立即 `del prompt`，使用 `self.analysis["system_prompt"]` 和 `self.analysis["user_prompt"]`；`infer_evidence` 使用 `self.evidence["system_prompt"]` 和 `self.evidence["user_prompt"]`。
-  - `ToolSampleAndInfer` schema 已移除 `prompt` 字段，并通过 `_discard_legacy_prompt` 丢弃旧调用中的遗留 `prompt`。
-  - 测试验证用户/决策模型内容不会进入视觉请求：`test_tool_sample_and_infer_discards_legacy_prompt`、`test_tool_sample_and_infer_never_exposes_legacy_prompt`、`test_build_sample_and_infer_prompt_has_required_elements`。
-  - 但 `IterativeAgent._execute_sample_and_infer` 仍调用 `build_sample_and_infer_prompt` 构造并传递 `prompt` 给 `inference_client.infer`，且进行 `max_prompt_length` 校验；`agent/__init__.py` 仍将 `build_sample_and_infer_prompt` 作为公共 API 导出。这部分属于仍需清理的冗余接口。
-- **存在差异**：核心目标（契约化固定 Prompt、隔离用户/决策模型内容）已实现，但上游仍保留并传递被丢弃的冗余 `prompt` 参数，接口尚未完全收紧。
-- **代码依据**：
-  - `agent/inference.py:483-489` `infer` 方法 `del prompt` 并使用契约 Prompt
-  - `agent/inference.py:703-708` `infer_evidence` 使用契约 Evidence Prompt
-  - `agent/schema.py:163-178` `ToolSampleAndInfer` 丢弃遗留 `prompt`
-  - `agent/iterative_agent.py:1672-1689` 仍构造并传递 `prompt`
-  - `agent/__init__.py:12,60-61` 仍导出 `build_sample_and_infer_prompt`
-  - `tests/test_schema.py:203-228`、`tests/test_prompts_tensile.py:92-104` 相关断言
-- **待决定或后续动作**：是否从 `IterativeAgent._execute_sample_and_infer` 和 `InferenceClient.infer` 签名中移除 `prompt` 参数，并同步清理测试与 `agent/__init__.py` 导出。
-- **记录版本**：`c2144117`（工作区存在未提交变更）
-
 ### 核心功能主链路失败兜底逻辑核查
 
 - **关联主题**：核心功能主链路 → 外部工具调用、视频读取、模型推理、LLM 调用、文件 I/O 等关键步骤的错误处理与 fallback 策略
@@ -81,3 +61,21 @@
   - `tests/test_interaction.py` 保留原有确定性正则用例
 - **待决定或后续动作**：P5 已完成 TODO 状态更新；混合架构与新增模型路径的 mock 测试已补齐并实测全绿（排除 3 个 fastapi 缺失文件后 444 passed、0 failed；`backend=deterministic` 结果逐字节一致），无需再声明“不声明已全部通过”。
 - **记录版本**：本次改造完成时的描述性状态（不再引用过期 commit hash；工作区存在未提交变更）
+
+### 简化视觉 Prompt 传输链路
+
+- **关联主题**：`sample_and_infer` 工具 → 视觉推理 HTTP 客户端 → 冻结视觉契约
+- **开发者期望**：移除上游为 `sample_and_infer` 构造并传递、随后又被 HTTP 推理客户端丢弃的冗余 `prompt` 参数；由推理客户端直接根据冻结的视觉契约选择并发送固定、版本化的主分析 Prompt（以及按需的固定 Evidence Prompt），同步收紧接口、schema 与测试，确保用户原话和决策模型内容仍不会进入视觉模型请求。
+- **当前实现**：已按用户确认的 Option A 彻底移除冗余 `prompt` 参数。`build_sample_and_infer_prompt` 已从 `agent/prompts.py` 删除，不再作为公共 API 导出（`agent/__init__.py` 导出同步清理）；`InferenceClient` Protocol、`LlamaFactoryInferenceClient` 与 `MockInferenceClient` 的 `infer` 签名由 `(video_input, prompt)` 收紧为 `(video_input)`，不再执行 `del prompt`，Mock 响应回调改为单参；`IterativeAgent._execute_sample_and_infer` 不再构造 prompt，删除 `max_prompt_length` 校验与 `prompt_too_long` 错误分支；`scripts/run_strategy_ab.py` 同步清理，包括移除 `_visual_round` 的死参数 `config`；测试已适配新签名，并删除 2 个失效用例。视觉请求文本的唯一来源仍为冻结契约 `self.analysis` / `self.evidence`；schema 层 `_discard_legacy_prompt` 防御保留；攻击测试验证旧双参调用会立即触发 `TypeError`，无静默失败。
+- **存在差异**：无。冗余 prompt 参数已彻底移除，接口收紧完成，安全契约保持不变。
+- **代码依据**：
+  - `agent/prompts.py` 已移除 `build_sample_and_infer_prompt`
+  - `agent/__init__.py` 已移除 `build_sample_and_infer_prompt` 公共导出
+  - `agent/inference.py` `infer` 签名收紧为 `(video_input)`，不再包含 `prompt`
+  - `agent/inference.py` `infer_evidence` 仍从 `self.evidence` 读取固定 Evidence Prompt
+  - `agent/schema.py:163-178` `ToolSampleAndInfer` 保留 `_discard_legacy_prompt` 防御
+  - `agent/iterative_agent.py` `_execute_sample_and_infer` 不再构造/传递 prompt
+  - `scripts/run_strategy_ab.py` 同步清理冗余 prompt 与死参数 `config`
+  - 相关测试已适配新签名并移除失效用例
+- **待决定或后续动作**：已完成。无需后续动作。
+- **记录版本**：`94174d5`（工作区存在未提交变更）

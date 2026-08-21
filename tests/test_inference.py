@@ -47,7 +47,7 @@ def test_mock_inference_client_returns_dict():
             "location": "inside_gauge",
         }
     )
-    result = client.infer("any.mp4", "prompt")
+    result = client.infer("any.mp4")
     assert result.ok
     assert result.model_output is not None
     assert result.model_output["has_fracture"] is True
@@ -59,7 +59,7 @@ def test_mock_inference_client_parses_json_string():
         '{"has_fracture": false, "fracture_between": null, "type": "未断裂", '
         '"location": null}'
     )
-    result = client.infer("any.mp4", "prompt")
+    result = client.infer("any.mp4")
     assert result.ok
     assert result.model_output is not None
     assert result.model_output["has_fracture"] is False
@@ -73,7 +73,7 @@ def test_mock_inference_client_parses_json_string():
 
 
 def test_mock_inference_client_callable_response():
-    def responder(video_input: str, prompt: str) -> dict:
+    def responder(video_input: str) -> dict:
         assert isinstance(video_input, str)
         return {
             "has_fracture": True,
@@ -83,7 +83,7 @@ def test_mock_inference_client_callable_response():
         }
 
     client = MockInferenceClient(responder)
-    result = client.infer("clip.mp4", "analyze")
+    result = client.infer("clip.mp4")
     assert result.ok
     assert result.model_output is not None
     assert result.model_output["type"] == "脆性断裂"
@@ -92,7 +92,7 @@ def test_mock_inference_client_callable_response():
 def test_mock_inference_client_accepts_clip_build_result():
     clip = ClipBuildResult(path="/tmp/clip.mp4", manifest=[{"temp_index": 0}])
 
-    def responder(video_input, prompt: str) -> dict:
+    def responder(video_input) -> dict:
         assert isinstance(video_input, ClipBuildResult)
         return {
             "has_fracture": False,
@@ -102,7 +102,7 @@ def test_mock_inference_client_accepts_clip_build_result():
         }
 
     client = MockInferenceClient(responder)
-    result = client.infer(clip, "prompt")
+    result = client.infer(clip)
     assert result.ok
     assert result.model_output is not None
     assert result.model_output["type"] == "未断裂"
@@ -110,7 +110,7 @@ def test_mock_inference_client_accepts_clip_build_result():
 
 def test_mock_inference_client_invalid_response_returns_failure():
     client = MockInferenceClient("not valid json")
-    result = client.infer("any.mp4", "prompt")
+    result = client.infer("any.mp4")
     assert not result.ok
     assert result.model_output is None
     assert result.error is not None
@@ -123,7 +123,7 @@ def test_mock_inference_client_invalid_response_returns_failure():
 def test_create_inference_client_mock_mode():
     with patch.dict("os.environ", {"INFERENCE_MOCK": "1"}):
         client = create_inference_client({})
-        result = client.infer("any.mp4", "prompt")
+        result = client.infer("any.mp4")
         assert result.ok
         assert result.model_output is not None
         assert result.model_output["has_fracture"] is False
@@ -182,7 +182,7 @@ def test_llama_factory_inference_client_missing_video():
     with patch("agent.inference.OpenAI"):
         client = LlamaFactoryInferenceClient(model="minicpm-test")
         with pytest.raises(FileNotFoundError):
-            client.infer("/nonexistent.mp4", "prompt")
+            client.infer("/nonexistent.mp4")
 
 
 def test_llama_factory_inference_client_rejects_non_mp4_extension(tmp_path: Path):
@@ -191,7 +191,7 @@ def test_llama_factory_inference_client_rejects_non_mp4_extension(tmp_path: Path
         video.write_text("content")
         client = LlamaFactoryInferenceClient(model="minicpm-test")
         with pytest.raises(ValueError, match="Invalid or non-MP4"):
-            client.infer(str(video), "prompt")
+            client.infer(str(video))
 
 
 def test_llama_factory_inference_client_rejects_bad_mp4_signature(tmp_path: Path):
@@ -200,7 +200,7 @@ def test_llama_factory_inference_client_rejects_bad_mp4_signature(tmp_path: Path
         video.write_text("not a real mp4")
         client = LlamaFactoryInferenceClient(model="minicpm-test")
         with pytest.raises(ValueError, match="Invalid or non-MP4"):
-            client.infer(str(video), "prompt")
+            client.infer(str(video))
 
 
 def test_llama_factory_inference_client_accepts_valid_mp4_signature(tmp_path: Path):
@@ -215,7 +215,7 @@ def test_llama_factory_inference_client_payload_too_large(tmp_path: Path):
         _write_fake_mp4(video, b"x" * 200)
         client = LlamaFactoryInferenceClient(model="minicpm-test", max_request_size=10)
         with pytest.raises(RuntimeError, match="exceeds"):
-            client.infer(str(video), "prompt")
+            client.infer(str(video))
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +249,7 @@ def test_llama_factory_inference_client_sends_base64(tmp_path: Path):
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
-        result = client.infer(str(video), "analyze this")
+        result = client.infer(str(video))
 
     assert result.ok
     assert result.model_output is not None
@@ -333,7 +333,7 @@ def test_llama_factory_inference_client_clip_build_result_sends_manifest(
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
         clip = ClipBuildResult(path=str(video), manifest=manifest)
-        result = client.infer(clip, "prompt")
+        result = client.infer(clip)
 
     assert result.ok
     assert result.model_output is not None
@@ -373,7 +373,7 @@ def test_llama_factory_inference_client_transport_retry(tmp_path: Path, monkeypa
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
-        result = client.infer(str(video), "prompt")
+        result = client.infer(str(video))
 
     assert result.ok
     assert result.model_output is not None
@@ -400,7 +400,7 @@ def test_llama_factory_inference_client_exhausts_retries(tmp_path: Path, monkeyp
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
         with pytest.raises(FakeRetryableError, match="err3"):
-            client.infer(str(video), "prompt")
+            client.infer(str(video))
 
     # Initial attempt + 2 retries = 3 calls.
     assert mock_client.chat.completions.create.call_count == 3
@@ -420,7 +420,7 @@ def test_llama_factory_inference_client_non_retryable_error(tmp_path: Path):
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
         with pytest.raises(FakeAuthError, match="unauthorized"):
-            client.infer(str(video), "prompt")
+            client.infer(str(video))
 
     assert mock_client.chat.completions.create.call_count == 1
 
@@ -453,7 +453,7 @@ def test_llama_factory_inference_client_does_not_add_client_correction(
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
-        result = client.infer(str(video), "analyze")
+        result = client.infer(str(video))
 
     assert result.ok is False
     assert result.model_output is None
@@ -491,7 +491,7 @@ def test_llama_factory_inference_client_invalid_output_is_parsed_once(
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
-        result = client.infer(str(video), "analyze")
+        result = client.infer(str(video))
 
     assert not result.ok
     assert result.model_output is None
@@ -770,7 +770,7 @@ def test_llama_factory_inference_client_extracts_preprocessing(tmp_path: Path):
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
-        result = client.infer(str(video), "analyze")
+        result = client.infer(str(video))
 
     assert result.ok
     assert result.preprocessing is not None
@@ -815,7 +815,7 @@ def test_llama_factory_inference_client_extracts_invalid_preprocessing(
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
-        result = client.infer(str(video), "analyze")
+        result = client.infer(str(video))
 
     # Invalid preprocessing is still stored (raw) for caller to validate.
     assert result.preprocessing is not None
@@ -857,7 +857,7 @@ def test_llama_factory_inference_client_no_preprocessing_is_graceful(
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
-        result = client.infer(str(video), "analyze")
+        result = client.infer(str(video))
 
     assert result.ok
     assert result.preprocessing is None  # graceful degradation
@@ -898,7 +898,7 @@ def test_inference_result_includes_diagnostics(tmp_path: Path):
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
-        result = client.infer(str(video), "analyze")
+        result = client.infer(str(video))
 
     assert result.ok
     assert result.diagnostics is not None
@@ -942,7 +942,7 @@ def test_diagnostics_transport_retries(tmp_path: Path, monkeypatch):
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
-        result = client.infer(str(video), "prompt")
+        result = client.infer(str(video))
 
     assert result.ok
     assert result.diagnostics is not None
@@ -976,7 +976,7 @@ def test_diagnostics_do_not_leak_base64(tmp_path: Path):
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value = mock_client
         client = LlamaFactoryInferenceClient(model="minicpm-test")
-        result = client.infer(str(video), "prompt")
+        result = client.infer(str(video))
 
     assert result.ok
     diagnostics = result.diagnostics

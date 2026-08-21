@@ -616,7 +616,7 @@ class TestRunnerOkFalseSampling:
 class FailingInferenceClient:
     """Inference client that raises on infer(), simulating transport failure."""
 
-    def infer(self, video_input: Any, prompt: str) -> Any:
+    def infer(self, video_input: Any) -> Any:
         raise RuntimeError("模拟推理传输错误: connection refused")
 
 

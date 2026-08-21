@@ -213,17 +213,6 @@ def build_tensile_agent_user_context(
     return "\n".join(lines)
 
 
-def build_sample_and_infer_prompt(
-    sample_range: list[float],
-    config: dict,
-    previous_context: str = "",
-) -> str:
-    """Build the ``prompt`` argument passed to ``sample_and_infer``."""
-    # ``previous_context`` is intentionally ignored: visual calls must remain
-    # comparable across rounds and cannot inherit Planner/user wording.
-    return build_user_prompt(sample_range)
-
-
 # ---------------------------------------------------------------------------
 # Intent recognition prompts (hybrid: model + deterministic fallback)
 # ---------------------------------------------------------------------------

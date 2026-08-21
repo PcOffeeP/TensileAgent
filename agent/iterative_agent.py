@@ -31,7 +31,6 @@ from agent.prompts import (
     TENSILE_AGENT_SYSTEM_PROMPT,
     TENSILE_AGENT_V4_1_SYSTEM_PROMPT,
     build_tensile_agent_user_context,
-    build_sample_and_infer_prompt,
 )
 from agent.sampling import ClipBuildResult, FfmpegVideoClipBuilder, VideoClipBuilder
 from agent.schema import (
@@ -1745,27 +1744,6 @@ class IterativeAgent:
                 )
             )
 
-        prompt = build_sample_and_infer_prompt(
-            sample_range=sample_range,
-            config=self.config,
-        )
-
-        # Runtime length re-check against configurable limit (default 4096).
-        agent_cfg = self.config.get("agent", {})
-        max_len = agent_cfg.get("max_prompt_length", 4096)
-        if len(prompt) > max_len:
-            return _finalize(
-                self._error_result(
-                    sample_range=sample_range,
-                    code="prompt_too_long",
-                    message=(
-                        f"prompt length {len(prompt)} exceeds configured "
-                        f"max_prompt_length {max_len}"
-                    ),
-                    field="prompt",
-                )
-            )
-
         source_video = self.video_meta["video_path"]
 
         # Build continuous clip + manifest.
@@ -1789,7 +1767,7 @@ class IterativeAgent:
 
         # Run inference.
         try:
-            inference_result = self.inference_client.infer(clip_result, prompt)
+            inference_result = self.inference_client.infer(clip_result)
         except Exception as exc:
             logger.warning("Inference transport/execution failed: %s", exc)
             return _finalize(

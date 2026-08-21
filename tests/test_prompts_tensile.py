@@ -4,7 +4,6 @@ from agent.prompts import (
     TENSILE_AGENT_SYSTEM_PROMPT,
     TENSILE_AGENT_V4_1_SYSTEM_PROMPT,
     build_tensile_agent_user_context,
-    build_sample_and_infer_prompt,
 )
 
 
@@ -113,16 +112,4 @@ def test_v4_1_coverage_context_exposes_progress_and_next_window():
     assert "下一动作由程序直接执行" in context
 
 
-def test_build_sample_and_infer_prompt_has_required_elements():
-    config = {"agent": {"video_fps": 8.0, "video_maxlen": 36}}
-    prompt = build_sample_and_infer_prompt(sample_range=[10.0, 20.0], config=config)
-    # Contract: runtime user prompt does NOT contain <video> literal
-    assert "<video>" not in prompt
-    # Production prompt is fixed; range and runtime sampling details stay out.
-    assert "[10.0, 20.0]" not in prompt
-    # v2 prompt does not expose FPS or video_maxlen as key=value
-    assert "video_fps" not in prompt
-    assert "video_maxlen=" not in prompt
-    # v2 prompt does not use the old "实际采样" phrasing
-    assert "实际采样" not in prompt
-    assert prompt == build_sample_and_infer_prompt(sample_range=[0.0, 5.0], config={})
+
