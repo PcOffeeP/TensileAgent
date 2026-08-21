@@ -446,7 +446,13 @@ class UserIntent(BaseModel):
     response_detail: Literal["concise", "detailed"] = "concise"
     language: Literal["zh", "en"] = "zh"
     ambiguity: str | None = None
-    rejection_code: str | None = None
+    rejection_code: Literal[
+        "prompt_injection",
+        "contradictory_intent",
+        "analysis_declined",
+        "unsupported_intent",
+        "out_of_scope",
+    ] | None = None
 
     @field_validator("requested_fields")
     @classmethod

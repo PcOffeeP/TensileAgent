@@ -14,6 +14,7 @@ from agent.schema import (
     SampleAndInferResult,
     ToolSampleAndInfer,
     ToolTerminate,
+    UserIntent,
     ValidationErrorInfo,
 )
 
@@ -458,3 +459,29 @@ def test_runner_result_failure():
     )
     assert result.ok is False
     assert result.result is None
+
+
+# ---------------------------------------------------------------------------
+# UserIntent: rejection_code closed set
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "prompt_injection",
+        "contradictory_intent",
+        "analysis_declined",
+        "unsupported_intent",
+        "out_of_scope",
+        None,
+    ],
+)
+def test_user_intent_accepts_legal_rejection_codes(code):
+    intent = UserIntent(action="unsupported", rejection_code=code)
+    assert intent.rejection_code == code
+
+
+def test_user_intent_rejects_unknown_rejection_code():
+    with pytest.raises(ValidationError):
+        UserIntent(action="unsupported", rejection_code="bad_code")
