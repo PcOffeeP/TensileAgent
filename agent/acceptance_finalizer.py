@@ -85,8 +85,7 @@ def _special_case_gate(
         "actual": f"{actual_correct}/{actual_total}",
         "minimum": expected,
         "passed": (
-            actual_total == expected_total
-            and actual_correct >= expected_correct
+            actual_total == expected_total and actual_correct >= expected_correct
         ),
     }
 
@@ -120,22 +119,17 @@ def finalize_stage_g(
     if (
         addendum.get("schema_version")
         != "tensile-agent/stage-g-scoring-input-addendum/v1"
-        or addendum.get("one_time_run_id")
-        != authorization["one_time_run_id"]
-        or addendum.get("agent_acceptance_manifest_sha256")
-        != manifest["_sha256"]
-        or addendum.get("stage_g_authorization_sha256")
-        != authorization["_sha256"]
+        or addendum.get("one_time_run_id") != authorization["one_time_run_id"]
+        or addendum.get("agent_acceptance_manifest_sha256") != manifest["_sha256"]
+        or addendum.get("stage_g_authorization_sha256") != authorization["_sha256"]
         or addendum.get("annotations_path") != str(annotations)
         or addendum.get("annotations_sha256") != sha256_file(annotations)
         or addendum.get("frozen_before_scoring") is not True
     ):
         raise ValueError("Stage G scoring addendum identity mismatch")
     if (
-        sha256_file(SCORER_PATH)
-        != manifest["scoring"]["implementation_sha256"]
-        or sha256_file(SPEC_PATH)
-        != manifest["scoring"]["spec_sha256"]
+        sha256_file(SCORER_PATH) != manifest["scoring"]["implementation_sha256"]
+        or sha256_file(SPEC_PATH) != manifest["scoring"]["spec_sha256"]
     ):
         raise ValueError("frozen scorer/spec identity mismatch")
 
@@ -183,9 +177,9 @@ def finalize_stage_g(
     )
     stage_g_gate = {
         "chain_integrity_passed": True,
-        "heldout_21_numeric_thresholds_passed": heldout_report[
-            "threshold_evaluation"
-        ]["passed"],
+        "heldout_21_numeric_thresholds_passed": heldout_report["threshold_evaluation"][
+            "passed"
+        ],
         "all_110_special_case_exact": special_case_gate,
         "passed_before_v2_comparison": (
             heldout_report["threshold_evaluation"]["passed"]
@@ -206,14 +200,17 @@ def finalize_stage_g(
         "reporter_sha256": sha256_file(REPORTER_PATH),
         "finalizer_sha256": sha256_file(FINALIZER_PATH),
     }
-    finalization_id = "stage-g-finalization-" + hashlib.sha256(
-        json.dumps(
-            seed,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()[:12]
+    finalization_id = (
+        "stage-g-finalization-"
+        + hashlib.sha256(
+            json.dumps(
+                seed,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()[:12]
+    )
     output_dir = Path(output_root).resolve() / finalization_id
     output_dir.mkdir(parents=True, exist_ok=False, mode=0o700)
     os.chmod(output_dir, 0o700)
@@ -223,9 +220,7 @@ def finalize_stage_g(
         "heldout_21_accuracy_report.json": heldout_report,
         "development_89_accuracy_report.json": development_report,
         "all_110_diagnostic_report.json": build_diagnostic_report(all_records),
-        "heldout_21_diagnostic_report.json": build_diagnostic_report(
-            heldout_records
-        ),
+        "heldout_21_diagnostic_report.json": build_diagnostic_report(heldout_records),
         "development_89_diagnostic_report.json": build_diagnostic_report(
             development_records
         ),

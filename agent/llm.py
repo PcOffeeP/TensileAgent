@@ -217,14 +217,11 @@ class DeterministicPlanner(BaseAgentLLM):
         if len(valid) >= 6 and all(
             (
                 (
-                    (item.get("model_output") or {}).get("has_fracture")
-                    is False
-                    and (item.get("model_output") or {}).get("type")
-                    == "未断裂"
+                    (item.get("model_output") or {}).get("has_fracture") is False
+                    and (item.get("model_output") or {}).get("type") == "未断裂"
                 )
                 if is_v2
-                else (item.get("model_output") or {}).get("clip_state")
-                == "未断裂"
+                else (item.get("model_output") or {}).get("clip_state") == "未断裂"
             )
             for item in valid[-5:]
         ):
@@ -250,7 +247,10 @@ class DeterministicPlanner(BaseAgentLLM):
             start = max(float(item[0]) for item in ranges)
             end = min(float(item[1]) for item in ranges)
             if start < end and end - start <= 1.0 + 1e-9:
-                outputs = [history[index].get("model_output") or {} for index in positive_indices]
+                outputs = [
+                    history[index].get("model_output") or {}
+                    for index in positive_indices
+                ]
                 mechanism = next(
                     (
                         (
@@ -351,9 +351,20 @@ class RemoteAPIClient(BaseAgentLLM):
         try:
             response = self.client.chat.completions.create(**kwargs)
         except Exception as exc:
-            _record_trace(self._trace_recorder, request=kwargs, response=None, started_at=started_at, error=exc)
+            _record_trace(
+                self._trace_recorder,
+                request=kwargs,
+                response=None,
+                started_at=started_at,
+                error=exc,
+            )
             raise
-        _record_trace(self._trace_recorder, request=kwargs, response=response, started_at=started_at)
+        _record_trace(
+            self._trace_recorder,
+            request=kwargs,
+            response=response,
+            started_at=started_at,
+        )
         return response
 
     @property
@@ -408,7 +419,13 @@ class LocalClient(BaseAgentLLM):
         try:
             response = self.client.chat.completions.create(**kwargs)
         except Exception as exc:
-            _record_trace(self._trace_recorder, request=kwargs, response=None, started_at=started_at, error=exc)
+            _record_trace(
+                self._trace_recorder,
+                request=kwargs,
+                response=None,
+                started_at=started_at,
+                error=exc,
+            )
             raise
         _record_trace(
             self._trace_recorder,
@@ -462,7 +479,8 @@ class AgentLLMFactory:
             digest = runtime_cfg.get("model_digest")
             if backend == "local" and not digest and selected_cfg.get("model"):
                 digest = get_local_model_digest(
-                    selected_cfg["model"], selected_cfg.get("base_url", "http://localhost:11434/v1")
+                    selected_cfg["model"],
+                    selected_cfg.get("base_url", "http://localhost:11434/v1"),
                 )
             trace_recorder = TransportTraceRecorder(
                 trace_root,
@@ -498,9 +516,13 @@ class AgentLLMFactory:
 
         if backend == "local":
             local_cfg = agent_cfg.get("local", {})
-            local_status = list_local_models(local_cfg.get("base_url", "http://localhost:11434/v1"))
+            local_status = list_local_models(
+                local_cfg.get("base_url", "http://localhost:11434/v1")
+            )
             if not local_status.get("ok"):
-                raise LocalBackendUnavailable(local_status.get("warning", "Ollama 不可用"))
+                raise LocalBackendUnavailable(
+                    local_status.get("warning", "Ollama 不可用")
+                )
             installed = {
                 item.get("id"): item.get("digest")
                 for item in local_status.get("models", [])

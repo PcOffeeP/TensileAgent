@@ -22,8 +22,20 @@ def test_v4_1_system_prompt_explains_program_owned_negative_coverage():
 
 
 def test_build_tensile_agent_user_context_contains_video_meta():
-    video_meta = {"video_id": "v001", "duration": 120.0, "fps": 30.0, "total_frames": 3600}
-    config = {"agent": {"tolerance_seconds": 1.0, "max_rounds": 10, "video_fps": 8.0, "video_maxlen": 36}}
+    video_meta = {
+        "video_id": "v001",
+        "duration": 120.0,
+        "fps": 30.0,
+        "total_frames": 3600,
+    }
+    config = {
+        "agent": {
+            "tolerance_seconds": 1.0,
+            "max_rounds": 10,
+            "video_fps": 8.0,
+            "video_maxlen": 36,
+        }
+    }
     context = build_tensile_agent_user_context(
         video_meta=video_meta,
         config=config,
@@ -38,8 +50,20 @@ def test_build_tensile_agent_user_context_contains_video_meta():
 
 
 def test_build_tensile_agent_user_context_includes_history():
-    video_meta = {"video_id": "v001", "duration": 100.0, "fps": 30.0, "total_frames": 3000}
-    config = {"agent": {"tolerance_seconds": 1.0, "max_rounds": 5, "video_fps": 8.0, "video_maxlen": 36}}
+    video_meta = {
+        "video_id": "v001",
+        "duration": 100.0,
+        "fps": 30.0,
+        "total_frames": 3000,
+    }
+    config = {
+        "agent": {
+            "tolerance_seconds": 1.0,
+            "max_rounds": 5,
+            "video_fps": 8.0,
+            "video_maxlen": 36,
+        }
+    }
     history = [
         {
             "round": 0,

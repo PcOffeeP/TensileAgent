@@ -15,7 +15,9 @@ _SECRET_RE = re.compile(
     r"(?i)^(api[_-]?key|authorization|proxy[_-]?authorization|access[_-]?token|refresh[_-]?token|base64)$"
 )
 _DATA_URI_RE = re.compile(r"data:[^\s;]+;base64,[A-Za-z0-9+/=]+")
-_LONG_BASE64_RE = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{128,}={0,2}(?![A-Za-z0-9+/])")
+_LONG_BASE64_RE = re.compile(
+    r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{128,}={0,2}(?![A-Za-z0-9+/])"
+)
 _API_KEY_RE = re.compile(r"sk-[A-Za-z0-9_-]+")
 _BEARER_RE = re.compile(r"(?i)\bBearer\s+[^\s,;]+")
 _CREDENTIAL_TEXT_RE = re.compile(
@@ -39,7 +41,9 @@ def sanitize_trace(value: Any, key: str | None = None) -> Any:
         value = _LONG_BASE64_RE.sub("<base64:redacted>", value)
         value = _API_KEY_RE.sub("<api_key:redacted>", value)
         value = _BEARER_RE.sub("Bearer <redacted>", value)
-        value = _CREDENTIAL_TEXT_RE.sub(lambda match: f"{match.group(1)}=<redacted>", value)
+        value = _CREDENTIAL_TEXT_RE.sub(
+            lambda match: f"{match.group(1)}=<redacted>", value
+        )
         value = _WINDOWS_PATH_RE.sub("<path:redacted>", value)
         return _ABS_PATH_RE.sub("<path:redacted>", value)
     return value
@@ -81,7 +85,9 @@ def response_to_dict(response: Any, *, include_reasoning: bool) -> dict[str, Any
 class TransportTraceRecorder:
     """Persist one sanitized JSON file per decision-model request."""
 
-    def __init__(self, root: str | Path, task_id: str, model_snapshot: dict[str, Any]) -> None:
+    def __init__(
+        self, root: str | Path, task_id: str, model_snapshot: dict[str, Any]
+    ) -> None:
         self.directory = Path(root) / task_id
         self.task_id = task_id
         self.model_snapshot = sanitize_trace(model_snapshot)
@@ -107,14 +113,22 @@ class TransportTraceRecorder:
             "request_id": str(uuid.uuid4()),
             "model": self.model_snapshot,
             "request": sanitize_trace(request),
-            "response": sanitize_trace(response_to_dict(response, include_reasoning=include_reasoning)) if response is not None else None,
+            "response": sanitize_trace(
+                response_to_dict(response, include_reasoning=include_reasoning)
+            )
+            if response is not None
+            else None,
             "elapsed_seconds": round(time.monotonic() - started_at, 6),
             # The decision clients disable SDK-level retries so this value is
             # exact rather than an estimate hidden inside the SDK.
             "retry_count": 0,
-            "error": None if error is None else {"type": type(error).__name__, "message": sanitize_trace(str(error))},
+            "error": None
+            if error is None
+            else {"type": type(error).__name__, "message": sanitize_trace(str(error))},
         }
         self.directory.mkdir(parents=True, exist_ok=True)
         path = self.directory / f"round-{round_number:04d}.json"
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return path

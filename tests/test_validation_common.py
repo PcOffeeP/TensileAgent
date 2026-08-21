@@ -31,18 +31,18 @@ from config import FRACTURE_CLASSES
 def test_parse_time_range_valid():
     assert parse_time_range([1.0, 2.0]) == (1.0, 2.0)
     assert parse_time_range((1.0, 2.0)) == (1.0, 2.0)
-    assert parse_time_range('[1.0, 2.0]') == (1.0, 2.0)
-    assert parse_time_range('[2.0, 1.0]') == (1.0, 2.0)
-    assert parse_time_range('  [1.0, 2.0]  ') == (1.0, 2.0)
+    assert parse_time_range("[1.0, 2.0]") == (1.0, 2.0)
+    assert parse_time_range("[2.0, 1.0]") == (1.0, 2.0)
+    assert parse_time_range("  [1.0, 2.0]  ") == (1.0, 2.0)
 
 
 def test_parse_time_range_invalid():
     assert parse_time_range(None) is None
-    assert parse_time_range('') is None
-    assert parse_time_range('not-a-range') is None
+    assert parse_time_range("") is None
+    assert parse_time_range("not-a-range") is None
     assert parse_time_range([1.0]) is None
     assert parse_time_range([1.0, 2.0, 3.0]) is None
-    assert parse_time_range(['a', 'b']) is None
+    assert parse_time_range(["a", "b"]) is None
 
 
 def test_time_range_contains_gt_hit():
@@ -58,7 +58,9 @@ def test_time_range_contains_gt_miss():
     assert time_range_contains_gt((1.0, 3.0), None) is False
 
 
-def _make_record(pred_time: float, gt_time: float, time_available: bool = True, **extras) -> dict:
+def _make_record(
+    pred_time: float, gt_time: float, time_available: bool = True, **extras
+) -> dict:
     return {
         "video_id": "v001",
         "gt_time_sec": gt_time,
@@ -112,9 +114,27 @@ def test_time_aggregator_excludes_no_gt_time():
 def test_confidence_buckets_numeric_scores():
     agg = init_time_aggregator()
     records = [
-        _make_record(10.0, 10.2, pred_time_range=[9.5, 10.5], pred_confidence_score=0.85, pred_confidence_level="高"),
-        _make_record(20.0, 20.8, pred_time_range=[19.5, 20.5], pred_confidence_score=0.85, pred_confidence_level="高"),
-        _make_record(30.0, 30.1, pred_time_range=[29.5, 30.5], pred_confidence_score=0.25, pred_confidence_level="低"),
+        _make_record(
+            10.0,
+            10.2,
+            pred_time_range=[9.5, 10.5],
+            pred_confidence_score=0.85,
+            pred_confidence_level="高",
+        ),
+        _make_record(
+            20.0,
+            20.8,
+            pred_time_range=[19.5, 20.5],
+            pred_confidence_score=0.85,
+            pred_confidence_level="高",
+        ),
+        _make_record(
+            30.0,
+            30.1,
+            pred_time_range=[29.5, 30.5],
+            pred_confidence_score=0.25,
+            pred_confidence_level="低",
+        ),
     ]
     for record in records:
         update_time_aggregator(agg, record)
@@ -298,7 +318,9 @@ def test_extract_confidence_maps_untrusted_level():
 def test_confidence_buckets_untrusted_level():
     """Level-only '不可信' records are binned using the canonical score."""
     agg = init_time_aggregator()
-    update_time_aggregator(agg, _make_record(10.0, 10.1, pred_confidence_level="不可信"))
+    update_time_aggregator(
+        agg, _make_record(10.0, 10.1, pred_confidence_level="不可信")
+    )
 
     metrics = finalize_time_aggregator(agg)
     buckets = {row["bucket"]: row for row in metrics["confidence_buckets"]}

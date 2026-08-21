@@ -33,7 +33,11 @@ def parse_user_intent(question: str | None) -> UserIntent:
         "类形": "类型",
     }.items():
         lower = lower.replace(typo, canonical)
-    language = "en" if re.search(r"[a-zA-Z]", text) and not re.search(r"[\u4e00-\u9fff]", text) else "zh"
+    language = (
+        "en"
+        if re.search(r"[a-zA-Z]", text) and not re.search(r"[\u4e00-\u9fff]", text)
+        else "zh"
+    )
 
     injection = re.search(
         r"忽略.{0,12}(指令|规则|系统)|覆盖.{0,8}(提示|prompt)|系统提示|"
@@ -46,7 +50,9 @@ def parse_user_intent(question: str | None) -> UserIntent:
         r"do\s+not\s+(analy[sz]e|inspect|call)|don't\s+(analy[sz]e|inspect|call)",
         lower,
     )
-    analysis_request = re.search(r"分析|识别|看看|视频|断裂|analy[sz]e|inspect|fracture|video", lower)
+    analysis_request = re.search(
+        r"分析|识别|看看|视频|断裂|analy[sz]e|inspect|fracture|video", lower
+    )
     if injection:
         return UserIntent(
             action="unsupported",
@@ -57,38 +63,58 @@ def parse_user_intent(question: str | None) -> UserIntent:
         )
     if refusal and analysis_request:
         contradictory = bool(
-            re.search(r"(但|同时|然后|又|however|but).{0,12}(分析|识别|看看|analy[sz]e|inspect)", lower)
-            or re.search(r"(分析|识别|看看|analy[sz]e|inspect).{0,12}(但|同时|however|but).{0,12}(不要|don't)", lower)
+            re.search(
+                r"(但|同时|然后|又|however|but).{0,12}(分析|识别|看看|analy[sz]e|inspect)",
+                lower,
+            )
+            or re.search(
+                r"(分析|识别|看看|analy[sz]e|inspect).{0,12}(但|同时|however|but).{0,12}(不要|don't)",
+                lower,
+            )
         )
         return UserIntent(
             action="unsupported",
             requested_fields=["has_fracture"],
             language=language,
-            ambiguity="请求同时要求分析与不分析" if contradictory else "用户明确要求不执行视频分析",
-            rejection_code="contradictory_intent" if contradictory else "analysis_declined",
+            ambiguity="请求同时要求分析与不分析"
+            if contradictory
+            else "用户明确要求不执行视频分析",
+            rejection_code="contradictory_intent"
+            if contradictory
+            else "analysis_declined",
         )
 
     requested: list[str] = []
     if re.search(r"断(了|裂|没)|是否.*断|fracture|broken|break", lower):
         requested.append("has_fracture")
-    if re.search(r"什么时候|啥时候|何时|几秒|多少秒|哪一秒|第几秒|几点|时间|哪.*帧|区间|when|what second|time|frame", lower):
+    if re.search(
+        r"什么时候|啥时候|何时|几秒|多少秒|哪一秒|第几秒|几点|时间|哪.*帧|区间|when|what second|time|frame",
+        lower,
+    ):
         requested.append("time_range")
     if re.search(r"类型|模式|种类|哪种|什么断裂|type|mode|kind", lower):
         requested.append("type")
-    if re.search(r"位置|哪里|哪儿|什么地方|哪个地方|哪个部位|断在哪|断裂点|标距|location|where|which part", lower):
+    if re.search(
+        r"位置|哪里|哪儿|什么地方|哪个地方|哪个部位|断在哪|断裂点|标距|location|where|which part",
+        lower,
+    ):
         requested.append("location")
     if re.search(r"置信|把握|确定吗|可靠|confidence|sure|certain", lower):
         requested.append("confidence")
     if re.search(r"为什么|依据|证据|怎么看|reason|evidence|why", lower):
         requested.append("visual_evidence")
 
-    detailed = bool(re.search(r"完整|全面|详细|综合|all|full|detail|comprehensive", lower))
+    detailed = bool(
+        re.search(r"完整|全面|详细|综合|all|full|detail|comprehensive", lower)
+    )
     if detailed:
         requested = list(_ALL_FIELDS)
     elif not requested:
         # A generic request such as “帮我看一下” is treated as a concise full
         # analysis, while clearly unrelated text is reported as unsupported.
-        if re.search(r"分析|看看|看一下|视频|试样|拉伸|analy[sz]e|video|tensile", lower):
+        if re.search(
+            r"分析|看看|看一下|视频|试样|拉伸|analy[sz]e|video|tensile", lower
+        ):
             requested = ["has_fracture", "time_range", "type", "location"]
         else:
             return UserIntent(
@@ -115,7 +141,10 @@ def project_result(result: dict[str, Any], intent: UserIntent) -> dict[str, Any]
             "status": "unrecognized",
             "answer": None,
             "evidence_available": False,
-            "error": {"code": intent.rejection_code or "unsupported_intent", "message": intent.ambiguity},
+            "error": {
+                "code": intent.rejection_code or "unsupported_intent",
+                "message": intent.ambiguity,
+            },
         }
 
     status = result.get("status")

@@ -83,23 +83,23 @@ def test_common_scoring_uses_coarse_site_and_special_case() -> None:
 
 
 def test_non_regression_uses_prefrozen_absolute_tolerance() -> None:
-    v2 = {metric: 0.8 for metric in (
-        "has_fracture_accuracy",
-        "fracture_recall",
-        "no_fracture_recall",
-        "time_hit_rate",
-        "mechanism_macro_f1",
-        "coarse_site_macro_f1",
-        "joint_common_success_rate",
-    )}
+    v2 = {
+        metric: 0.8
+        for metric in (
+            "has_fracture_accuracy",
+            "fracture_recall",
+            "no_fracture_recall",
+            "time_hit_rate",
+            "mechanism_macro_f1",
+            "coarse_site_macro_f1",
+            "joint_common_success_rate",
+        )
+    }
     v4 = {metric: 0.77 for metric in v2}
     report = compare_common_reports(v4, v2, absolute_tolerance=0.03)
     assert report["passed"] is True
     v4["time_hit_rate"] = 0.76
-    assert (
-        compare_common_reports(v4, v2, absolute_tolerance=0.03)["passed"]
-        is False
-    )
+    assert compare_common_reports(v4, v2, absolute_tolerance=0.03)["passed"] is False
 
 
 def test_special_case_comparison_requires_exact_v4_result() -> None:

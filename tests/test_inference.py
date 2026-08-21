@@ -39,12 +39,14 @@ def _write_fake_mp4(path: Path, content: bytes = b"video-bytes") -> None:
 # MockInferenceClient
 # ---------------------------------------------------------------------------
 def test_mock_inference_client_returns_dict():
-    client = MockInferenceClient({
-        "has_fracture": True,
-        "fracture_between": [17, 18],
-        "type": "韧性断裂",
-        "location": "inside_gauge",
-    })
+    client = MockInferenceClient(
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+        }
+    )
     result = client.infer("any.mp4", "prompt")
     assert result.ok
     assert result.model_output is not None
@@ -62,7 +64,12 @@ def test_mock_inference_client_parses_json_string():
     assert result.model_output is not None
     assert result.model_output["has_fracture"] is False
     assert result.model_output["location"] is None
-    assert set(result.model_output) == {"has_fracture", "fracture_between", "type", "location"}
+    assert set(result.model_output) == {
+        "has_fracture",
+        "fracture_between",
+        "type",
+        "location",
+    }
 
 
 def test_mock_inference_client_callable_response():
@@ -206,9 +213,7 @@ def test_llama_factory_inference_client_payload_too_large(tmp_path: Path):
     with patch("agent.inference.OpenAI"):
         video = tmp_path / "big.mp4"
         _write_fake_mp4(video, b"x" * 200)
-        client = LlamaFactoryInferenceClient(
-            model="minicpm-test", max_request_size=10
-        )
+        client = LlamaFactoryInferenceClient(model="minicpm-test", max_request_size=10)
         with pytest.raises(RuntimeError, match="exceeds"):
             client.infer(str(video), "prompt")
 
@@ -249,7 +254,12 @@ def test_llama_factory_inference_client_sends_base64(tmp_path: Path):
     assert result.ok
     assert result.model_output is not None
     assert result.model_output["has_fracture"] is True
-    assert set(result.model_output) == {"has_fracture", "fracture_between", "type", "location"}
+    assert set(result.model_output) == {
+        "has_fracture",
+        "fracture_between",
+        "type",
+        "location",
+    }
     assert captured["model"] == "minicpm-test"
 
     # Message ordering: system first, then user with video_url before text.
@@ -284,12 +294,15 @@ def test_evidence_inference_requires_and_returns_actual_frame_metadata(tmp_path:
 
     with patch("agent.inference.OpenAI") as mock_openai:
         mock_openai.return_value.chat.completions.create.return_value = response
-        result = LlamaFactoryInferenceClient(model="minicpm-test").infer_evidence(str(video))
+        result = LlamaFactoryInferenceClient(model="minicpm-test").infer_evidence(
+            str(video)
+        )
 
     assert result.ok is True
     assert result.preprocessing is not None
     assert result.preprocessing["request_id"] == "evidence-request"
     assert len(result.preprocessing["frames"]) == 8
+
 
 def test_llama_factory_inference_client_clip_build_result_sends_manifest(
     tmp_path: Path,
@@ -325,7 +338,9 @@ def test_llama_factory_inference_client_clip_build_result_sends_manifest(
     assert result.ok
     assert result.model_output is not None
     assert result.model_output["type"] == "未断裂"
-    assert captured["extra_body"] == {"preprocessing": {"temp_video_manifest": manifest}}
+    assert captured["extra_body"] == {
+        "preprocessing": {"temp_video_manifest": manifest}
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -470,7 +485,7 @@ def test_llama_factory_inference_client_invalid_output_is_parsed_once(
 
     mock_client = MagicMock()
     mock_client.chat.completions.create.return_value = make_completion(
-        "{\"has_fracture\": true}"
+        '{"has_fracture": true}'
     )
 
     with patch("agent.inference.OpenAI") as mock_openai:
@@ -526,9 +541,7 @@ def test_logs_do_not_contain_full_base64(tmp_path: Path, caplog):
 
 def test_client_repr_does_not_leak_api_key():
     with patch("agent.inference.OpenAI"):
-        client = LlamaFactoryInferenceClient(
-            model="m", api_key="super-secret-key"
-        )
+        client = LlamaFactoryInferenceClient(model="m", api_key="super-secret-key")
         representation = repr(client)
         assert "super-secret-key" not in representation
         assert "***REDACTED***" in representation
@@ -546,27 +559,40 @@ def test_default_request_size_is_32_mib():
 # ---------------------------------------------------------------------------
 def test_validate_preprocessing_meta_none():
     from agent.inference import _validate_preprocessing_meta
-    assert _validate_preprocessing_meta(None) == "missing_or_invalid_preprocessing_metadata"
+
+    assert (
+        _validate_preprocessing_meta(None)
+        == "missing_or_invalid_preprocessing_metadata"
+    )
 
 
 def test_validate_preprocessing_meta_max_frames_not_8():
     """max_frames != 8 is fatal."""
     from agent.inference import _validate_preprocessing_meta
+
     meta = {"request_id": "r", "processor_version": "v", "max_frames": 4, "frames": []}
     assert _validate_preprocessing_meta(meta) == "max_frames_not_8"
 
 
 def test_validate_preprocessing_meta_too_many_frames():
     from agent.inference import _validate_preprocessing_meta
-    meta = {"request_id": "r", "processor_version": "v", "max_frames": 8, "frames": [{"index": i, "timestamp": float(i)} for i in range(9)]}
+
+    meta = {
+        "request_id": "r",
+        "processor_version": "v",
+        "max_frames": 8,
+        "frames": [{"index": i, "timestamp": float(i)} for i in range(9)],
+    }
     assert _validate_preprocessing_meta(meta) == "too_many_frames"
 
 
 def test_validate_preprocessing_meta_non_monotonic_indices():
     from agent.inference import _validate_preprocessing_meta
+
     meta = {
         "max_frames": 8,
-        "request_id": "r", "processor_version": "v",
+        "request_id": "r",
+        "processor_version": "v",
         "deployment_manifest": TEST_DEPLOYMENT_MANIFEST,
         "frames": [
             {"index": 0, "timestamp": 0.0},
@@ -579,9 +605,11 @@ def test_validate_preprocessing_meta_non_monotonic_indices():
 
 def test_validate_preprocessing_meta_duplicate_index():
     from agent.inference import _validate_preprocessing_meta
+
     meta = {
         "max_frames": 8,
-        "request_id": "r", "processor_version": "v",
+        "request_id": "r",
+        "processor_version": "v",
         "frames": [
             {"index": 0, "timestamp": 0.0},
             {"index": 1, "timestamp": 1.0},
@@ -593,9 +621,11 @@ def test_validate_preprocessing_meta_duplicate_index():
 
 def test_validate_preprocessing_meta_valid():
     from agent.inference import _validate_preprocessing_meta
+
     meta = {
         "max_frames": 8,
-        "request_id": "r", "processor_version": "v",
+        "request_id": "r",
+        "processor_version": "v",
         "deployment_manifest": TEST_DEPLOYMENT_MANIFEST,
         "frames": [
             {"index": 0, "timestamp": 0.0},
@@ -609,9 +639,11 @@ def test_validate_preprocessing_meta_valid():
 def test_validate_preprocessing_meta_non_continuous_indices():
     """Indices with gaps (non-continuous) are fatal."""
     from agent.inference import _validate_preprocessing_meta
+
     meta = {
         "max_frames": 8,
-        "request_id": "r", "processor_version": "v",
+        "request_id": "r",
+        "processor_version": "v",
         "frames": [
             {"index": 0, "timestamp": 0.0},
             {"index": 2, "timestamp": 1.0},
@@ -728,6 +760,7 @@ def test_llama_factory_inference_client_extracts_preprocessing(tmp_path: Path):
 
         def model_dump():
             return {"id": "chatcmpl-e2e", "choices": [{"index": 0}]}
+
         mock_completion.model_dump = model_dump
         return mock_completion
 
@@ -772,6 +805,7 @@ def test_llama_factory_inference_client_extracts_invalid_preprocessing(
 
         def model_dump():
             return {"id": "chatcmpl-invalid"}
+
         mock_completion.model_dump = model_dump
         return mock_completion
 
@@ -797,12 +831,14 @@ def test_llama_factory_inference_client_no_preprocessing_is_graceful(
 
     class _ResponseStub:
         """Stub that mimics ChatCompletion without preprocessing."""
+
         class _Choice:
             class _Message:
                 content = (
                     '{"has_fracture": false, "fracture_between": null, '
                     '"type": "未断裂", "location": null}'
                 )
+
             message = _Message()
 
         choices = [_Choice()]
@@ -954,8 +990,11 @@ def test_diagnostics_do_not_leak_base64(tmp_path: Path):
     # The original full base64 payload must not appear anywhere in diagnostics.
     diagnostics_json = json.dumps(diagnostics.model_dump(mode="json"))
     import base64
+
     full_payload = base64.b64encode(_FAKE_MP4_HEADER + secret).decode("ascii")
     assert full_payload not in diagnostics_json
+
+
 TEST_DEPLOYMENT_MANIFEST = {
     "model_version": "minicpm-v-4.5",
     "adapter_version": "adapter-test",

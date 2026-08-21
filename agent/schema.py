@@ -126,22 +126,32 @@ class ModelOutput(BaseModel):
                 raise ValueError("non-null type must be one of the 8 fracture classes")
             if self.fracture_between is not None:
                 if len(self.fracture_between) != 2:
-                    raise ValueError("fracture_between must contain exactly two integers [i, i+1]")
+                    raise ValueError(
+                        "fracture_between must contain exactly two integers [i, i+1]"
+                    )
                 i, j = self.fracture_between
                 if j != i + 1 or i < 0:
-                    raise ValueError("fracture_between must be strictly adjacent [i, i+1] with i >= 0")
+                    raise ValueError(
+                        "fracture_between must be strictly adjacent [i, i+1] with i >= 0"
+                    )
             if self.location is not None and self.location not in {
                 LocationType.INSIDE,
                 LocationType.OUTSIDE,
             }:
-                raise ValueError("non-null location must be inside_gauge or outside_gauge")
+                raise ValueError(
+                    "non-null location must be inside_gauge or outside_gauge"
+                )
             return self
 
         if self.has_fracture is False:
             if self.fracture_between is not None:
-                raise ValueError("fracture_between must be null when has_fracture is false")
+                raise ValueError(
+                    "fracture_between must be null when has_fracture is false"
+                )
             if self.type not in {FractureType.NO_FRACTURE, FractureType.NOT_CLAMPED}:
-                raise ValueError("type must be 未断裂 or 未夹紧 when has_fracture is false")
+                raise ValueError(
+                    "type must be 未断裂 or 未夹紧 when has_fracture is false"
+                )
             if self.location is not None:
                 raise ValueError("location must be null when has_fracture is false")
             return self
@@ -195,6 +205,7 @@ class ToolSampleAndInfer(BaseModel):
             raise ValueError("sample_range must satisfy start < end")
         return value
 
+
 class ToolTerminate(BaseModel):
     """Schema for the ``terminate`` tool (v3).
 
@@ -213,7 +224,9 @@ class ToolTerminate(BaseModel):
     fracture_type: str | None = Field(
         default=None,
         description="status=fracture 时可选，非空时只能是八种中文断裂类别；其他 status 省略此字段",
-        json_schema_extra={"enum": [str(item) for item in sorted(FRACTURE_CLASSES)] + [None]},
+        json_schema_extra={
+            "enum": [str(item) for item in sorted(FRACTURE_CLASSES)] + [None]
+        },
     )
     location: str | None = Field(
         default=None,
@@ -265,11 +278,18 @@ class ToolTerminate(BaseModel):
     def _validate_status(self) -> Self:
         valid_statuses = {"fracture", "no_fracture", "unrecognized"}
         if self.status not in valid_statuses:
-            raise ValueError(f"status must be one of {valid_statuses}, got {self.status}")
+            raise ValueError(
+                f"status must be one of {valid_statuses}, got {self.status}"
+            )
 
         if self.status == "fracture":
-            if self.fracture_type is not None and self.fracture_type not in FRACTURE_CLASSES:
-                raise ValueError("fracture_type must be null or one of the 8 fracture classes")
+            if (
+                self.fracture_type is not None
+                and self.fracture_type not in FRACTURE_CLASSES
+            ):
+                raise ValueError(
+                    "fracture_type must be null or one of the 8 fracture classes"
+                )
             if self.location is not None and self.location not in {
                 LocationType.INSIDE,
                 LocationType.OUTSIDE,
@@ -288,7 +308,9 @@ class ToolTerminate(BaseModel):
             if self.location is not None:
                 raise ValueError("location must be null for no_fracture status")
             if self.unrecognized_reason is not None:
-                raise ValueError("unrecognized_reason must be null for no_fracture status")
+                raise ValueError(
+                    "unrecognized_reason must be null for no_fracture status"
+                )
 
         else:  # unrecognized
             if self.unrecognized_reason not in UNRECOGNIZED_REASONS:
@@ -406,7 +428,9 @@ class UserIntent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    action: Literal["analyze_video", "explain_previous", "unsupported"] = "analyze_video"
+    action: Literal["analyze_video", "explain_previous", "unsupported"] = (
+        "analyze_video"
+    )
     requested_fields: list[
         Literal[
             "has_fracture",
@@ -469,7 +493,9 @@ class VisualEvidenceReference(BaseModel):
             raise ValueError("frame_timestamps must be finite")
         if any(
             current <= previous
-            for previous, current in zip(self.frame_timestamps, self.frame_timestamps[1:])
+            for previous, current in zip(
+                self.frame_timestamps, self.frame_timestamps[1:]
+            )
         ):
             raise ValueError("frame_timestamps must be strictly increasing")
         return self
@@ -490,11 +516,15 @@ class VisualEvidence(BaseModel):
         if self.status == "available" and not (self.summary and self.summary.strip()):
             raise ValueError("summary is required when visual evidence is available")
         if self.status == "available" and not self.references:
-            raise ValueError("references are required when visual evidence is available")
+            raise ValueError(
+                "references are required when visual evidence is available"
+            )
         if self.status != "available" and self.summary is not None:
             raise ValueError("summary must be null unless visual evidence is available")
         if self.status != "available" and self.references:
-            raise ValueError("references must be empty unless visual evidence is available")
+            raise ValueError(
+                "references must be empty unless visual evidence is available"
+            )
         return self
 
 
@@ -545,20 +575,40 @@ class FinalOutput(BaseModel):
         data = dict(value)
         status = data.get("status")
         if "has_fracture" not in data:
-            data["has_fracture"] = True if status == "fracture" else False if status == "no_fracture" else None
+            data["has_fracture"] = (
+                True
+                if status == "fracture"
+                else False
+                if status == "no_fracture"
+                else None
+            )
         evidence = data.get("visual_evidence") or {}
-        evidence_status = evidence.get("status", "not_requested") if isinstance(evidence, dict) else evidence.status
+        evidence_status = (
+            evidence.get("status", "not_requested")
+            if isinstance(evidence, dict)
+            else evidence.status
+        )
         if data.get("field_status") is None:
             if status == "fracture":
                 data["field_status"] = {
                     "has_fracture": "available",
-                    "time_range": "available" if data.get("time_range") is not None else "unavailable",
-                    "fracture_type": "available" if data.get("fracture_type") is not None else "unavailable",
-                    "location": "available" if data.get("location") is not None else "unavailable",
-                    "confidence": "available" if data.get("confidence") is not None else "unavailable",
+                    "time_range": "available"
+                    if data.get("time_range") is not None
+                    else "unavailable",
+                    "fracture_type": "available"
+                    if data.get("fracture_type") is not None
+                    else "unavailable",
+                    "location": "available"
+                    if data.get("location") is not None
+                    else "unavailable",
+                    "confidence": "available"
+                    if data.get("confidence") is not None
+                    else "unavailable",
                     "visual_evidence": (
-                        "available" if evidence_status == "available"
-                        else "not_applicable" if evidence_status == "not_requested"
+                        "available"
+                        if evidence_status == "available"
+                        else "not_applicable"
+                        if evidence_status == "not_requested"
                         else "unavailable"
                     ),
                 }
@@ -568,10 +618,14 @@ class FinalOutput(BaseModel):
                     "time_range": "not_applicable",
                     "fracture_type": "not_applicable",
                     "location": "not_applicable",
-                    "confidence": "available" if data.get("confidence") is not None else "unavailable",
+                    "confidence": "available"
+                    if data.get("confidence") is not None
+                    else "unavailable",
                     "visual_evidence": (
-                        "available" if evidence_status == "available"
-                        else "not_applicable" if evidence_status == "not_requested"
+                        "available"
+                        if evidence_status == "available"
+                        else "not_applicable"
+                        if evidence_status == "not_requested"
                         else "unavailable"
                     ),
                 }
@@ -583,8 +637,10 @@ class FinalOutput(BaseModel):
                     "location": "unavailable",
                     "confidence": "unavailable",
                     "visual_evidence": (
-                        "available" if evidence_status == "available"
-                        else "not_applicable" if evidence_status == "not_requested"
+                        "available"
+                        if evidence_status == "available"
+                        else "not_applicable"
+                        if evidence_status == "not_requested"
                         else "unavailable"
                     ),
                 }
@@ -639,7 +695,9 @@ class FinalOutput(BaseModel):
                 self.fracture_type is not None
                 and self.fracture_type not in allowed_fracture_types
             ):
-                raise ValueError("fracture_type must be null or one of the 8 fracture classes")
+                raise ValueError(
+                    "fracture_type must be null or one of the 8 fracture classes"
+                )
             allowed_locations = (
                 {
                     LocationType.INSIDE,
@@ -671,7 +729,9 @@ class FinalOutput(BaseModel):
             if self.location is not None:
                 raise ValueError("location must be null for no_fracture status")
             if self.unrecognized_reason is not None:
-                raise ValueError("unrecognized_reason must be null for no_fracture status")
+                raise ValueError(
+                    "unrecognized_reason must be null for no_fracture status"
+                )
             if self.special_case is not None:
                 raise ValueError("special_case must be null for no_fracture status")
 
@@ -688,11 +748,22 @@ class FinalOutput(BaseModel):
                 raise ValueError("fracture_type must be null for unrecognized status")
             if self.location is not None:
                 raise ValueError("location must be null for unrecognized status")
-            if self.schema_version == PUBLIC_RESULT_V2 and self.special_case is not None:
-                raise ValueError("special_case is available only in the V4.1 result schema")
-            if self.special_case == "未夹紧" and self.unrecognized_reason != "not_clamped":
+            if (
+                self.schema_version == PUBLIC_RESULT_V2
+                and self.special_case is not None
+            ):
+                raise ValueError(
+                    "special_case is available only in the V4.1 result schema"
+                )
+            if (
+                self.special_case == "未夹紧"
+                and self.unrecognized_reason != "not_clamped"
+            ):
                 raise ValueError("未夹紧 requires unrecognized_reason=not_clamped")
-            if self.special_case == "视频异常" and self.unrecognized_reason != "video_anomaly":
+            if (
+                self.special_case == "视频异常"
+                and self.unrecognized_reason != "video_anomaly"
+            ):
                 raise ValueError("视频异常 requires unrecognized_reason=video_anomaly")
         assert self.field_status is not None
         availability_values = {
@@ -704,9 +775,13 @@ class FinalOutput(BaseModel):
         for field_name, field_value in availability_values.items():
             state = getattr(self.field_status, field_name)
             if state == "available" and field_value is None:
-                raise ValueError(f"field_status.{field_name}=available requires a value")
+                raise ValueError(
+                    f"field_status.{field_name}=available requires a value"
+                )
             if state == "not_applicable" and field_value is not None:
-                raise ValueError(f"field_status.{field_name}=not_applicable requires null")
+                raise ValueError(
+                    f"field_status.{field_name}=not_applicable requires null"
+                )
         return self
 
 

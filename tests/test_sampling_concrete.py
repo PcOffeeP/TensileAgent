@@ -20,10 +20,14 @@ def synthetic_video(tmp_path_factory):
     cmd = [
         "ffmpeg",
         "-y",
-        "-f", "lavfi",
-        "-i", "testsrc=size=320x240:rate=30:duration=10",
-        "-pix_fmt", "yuv420p",
-        "-c:v", "libx264",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=size=320x240:rate=30:duration=10",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:v",
+        "libx264",
         str(path),
     ]
     subprocess.run(cmd, capture_output=True, check=True)

@@ -11,13 +11,17 @@ def _mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def _time_contains(prediction: dict[str, Any], timestamp: Any, margin: float = 0.0) -> bool:
+def _time_contains(
+    prediction: dict[str, Any], timestamp: Any, margin: float = 0.0
+) -> bool:
     interval = prediction.get("time_range")
     return (
         isinstance(timestamp, (int, float))
         and isinstance(interval, list)
         and len(interval) == 2
-        and float(interval[0]) - margin <= float(timestamp) <= float(interval[1]) + margin
+        and float(interval[0]) - margin
+        <= float(timestamp)
+        <= float(interval[1]) + margin
     )
 
 
@@ -25,7 +29,9 @@ def score_method(
     records: list[tuple[dict[str, Any], dict[str, Any], int]],
 ) -> dict[str, Any]:
     """Score one method with explicit availability and fixed denominators."""
-    normal = [(gt, pred, calls) for gt, pred, calls in records if gt["special_case"] is None]
+    normal = [
+        (gt, pred, calls) for gt, pred, calls in records if gt["special_case"] is None
+    ]
     positives = [item for item in normal if item[0]["has_fracture"] is True]
     negatives = [item for item in normal if item[0]["has_fracture"] is False]
     tp = sum(pred.get("has_fracture") is True for gt, pred, _ in positives)
@@ -60,15 +66,9 @@ def score_method(
         if gt.get("fracture_mechanism") is not None
     ]
     site_eligible = [
-        (gt, pred)
-        for gt, pred, _ in positives
-        if gt.get("fracture_site") is not None
+        (gt, pred) for gt, pred, _ in positives if gt.get("fracture_site") is not None
     ]
-    specials = [
-        (gt, pred)
-        for gt, pred, _ in records
-        if gt["special_case"] is not None
-    ]
+    specials = [(gt, pred) for gt, pred, _ in records if gt["special_case"] is not None]
     return {
         "n": len(records),
         "presence": {
@@ -78,7 +78,8 @@ def score_method(
             "f1": f1,
             "specificity": tn / len(negatives) if negatives else None,
             "abstention_rate": (
-                sum(pred.get("has_fracture") is None for _, pred, _ in normal) / len(normal)
+                sum(pred.get("has_fracture") is None for _, pred, _ in normal)
+                / len(normal)
                 if normal
                 else None
             ),
@@ -86,7 +87,9 @@ def score_method(
             "denominator": len(normal),
         },
         "time": {
-            "availability": len(available_times) / len(positives) if positives else None,
+            "availability": len(available_times) / len(positives)
+            if positives
+            else None,
             "strict_hit_rate_all_positives": (
                 sum(
                     _time_contains(pred, gt.get("fracture_time"))
@@ -119,7 +122,10 @@ def score_method(
         },
         "mechanism": {
             "availability": (
-                sum(pred.get("fracture_type") is not None for _, pred in mechanism_eligible)
+                sum(
+                    pred.get("fracture_type") is not None
+                    for _, pred in mechanism_eligible
+                )
                 / len(mechanism_eligible)
                 if mechanism_eligible
                 else None
@@ -143,7 +149,10 @@ def score_method(
                 else None
             ),
             "accuracy": (
-                sum(pred.get("location") == gt["fracture_site"] for gt, pred in site_eligible)
+                sum(
+                    pred.get("location") == gt["fracture_site"]
+                    for gt, pred in site_eligible
+                )
                 / len(site_eligible)
                 if site_eligible
                 else None
@@ -152,7 +161,10 @@ def score_method(
         },
         "special_case": {
             "accuracy": (
-                sum(pred.get("special_case") == gt["special_case"] for gt, pred in specials)
+                sum(
+                    pred.get("special_case") == gt["special_case"]
+                    for gt, pred in specials
+                )
                 / len(specials)
                 if specials
                 else None
@@ -162,7 +174,9 @@ def score_method(
         "efficiency": {
             "mean_requests": _mean([float(calls) for _, _, calls in records]),
             "total_requests": sum(calls for _, _, calls in records),
-            "request_count_distribution": dict(Counter(calls for _, _, calls in records)),
+            "request_count_distribution": dict(
+                Counter(calls for _, _, calls in records)
+            ),
         },
     }
 

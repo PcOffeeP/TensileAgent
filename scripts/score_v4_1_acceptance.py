@@ -20,7 +20,9 @@ def main() -> None:
     parser.add_argument("--results-root", required=True)
     parser.add_argument("--spec", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--video-ids", help="Optional JSON array restricting the scored subset")
+    parser.add_argument(
+        "--video-ids", help="Optional JSON array restricting the scored subset"
+    )
     args = parser.parse_args()
     spec = json.loads(Path(args.spec).read_text(encoding="utf-8"))
     allowed = None

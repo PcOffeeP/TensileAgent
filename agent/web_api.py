@@ -1,4 +1,5 @@
 """Agent 本地 Web 工作台 API"""
+
 import argparse
 import asyncio
 import csv
@@ -203,7 +204,9 @@ def _save_task(task: TaskModel):
     )
     d = public.model_dump()
     d["_schema_version"] = 2
-    _task_path(task.id).write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+    _task_path(task.id).write_text(
+        json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     _update_runtime_index(task)
 
 
@@ -227,9 +230,7 @@ def _restore_history():
 
         schema_version = data.get("_schema_version")
         is_old_format = (
-            schema_version == 1
-            or "video_path" in data
-            or "config_path" in data
+            schema_version == 1 or "video_path" in data or "config_path" in data
         )
 
         if is_old_format:
@@ -381,8 +382,11 @@ def _append_event(task_id: str, event: dict):
 
 def _event_callback_factory(task_id: str):
     """创建 runner 事件回调。Agent 原始事件使用 ``event_type`` 字段。"""
+
     def callback(event_data: dict):
-        event_type = event_data.get("event_type") or event_data.get("event") or "unknown"
+        event_type = (
+            event_data.get("event_type") or event_data.get("event") or "unknown"
+        )
         event = {
             "task_id": task_id,
             "event": event_type,
@@ -390,6 +394,7 @@ def _event_callback_factory(task_id: str):
             "timestamp": _now(),
         }
         _append_event(task_id, event)
+
     return callback
 
 
@@ -417,7 +422,9 @@ async def task_events(task_id: str):
             pass
         finally:
             if task_id in sse_connections:
-                sse_connections[task_id] = [q for q in sse_connections[task_id] if q is not queue]
+                sse_connections[task_id] = [
+                    q for q in sse_connections[task_id] if q is not queue
+                ]
 
     return EventSourceResponse(event_generator())
 
@@ -435,12 +442,15 @@ async def _queue_worker():
         task.started_at = _now()
         _save_task(task)
 
-        _append_event(task_id, {
-            "task_id": task_id,
-            "event": "task_started",
-            "data": {"video_id": task.video_id},
-            "timestamp": _now(),
-        })
+        _append_event(
+            task_id,
+            {
+                "task_id": task_id,
+                "event": "task_started",
+                "data": {"video_id": task.video_id},
+                "timestamp": _now(),
+            },
+        )
 
         try:
             config_path = task.config_path or str(CONFIG_PATH)
@@ -457,20 +467,27 @@ async def _queue_worker():
                     agent_config_snapshot=task.decision_model,
                     trace_task_id=task.id,
                     work_dir=PROJECT_ROOT,
-                )
+                ),
             )
 
             # 统一解包 RunnerResult 并映射任务状态/结果
             _apply_runner_result_to_task(task, runner_result)
         except Exception as e:
             task.status = TASK_STATUS_FAILED
-            task.error = {"stage": "runner", "code": type(e).__name__, "message": str(e)}
-            _append_event(task_id, {
-                "task_id": task_id,
-                "event": "task_failed",
-                "data": _sanitize_event_data(task.error),
-                "timestamp": _now(),
-            })
+            task.error = {
+                "stage": "runner",
+                "code": type(e).__name__,
+                "message": str(e),
+            }
+            _append_event(
+                task_id,
+                {
+                    "task_id": task_id,
+                    "event": "task_failed",
+                    "data": _sanitize_event_data(task.error),
+                    "timestamp": _now(),
+                },
+            )
         finally:
             task.finished_at = _now()
             _save_task(task)
@@ -506,7 +523,8 @@ def _normalize_result(result: Any) -> dict:
                 "warnings": res.get("warnings", []),
                 "rounds": result.get("rounds", result.get("total_rounds")),
             }.items()
-            if v is not None or k in ("schema_version", "video_id", "status", "warnings")
+            if v is not None
+            or k in ("schema_version", "video_id", "status", "warnings")
         }
 
     if ok is False:
@@ -545,24 +563,30 @@ def _apply_runner_result_to_task(task: TaskModel, runner_result: Any):
                 "code": "unknown_error",
                 "message": str(error) if error is not None else "unknown runner error",
             }
-        _append_event(task.id, {
-            "task_id": task.id,
-            "event": "task_failed",
-            "data": task.error,
-            "timestamp": _now(),
-        })
+        _append_event(
+            task.id,
+            {
+                "task_id": task.id,
+                "event": "task_failed",
+                "data": task.error,
+                "timestamp": _now(),
+            },
+        )
         return
 
     task.status = TASK_STATUS_COMPLETED
     task.result = _normalize_result(runner_result)
     if isinstance(runner_result, dict):
         task.response = _sanitize_event_data(runner_result.get("response"))
-    _append_event(task.id, {
-        "task_id": task.id,
-        "event": "task_completed",
-        "data": {"result": task.result, "response": task.response},
-        "timestamp": _now(),
-    })
+    _append_event(
+        task.id,
+        {
+            "task_id": task.id,
+            "event": "task_completed",
+            "data": {"result": task.result, "response": task.response},
+            "timestamp": _now(),
+        },
+    )
 
 
 def _to_public_task(task: TaskModel) -> dict:
@@ -619,14 +643,22 @@ def _validated_model_snapshot() -> dict[str, Any]:
 
 
 def _configuration_switch_blocked() -> bool:
-    return any(task.status in {TASK_STATUS_QUEUED, TASK_STATUS_RUNNING} for task in tasks.values())
+    return any(
+        task.status in {TASK_STATUS_QUEUED, TASK_STATUS_RUNNING}
+        for task in tasks.values()
+    )
 
 
 # ── API 端点 ─────────────────────────────────────────────
 @app.get("/api/health")
 async def health():
     """健康检查"""
-    return {"ok": True, "status": "running", "tasks": len(tasks), "queue_size": task_queue.qsize()}
+    return {
+        "ok": True,
+        "status": "running",
+        "tasks": len(tasks),
+        "queue_size": task_queue.qsize(),
+    }
 
 
 @app.get("/api/config")
@@ -642,11 +674,17 @@ async def get_config():
     else:
         active_model = None
     local_cfg = agent_cfg.get("local", {})
-    local_status = list_local_models(local_cfg.get("base_url", "http://localhost:11434/v1"))
+    local_status = list_local_models(
+        local_cfg.get("base_url", "http://localhost:11434/v1")
+    )
     active_digest = None
     if active_backend == "local" and active_model:
         active_digest = next(
-            (item.get("digest") for item in local_status.get("models", []) if item.get("id") == active_model),
+            (
+                item.get("digest")
+                for item in local_status.get("models", [])
+                if item.get("id") == active_model
+            ),
             None,
         )
     return {
@@ -663,7 +701,8 @@ async def get_config():
         "active_digest": active_digest,
         "ollama_ok": local_status.get("ok", False),
         "reasoning_effort": local_cfg.get("reasoning_effort", "none"),
-        "switch_allowed": not _configuration_switch_blocked() and not has_session_overrides(),
+        "switch_allowed": not _configuration_switch_blocked()
+        and not has_session_overrides(),
         "session_override": has_session_overrides(),
     }
 
@@ -713,12 +752,15 @@ async def create_task(
     # 入队
     await task_queue.put(task_id)
 
-    _append_event(task_id, {
-        "task_id": task_id,
-        "event": "task_created",
-        "data": {"video_id": vid, "video_path": vpath},
-        "timestamp": _now(),
-    })
+    _append_event(
+        task_id,
+        {
+            "task_id": task_id,
+            "event": "task_created",
+            "data": {"video_id": vid, "video_path": vpath},
+            "timestamp": _now(),
+        },
+    )
 
     return {"task_id": task_id, **_to_public_task(task)}
 
@@ -783,7 +825,9 @@ async def replay_events(task_id: str):
         if not isinstance(ev, dict):
             continue
         if "event" not in ev and isinstance(ev.get("data"), dict):
-            ev["event"] = ev["data"].get("event_type") or ev["data"].get("event") or "unknown"
+            ev["event"] = (
+                ev["data"].get("event_type") or ev["data"].get("event") or "unknown"
+            )
         events.append(ev)
     return events
 
@@ -816,12 +860,16 @@ async def export_llm_traces(task_id: str):
         raise HTTPException(404, "task not found")
     return JSONResponse(
         _load_llm_traces(task_id),
-        headers={"Content-Disposition": f'attachment; filename="{task_id}-llm-traces.json"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{task_id}-llm-traces.json"'
+        },
     )
 
 
 @app.get("/api/tasks/{task_id}/export")
-async def export_result(task_id: str, fmt: str = Query("json", pattern="^(json|jsonl|csv)$")):
+async def export_result(
+    task_id: str, fmt: str = Query("json", pattern="^(json|jsonl|csv)$")
+):
     """导出分析结果"""
     if task_id not in tasks:
         raise HTTPException(404, "task not found")
@@ -842,11 +890,22 @@ async def export_result(task_id: str, fmt: str = Query("json", pattern="^(json|j
     else:  # csv
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow([
-            "video_id", "status", "time_range_start", "time_range_end",
-            "fracture_type", "location", "confidence", "unrecognized_reason",
-            "rounds", "error_stage", "error_code", "error_message",
-        ])
+        writer.writerow(
+            [
+                "video_id",
+                "status",
+                "time_range_start",
+                "time_range_end",
+                "fracture_type",
+                "location",
+                "confidence",
+                "unrecognized_reason",
+                "rounds",
+                "error_stage",
+                "error_code",
+                "error_message",
+            ]
+        )
         time_range = result.get("time_range") or [None, None]
         if not isinstance(time_range, (list, tuple)) or len(time_range) != 2:
             time_range = [None, None]
@@ -855,22 +914,33 @@ async def export_result(task_id: str, fmt: str = Query("json", pattern="^(json|j
             csv_status = result.get("status") or TASK_STATUS_COMPLETED
         elif task.status == TASK_STATUS_FAILED:
             csv_status = TASK_STATUS_FAILED
-        writer.writerow([
-            result.get("video_id", task.video_id),
-            csv_status,
-            time_range[0] if time_range[0] is not None else "",
-            time_range[1] if time_range[1] is not None else "",
-            result.get("fracture_type") if result.get("fracture_type") is not None else "",
-            result.get("location") if result.get("location") is not None else "",
-            result.get("confidence") if result.get("confidence") is not None else "",
-            result.get("unrecognized_reason") if result.get("unrecognized_reason") is not None else "",
-            result.get("rounds") if result.get("rounds") is not None else 0,
-            error.get("stage") if error.get("stage") is not None else "",
-            error.get("code") if error.get("code") is not None else "",
-            error.get("message") if error.get("message") is not None else "",
-        ])
-        return Response(output.getvalue(), media_type="text/csv",
-                        headers={"Content-Disposition": "attachment; filename=result.csv"})
+        writer.writerow(
+            [
+                result.get("video_id", task.video_id),
+                csv_status,
+                time_range[0] if time_range[0] is not None else "",
+                time_range[1] if time_range[1] is not None else "",
+                result.get("fracture_type")
+                if result.get("fracture_type") is not None
+                else "",
+                result.get("location") if result.get("location") is not None else "",
+                result.get("confidence")
+                if result.get("confidence") is not None
+                else "",
+                result.get("unrecognized_reason")
+                if result.get("unrecognized_reason") is not None
+                else "",
+                result.get("rounds") if result.get("rounds") is not None else 0,
+                error.get("stage") if error.get("stage") is not None else "",
+                error.get("code") if error.get("code") is not None else "",
+                error.get("message") if error.get("message") is not None else "",
+            ]
+        )
+        return Response(
+            output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=result.csv"},
+        )
 
 
 @app.post("/api/tasks/batch")
@@ -902,12 +972,15 @@ async def create_batch_tasks(
         tasks[task_id] = task
         _save_task(task)
         await task_queue.put(task_id)
-        _append_event(task_id, {
-            "task_id": task_id,
-            "event": "task_created",
-            "data": {"video_id": vid, "video_path": str(upload_path)},
-            "timestamp": _now(),
-        })
+        _append_event(
+            task_id,
+            {
+                "task_id": task_id,
+                "event": "task_created",
+                "data": {"video_id": vid, "video_path": str(upload_path)},
+                "timestamp": _now(),
+            },
+        )
         results.append({"task_id": task_id, **_to_public_task(task)})
     return {"tasks": results}
 
@@ -927,7 +1000,9 @@ async def get_config_status():
     agent_cfg = config.get("agent", {})
     local_cfg = agent_cfg.get("local", {})
     local_model = local_cfg.get("model")
-    local_result = list_local_models(local_cfg.get("base_url", "http://localhost:11434/v1"))
+    local_result = list_local_models(
+        local_cfg.get("base_url", "http://localhost:11434/v1")
+    )
     installed_ids = [item.get("id") for item in local_result.get("models", [])]
 
     # 按当前 backend 判断是否已配置
@@ -955,13 +1030,18 @@ async def get_config_status():
             "service_ok": local_result.get("ok", False),
             "installed": local_model in installed_ids,
             "digest": next(
-                (item.get("digest") for item in local_result.get("models", []) if item.get("id") == local_model),
+                (
+                    item.get("digest")
+                    for item in local_result.get("models", [])
+                    if item.get("id") == local_model
+                ),
                 None,
             ),
             "warning": local_result.get("warning"),
             "reasoning_effort": local_cfg.get("reasoning_effort", "none"),
         },
-        "switch_allowed": not _configuration_switch_blocked() and not has_session_overrides(),
+        "switch_allowed": not _configuration_switch_blocked()
+        and not has_session_overrides(),
         "session_override": has_session_overrides(),
     }
 
@@ -971,11 +1051,15 @@ async def get_config_models(backend: str = Query(..., pattern="^(local|remote)$"
     config = load_config()
     if backend == "local":
         local_cfg = config.get("agent", {}).get("local", {})
-        result = list_local_models(local_cfg.get("base_url", "http://localhost:11434/v1"))
+        result = list_local_models(
+            local_cfg.get("base_url", "http://localhost:11434/v1")
+        )
         return result
     remote_cfg = config.get("agent", {}).get("remote", {})
     result = list_available_models(
-        base_url=remote_cfg.get("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+        base_url=remote_cfg.get(
+            "base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        ),
         api_key=get_api_key(),
     )
     return {**result, "models": [{"id": model} for model in result.get("models", [])]}
@@ -988,7 +1072,9 @@ async def test_config_backend(body: dict):
     config = load_config()
     if backend == "local":
         local_cfg = config.get("agent", {}).get("local", {})
-        result = list_local_models(local_cfg.get("base_url", "http://localhost:11434/v1"))
+        result = list_local_models(
+            local_cfg.get("base_url", "http://localhost:11434/v1")
+        )
         installed = {item.get("id") for item in result.get("models", [])}
         if not result.get("ok"):
             raise HTTPException(503, result.get("warning", "Ollama 不可用"))
@@ -999,7 +1085,9 @@ async def test_config_backend(body: dict):
         if not get_api_key():
             raise HTTPException(400, "远程后端尚未配置 API Key")
         result = list_available_models(
-            base_url=config.get("agent", {}).get("remote", {}).get("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+            base_url=config.get("agent", {})
+            .get("remote", {})
+            .get("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
             api_key=get_api_key(),
         )
         if not result.get("ok"):
@@ -1022,7 +1110,12 @@ async def update_active_config(body: dict):
         save_active_config(backend, model, reasoning_effort=reasoning_effort)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {"ok": True, "backend": backend, "model": model, "reasoning_effort": reasoning_effort}
+    return {
+        "ok": True,
+        "backend": backend,
+        "model": model,
+        "reasoning_effort": reasoning_effort,
+    }
 
 
 @app.post("/api/config/setup")
@@ -1110,7 +1203,9 @@ async def update_model(body: dict):
 
     # 检查是否已配置 API Key（不要求 backend 必须是 remote）
     if not get_api_key():
-        raise HTTPException(status_code=400, detail="尚未完成初始配置，请先配置 API Key")
+        raise HTTPException(
+            status_code=400, detail="尚未完成初始配置，请先配置 API Key"
+        )
 
     # 用已保存的 Key 拉取模型列表
     result = list_available_models(api_key=get_api_key())

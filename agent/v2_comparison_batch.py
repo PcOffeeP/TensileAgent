@@ -58,8 +58,7 @@ def build_v2_comparison_manifest(
     finalization_path = Path(v4_finalization_manifest_path).resolve()
     finalization = json.loads(finalization_path.read_text(encoding="utf-8"))
     if (
-        finalization.get("schema_version")
-        != "tensile-agent/stage-g-finalization/v1"
+        finalization.get("schema_version") != "tensile-agent/stage-g-finalization/v1"
         or finalization.get("status") != "scored_awaiting_v2_comparison"
         or finalization.get("stage_g_gate", {}).get(
             "final_acceptance_pending_v2_comparison"
@@ -68,8 +67,7 @@ def build_v2_comparison_manifest(
     ):
         raise ValueError("V4.1 Stage G finalization is not ready for V2")
     if (
-        v4_manifest.get("schema_version")
-        != "tensile-agent/acceptance-manifest/v1"
+        v4_manifest.get("schema_version") != "tensile-agent/acceptance-manifest/v1"
         or v4_manifest.get("status") != "frozen"
     ):
         raise ValueError("invalid V4.1 acceptance manifest")
@@ -91,14 +89,12 @@ def build_v2_comparison_manifest(
     all_110 = v4_manifest["input_lists"]["all_110"]
     baseline_value = json.loads(baseline.read_text(encoding="utf-8"))
     if (
-        baseline_value.get("schema_version")
-        != "tensile-agent/v4-common-baseline/v1"
+        baseline_value.get("schema_version") != "tensile-agent/v4-common-baseline/v1"
         or baseline_value.get("v4_acceptance_manifest_sha256")
         != sha256_file(v4_manifest_path)
         or baseline_value.get("v4_finalization_manifest_sha256")
         != sha256_file(finalization_path)
-        or baseline_value.get("annotations_sha256")
-        != sha256_file(annotations)
+        or baseline_value.get("annotations_sha256") != sha256_file(annotations)
         or baseline_value.get("video_count") != all_110["count"]
     ):
         raise ValueError("V4.1 common baseline identity mismatch")
@@ -116,14 +112,17 @@ def build_v2_comparison_manifest(
         "agent_runtime_commit": agent_runtime_commit,
         "batch_runner_sha256": sha256_file(runner),
     }
-    manifest_id = "v2-comparison-" + hashlib.sha256(
-        json.dumps(
-            seed,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()[:12]
+    manifest_id = (
+        "v2-comparison-"
+        + hashlib.sha256(
+            json.dumps(
+                seed,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()[:12]
+    )
     return {
         "schema_version": MANIFEST_SCHEMA,
         "manifest_id": manifest_id,
@@ -189,7 +188,9 @@ def freeze_v2_comparison_manifest(path: str | Path, value: dict[str, Any]) -> No
     if output.exists():
         existing = json.loads(output.read_text(encoding="utf-8"))
         if existing != value:
-            raise ValueError("V2 comparison manifest already exists with different content")
+            raise ValueError(
+                "V2 comparison manifest already exists with different content"
+            )
         return
     _atomic_json(output, value)
 
@@ -220,9 +221,7 @@ def load_v2_comparison_manifest(path: str | Path) -> dict[str, Any]:
     if (
         sha256_file(manifest["v4_acceptance"]["manifest_path"])
         != manifest["v4_acceptance"]["manifest_sha256"]
-        or sha256_file(
-            manifest["v4_acceptance"]["finalization_manifest_path"]
-        )
+        or sha256_file(manifest["v4_acceptance"]["finalization_manifest_path"])
         != manifest["v4_acceptance"]["finalization_manifest_sha256"]
     ):
         raise ValueError("V4.1 evidence changed after V2 manifest freeze")
@@ -285,8 +284,7 @@ def run_v2_comparison_batch(
                 .get("deployment_manifest")
             )
             if (
-                existing.get("v2_comparison_manifest_sha256")
-                != manifest["_sha256"]
+                existing.get("v2_comparison_manifest_sha256") != manifest["_sha256"]
                 or actual_deployment != expected_deployment
             ):
                 raise ValueError(f"immutable V2 success identity mismatch: {video_id}")

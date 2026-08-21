@@ -35,12 +35,19 @@ def test_clip_build_result_includes_hash_and_size(tmp_path, monkeypatch):
     source.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x00\x00isommp41fake_video")
 
     def fake_probe(path):
-        return {"fps": 8.0, "total_frames": 8, "duration": 1.0, "width": 64, "height": 64}
+        return {
+            "fps": 8.0,
+            "total_frames": 8,
+            "duration": 1.0,
+            "width": 64,
+            "height": 64,
+        }
 
     def fake_ffmpeg(args, check=True):
         output = args[-1]
         # Copy source bytes to the output path so hashing/sizing works.
         import shutil
+
         shutil.copy(str(source), output)
         return None
 
@@ -57,5 +64,6 @@ def test_clip_build_result_includes_hash_and_size(tmp_path, monkeypatch):
     assert isinstance(result, ClipBuildResult)
     assert result.file_size == source.stat().st_size
     import hashlib
+
     assert result.file_hash == hashlib.sha256(source.read_bytes()).hexdigest()
     assert result.file_hash != ""

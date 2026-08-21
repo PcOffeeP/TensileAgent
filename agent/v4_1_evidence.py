@@ -125,18 +125,14 @@ class V41EventBounds:
             )
 
         changed = (
-            proposed_lower > self.lower + 1e-9
-            or proposed_upper < self.upper - 1e-9
+            proposed_lower > self.lower + 1e-9 or proposed_upper < self.upper - 1e-9
         )
         self.lower = proposed_lower
         self.upper = proposed_upper
         conflict_resolved = False
         if clip_state in _WITHIN_STATES and self.unresolved_conflict:
             for index, pending in enumerate(self.pending_conflict_ranges):
-                if (
-                    abs(start - pending[0]) <= 1e-9
-                    and abs(end - pending[1]) <= 1e-9
-                ):
+                if abs(start - pending[0]) <= 1e-9 and abs(end - pending[1]) <= 1e-9:
                     self.pending_conflict_ranges.pop(index)
                     self.conflict_count -= 1
                     self.unresolved_conflict = bool(self.pending_conflict_ranges)

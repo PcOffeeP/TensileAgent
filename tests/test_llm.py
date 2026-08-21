@@ -33,7 +33,9 @@ class DummyLLM(BaseAgentLLM):
         temperature: float = 0.7,
         max_tokens: int | None = None,
     ) -> Any:
-        self._calls.append(((messages, tools), {"temperature": temperature, "max_tokens": max_tokens}))
+        self._calls.append(
+            ((messages, tools), {"temperature": temperature, "max_tokens": max_tokens})
+        )
         resp = self._responses[self._idx]
         self._idx = min(self._idx + 1, len(self._responses) - 1)
         return resp
@@ -98,7 +100,13 @@ def test_factory_creates_local_client():
             },
         }
     }
-    with patch("agent.llm.list_local_models", return_value={"ok": True, "models": [{"id": "qwen2.5:7b"}]}), patch("agent.llm.OpenAI") as mock_openai:
+    with (
+        patch(
+            "agent.llm.list_local_models",
+            return_value={"ok": True, "models": [{"id": "qwen2.5:7b"}]},
+        ),
+        patch("agent.llm.OpenAI") as mock_openai,
+    ):
         client = AgentLLMFactory.create(config)
         assert isinstance(client, LocalClient)
         assert client.model_name == "ollama/qwen2.5:7b"
@@ -119,13 +127,16 @@ def test_factory_rejects_changed_pinned_local_digest():
         },
         "_runtime": {"model_digest": "old-digest"},
     }
-    with patch(
-        "agent.llm.list_local_models",
-        return_value={
-            "ok": True,
-            "models": [{"id": "tensile-qwen35:9b", "digest": "new-digest"}],
-        },
-    ), pytest.raises(LocalModelDigestMismatch, match="digest"):
+    with (
+        patch(
+            "agent.llm.list_local_models",
+            return_value={
+                "ok": True,
+                "models": [{"id": "tensile-qwen35:9b", "digest": "new-digest"}],
+            },
+        ),
+        pytest.raises(LocalModelDigestMismatch, match="digest"),
+    ):
         AgentLLMFactory.create(config)
 
 
@@ -153,14 +164,26 @@ def test_factory_rejects_unknown_backend():
 
 
 def test_factory_fails_closed_when_ollama_is_offline():
-    config = {"agent": {"backend": "local", "local": {"model": "qwen3:8b", "base_url": "http://localhost:11434/v1"}}}
-    with patch("agent.llm.list_local_models", return_value={"ok": False, "warning": "offline"}):
+    config = {
+        "agent": {
+            "backend": "local",
+            "local": {"model": "qwen3:8b", "base_url": "http://localhost:11434/v1"},
+        }
+    }
+    with patch(
+        "agent.llm.list_local_models", return_value={"ok": False, "warning": "offline"}
+    ):
         with pytest.raises(LocalBackendUnavailable, match="offline"):
             AgentLLMFactory.create(config)
 
 
 def test_factory_fails_closed_when_local_model_is_missing():
-    config = {"agent": {"backend": "local", "local": {"model": "qwen3:8b", "base_url": "http://localhost:11434/v1"}}}
+    config = {
+        "agent": {
+            "backend": "local",
+            "local": {"model": "qwen3:8b", "base_url": "http://localhost:11434/v1"},
+        }
+    }
     with patch("agent.llm.list_local_models", return_value={"ok": True, "models": []}):
         with pytest.raises(LocalModelMissing, match="qwen3:8b"):
             AgentLLMFactory.create(config)

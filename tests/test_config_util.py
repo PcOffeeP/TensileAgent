@@ -32,7 +32,9 @@ from agent.config_util import (
 
 @pytest.fixture(autouse=True)
 def isolate_local_config(tmp_path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("agent.config_util.LOCAL_CONFIG_PATH", tmp_path / "config.local.yaml")
+    monkeypatch.setattr(
+        "agent.config_util.LOCAL_CONFIG_PATH", tmp_path / "config.local.yaml"
+    )
     clear_session_overrides()
     yield
     clear_session_overrides()
@@ -256,9 +258,7 @@ class TestSaveRemoteModel:
 class TestListAvailableModels:
     def test_no_api_key_returns_auth_error(self) -> None:
         """api_key=None and get_api_key() returns None → auth_error."""
-        with patch(
-            "agent.config_util.get_api_key", return_value=None
-        ) as mock_get_key:
+        with patch("agent.config_util.get_api_key", return_value=None) as mock_get_key:
             result = list_available_models(api_key=None)
 
         mock_get_key.assert_called_once()
@@ -293,8 +293,14 @@ class TestListAvailableModels:
 def test_effective_config_precedence(tmp_path, monkeypatch):
     default = tmp_path / "config.yaml"
     local = tmp_path / "config.local.yaml"
-    default.write_text("agent:\n  backend: remote\n  remote:\n    model: remote-default\n", encoding="utf-8")
-    local.write_text("agent:\n  backend: local\n  local:\n    model: local-persisted\n", encoding="utf-8")
+    default.write_text(
+        "agent:\n  backend: remote\n  remote:\n    model: remote-default\n",
+        encoding="utf-8",
+    )
+    local.write_text(
+        "agent:\n  backend: local\n  local:\n    model: local-persisted\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr("agent.config_util.CONFIG_PATH", default)
     monkeypatch.setattr("agent.config_util.LOCAL_CONFIG_PATH", local)
     set_session_overrides(backend="local", model="session-model")
@@ -313,12 +319,17 @@ def test_save_active_config_only_writes_ignored_local_file(tmp_path, monkeypatch
     before = tracked.read_text(encoding="utf-8")
     save_active_config("local", "tensile-qwen35:9b", reasoning_effort="none")
     assert tracked.read_text(encoding="utf-8") == before
-    assert yaml.safe_load(local.read_text(encoding="utf-8"))["agent"]["local"]["model"] == "tensile-qwen35:9b"
+    assert (
+        yaml.safe_load(local.read_text(encoding="utf-8"))["agent"]["local"]["model"]
+        == "tensile-qwen35:9b"
+    )
 
 
 def test_list_local_models_parses_ollama_tags():
     response = MagicMock()
-    response.json.return_value = {"models": [{"name": "qwen3:8b", "digest": "d1", "size": 123}]}
+    response.json.return_value = {
+        "models": [{"name": "qwen3:8b", "digest": "d1", "size": 123}]
+    }
     with patch("agent.config_util.requests.get", return_value=response):
         result = list_local_models()
     assert result["ok"] is True

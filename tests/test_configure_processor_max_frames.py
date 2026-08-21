@@ -49,7 +49,9 @@ def test_raises_when_no_settable_attribute_found():
     """没有任何可设置 max-frame 参数时，应抛出 RuntimeError。"""
     proc = SimpleNamespace()
 
-    with pytest.raises(RuntimeError, match="cannot locate MiniCPM actual max-frame parameter"):
+    with pytest.raises(
+        RuntimeError, match="cannot locate MiniCPM actual max-frame parameter"
+    ):
         configure_processor_max_frames(proc, 8)
 
 

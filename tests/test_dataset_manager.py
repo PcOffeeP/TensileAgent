@@ -204,12 +204,17 @@ def _make_annotation_row(
     }
 
 
-def test_five_semantics_confirmed_fracture_time_reliable(monkeypatch: pytest.MonkeyPatch):
+def test_five_semantics_confirmed_fracture_time_reliable(
+    monkeypatch: pytest.MonkeyPatch,
+):
     df = pd.DataFrame(
         [
             _make_annotation_row(
-                "v_fracture", has_fracture=True, is_abnormal=False,
-                ftype="韧性断裂", location="inside_gauge",
+                "v_fracture",
+                has_fracture=True,
+                is_abnormal=False,
+                ftype="韧性断裂",
+                location="inside_gauge",
             )
         ]
     )
@@ -229,8 +234,11 @@ def test_five_semantics_confirmed_no_fracture(monkeypatch: pytest.MonkeyPatch):
     df = pd.DataFrame(
         [
             _make_annotation_row(
-                "v_no", has_fracture=False, is_abnormal=False,
-                ftype="未断裂", location="N/A",
+                "v_no",
+                has_fracture=False,
+                is_abnormal=False,
+                ftype="未断裂",
+                location="N/A",
             )
         ]
     )
@@ -249,8 +257,11 @@ def test_five_semantics_not_clamped(monkeypatch: pytest.MonkeyPatch):
     df = pd.DataFrame(
         [
             _make_annotation_row(
-                "v_clamp", has_fracture=False, is_abnormal=True,
-                ftype="未夹紧", location="N/A",
+                "v_clamp",
+                has_fracture=False,
+                is_abnormal=True,
+                ftype="未夹紧",
+                location="N/A",
             )
         ]
     )
@@ -269,8 +280,11 @@ def test_five_semantics_video_anomaly_presence_unknown(monkeypatch: pytest.Monke
     df = pd.DataFrame(
         [
             _make_annotation_row(
-                "v_presence", has_fracture=False, is_abnormal=True,
-                ftype="视频异常", location="N/A",
+                "v_presence",
+                has_fracture=False,
+                is_abnormal=True,
+                ftype="视频异常",
+                location="N/A",
             )
         ]
     )
@@ -289,8 +303,11 @@ def test_five_semantics_video_anomaly_time_unknown(monkeypatch: pytest.MonkeyPat
     df = pd.DataFrame(
         [
             _make_annotation_row(
-                "v_time", has_fracture=True, is_abnormal=True,
-                ftype="视频异常", location="N/A",
+                "v_time",
+                has_fracture=True,
+                is_abnormal=True,
+                ftype="视频异常",
+                location="N/A",
             )
         ]
     )
@@ -305,12 +322,17 @@ def test_five_semantics_video_anomaly_time_unknown(monkeypatch: pytest.MonkeyPat
     assert rec["event_time_reliable"] is False
 
 
-def test_no_fracture_forces_is_abnormal_canonical_false(monkeypatch: pytest.MonkeyPatch):
+def test_no_fracture_forces_is_abnormal_canonical_false(
+    monkeypatch: pytest.MonkeyPatch,
+):
     df = pd.DataFrame(
         [
             _make_annotation_row(
-                "v_no_conflict", has_fracture=False, is_abnormal=True,
-                ftype="未断裂", location="N/A",
+                "v_no_conflict",
+                has_fracture=False,
+                is_abnormal=True,
+                ftype="未断裂",
+                location="N/A",
             )
         ]
     )
@@ -362,7 +384,9 @@ def test_time_unknown_videos_keep_true_canonical():
         rec = by_id[vid]
         assert rec["type"] == "视频异常", f"{vid} 应为视频异常"
         assert rec["has_fracture"] is True, f"{vid} CSV 原始 has_fracture 必须保留"
-        assert rec["has_fracture_canonical"] is True, f"{vid} 时间不可靠异常 canonical 应为 True"
+        assert rec["has_fracture_canonical"] is True, (
+            f"{vid} 时间不可靠异常 canonical 应为 True"
+        )
         assert rec["video_anomaly_kind"] == VIDEO_ANOMALY_KIND_TIME_UNKNOWN
         assert rec["location_canonical"] is None
         assert rec["event_time_reliable"] is False
@@ -376,9 +400,7 @@ def test_no_fracture_videos_are_not_abnormal_canonical():
             assert rec["is_abnormal_canonical"] is False, rec["video_id"]
 
 
-@pytest.mark.skipif(
-    not DECISION_LOG_PATH.exists(), reason="分层决策日志不存在"
-)
+@pytest.mark.skipif(not DECISION_LOG_PATH.exists(), reason="分层决策日志不存在")
 def test_real_split_decision_log_in_metadata_dir():
     data = json.loads(DECISION_LOG_PATH.read_text(encoding="utf-8"))
     assert "rare_pool" in data
@@ -386,9 +408,7 @@ def test_real_split_decision_log_in_metadata_dir():
     assert data.get("method") == "stratified_split_with_rare_pool"
 
 
-@pytest.mark.skipif(
-    not TEST_MANIFEST_PATH.exists(), reason="测试清单不存在"
-)
+@pytest.mark.skipif(not TEST_MANIFEST_PATH.exists(), reason="测试清单不存在")
 def test_real_test_manifest_has_sha256():
     data = json.loads(TEST_MANIFEST_PATH.read_text(encoding="utf-8"))
     assert "sha256" in data
@@ -397,9 +417,7 @@ def test_real_test_manifest_has_sha256():
     assert data["test_video_ids"] == sorted(data["test_video_ids"])
 
 
-@pytest.mark.skipif(
-    not (SPLITS_DIR / "test.json").exists(), reason="划分文件不存在"
-)
+@pytest.mark.skipif(not (SPLITS_DIR / "test.json").exists(), reason="划分文件不存在")
 def test_real_split_rare_pool_only_in_train():
     decision_log = json.loads(DECISION_LOG_PATH.read_text(encoding="utf-8"))
     rare_pool = set(decision_log.get("rare_pool", []))
@@ -421,23 +439,28 @@ def test_real_split_rare_pool_only_in_train():
         assert not (rare_pool & val_ids), f"fold {i} 验证集不应包含稀有池"
 
     test_ids = set(
-        json.loads(
-            (SPLITS_DIR / "test.json").read_text(encoding="utf-8")
-        ).get("video_ids", [])
+        json.loads((SPLITS_DIR / "test.json").read_text(encoding="utf-8")).get(
+            "video_ids", []
+        )
     )
     assert not (rare_pool & test_ids), "测试集不应包含稀有池"
 
 
-@pytest.mark.skipif(
-    not (SPLITS_DIR / "test.json").exists(), reason="划分文件不存在"
-)
+@pytest.mark.skipif(not (SPLITS_DIR / "test.json").exists(), reason="划分文件不存在")
 def test_real_splits_no_leakage_and_full_coverage():
     meta = json.loads(VIDEO_META_PATH.read_text(encoding="utf-8"))
     all_ids = {r["video_id"] for r in meta}
 
     splits: dict[str, set[str]] = {}
-    for name in ["fold_0_train", "fold_0_val", "fold_1_train", "fold_1_val",
-                 "fold_2_train", "fold_2_val", "test"]:
+    for name in [
+        "fold_0_train",
+        "fold_0_val",
+        "fold_1_train",
+        "fold_1_val",
+        "fold_2_train",
+        "fold_2_val",
+        "test",
+    ]:
         path = SPLITS_DIR / f"{name}.json"
         if not path.exists():
             continue
@@ -455,9 +478,7 @@ def test_real_splits_no_leakage_and_full_coverage():
     assert test_ids | train_val_ids == all_ids, "划分未覆盖全部视频"
 
 
-@pytest.mark.skipif(
-    not (SPLITS_DIR / "test.json").exists(), reason="划分文件不存在"
-)
+@pytest.mark.skipif(not (SPLITS_DIR / "test.json").exists(), reason="划分文件不存在")
 def test_real_split_test_ratio_around_20_percent():
     meta = json.loads(VIDEO_META_PATH.read_text(encoding="utf-8"))
     total = len(meta)
@@ -488,7 +509,9 @@ def test_real_split_type_distribution_not_empty():
 # ---------------------------------------------------------------------------
 
 
-def test_canonical_preserved_for_video_anomaly_time_unknown(monkeypatch: pytest.MonkeyPatch):
+def test_canonical_preserved_for_video_anomaly_time_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+):
     df = pd.DataFrame(
         [
             _make_annotation_row(
@@ -513,7 +536,9 @@ def test_canonical_preserved_for_video_anomaly_time_unknown(monkeypatch: pytest.
     assert rec["label_governance_reason"] is None
 
 
-def test_canonical_preserved_for_video_anomaly_presence_unknown(monkeypatch: pytest.MonkeyPatch):
+def test_canonical_preserved_for_video_anomaly_presence_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+):
     df = pd.DataFrame(
         [
             _make_annotation_row(

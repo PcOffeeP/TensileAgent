@@ -1,4 +1,5 @@
 """Web API 适配层契约测试（纯 mock，不依赖真实模型/视频/配置）"""
+
 from __future__ import annotations
 
 import asyncio
@@ -31,7 +32,9 @@ def tmp_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(web_api, "UPLOADS_DIR", uploads)
     monkeypatch.setattr(web_api, "HISTORY_DIR", history)
     monkeypatch.setattr(web_api, "EVENTS_DIR", events)
-    monkeypatch.setattr(web_api, "RUNTIME_INDEX_PATH", runtime / "private_runtime_index.json")
+    monkeypatch.setattr(
+        web_api, "RUNTIME_INDEX_PATH", runtime / "private_runtime_index.json"
+    )
     monkeypatch.setattr(web_api, "LLM_TRACES_DIR", runtime / "llm_traces")
     runtime.mkdir(parents=True, exist_ok=True)
     uploads.mkdir(parents=True, exist_ok=True)
@@ -122,7 +125,11 @@ class TestNormalizeResult:
         legacy = {
             "status": "fracture",
             "video_id": "legacy",
-            "output": {"type": "韧性断裂", "location": "inside_gauge", "confidence": 0.8},
+            "output": {
+                "type": "韧性断裂",
+                "location": "inside_gauge",
+                "confidence": 0.8,
+            },
             "start_time": 5.0,
             "end_time": 6.0,
             "rounds": 3,
@@ -135,7 +142,9 @@ class TestNormalizeResult:
 
 class TestApplyRunnerResultToTask:
     def test_ok_true_completes_task(self, capture_events):
-        task = TaskModel(id="t1", video_id="sample", video_name="sample.mp4", created_at="now")
+        task = TaskModel(
+            id="t1", video_id="sample", video_name="sample.mp4", created_at="now"
+        )
         runner_result = {
             "ok": True,
             "result": {
@@ -156,21 +165,33 @@ class TestApplyRunnerResultToTask:
         assert not any(e["event"] == "task_failed" for e in capture_events)
 
     def test_ok_false_fails_task_and_emits_task_failed(self, capture_events):
-        task = TaskModel(id="t2", video_id="sample", video_name="sample.mp4", created_at="now")
+        task = TaskModel(
+            id="t2", video_id="sample", video_name="sample.mp4", created_at="now"
+        )
         runner_result = {
             "ok": False,
-            "error": {"stage": "inference", "code": "timeout", "message": "inference timeout"},
+            "error": {
+                "stage": "inference",
+                "code": "timeout",
+                "message": "inference timeout",
+            },
         }
         _apply_runner_result_to_task(task, runner_result)
 
         assert task.status == web_api.TASK_STATUS_FAILED
-        assert task.error == {"stage": "inference", "code": "timeout", "message": "inference timeout"}
+        assert task.error == {
+            "stage": "inference",
+            "code": "timeout",
+            "message": "inference timeout",
+        }
         assert task.result is None
         assert any(e["event"] == "task_failed" for e in capture_events)
         assert not any(e["event"] == "task_completed" for e in capture_events)
 
     def test_apply_runner_result_ok_false_non_dict_error_fallback(self, capture_events):
-        task = TaskModel(id="t3", video_id="sample", video_name="sample.mp4", created_at="now")
+        task = TaskModel(
+            id="t3", video_id="sample", video_name="sample.mp4", created_at="now"
+        )
         runner_result = {"ok": False, "error": "connection timeout"}
         _apply_runner_result_to_task(task, runner_result)
 
@@ -182,18 +203,28 @@ class TestApplyRunnerResultToTask:
         }
 
     def test_apply_runner_result_ok_false_result_is_none(self, capture_events):
-        task = TaskModel(id="t4", video_id="sample", video_name="sample.mp4", created_at="now")
+        task = TaskModel(
+            id="t4", video_id="sample", video_name="sample.mp4", created_at="now"
+        )
         runner_result = {
             "ok": False,
-            "error": {"stage": "inference", "code": "timeout", "message": "inference timeout"},
+            "error": {
+                "stage": "inference",
+                "code": "timeout",
+                "message": "inference timeout",
+            },
         }
         _apply_runner_result_to_task(task, runner_result)
 
         assert task.status == web_api.TASK_STATUS_FAILED
         assert task.result is None
 
-    def test_apply_runner_result_ok_false_task_failed_event_sanitized(self, capture_events):
-        task = TaskModel(id="t5", video_id="sample", video_name="sample.mp4", created_at="now")
+    def test_apply_runner_result_ok_false_task_failed_event_sanitized(
+        self, capture_events
+    ):
+        task = TaskModel(
+            id="t5", video_id="sample", video_name="sample.mp4", created_at="now"
+        )
         runner_result = {
             "ok": False,
             "error": {
@@ -229,14 +260,16 @@ class TestEventCallbackFactory:
 
     def test_video_failed_event_sanitized(self, capture_events):
         callback = _event_callback_factory("t2")
-        callback({
-            "event_type": "video_failed",
-            "error": {
-                "stage": "runner",
-                "code": "file_not_found",
-                "message": "missing /secret/video.mp4",
-            },
-        })
+        callback(
+            {
+                "event_type": "video_failed",
+                "error": {
+                    "stage": "runner",
+                    "code": "file_not_found",
+                    "message": "missing /secret/video.mp4",
+                },
+            }
+        )
 
         event = capture_events[0]
         assert event["event"] == "video_failed"
@@ -340,8 +373,14 @@ class TestSanitizeEventData:
             "error_message": "failed to access C:\\Users\\demo\\path.mp4 via https://127.0.0.1:8765/api/tasks",
         }
         safe = _sanitize_event_data(raw)
-        assert safe["message"] == "check URL http://example.com/a/b and file <path:redacted>"
-        assert safe["error_message"] == "failed to access <path:redacted> via https://127.0.0.1:8765/api/tasks"
+        assert (
+            safe["message"]
+            == "check URL http://example.com/a/b and file <path:redacted>"
+        )
+        assert (
+            safe["error_message"]
+            == "failed to access <path:redacted> via https://127.0.0.1:8765/api/tasks"
+        )
 
 
 class TestPublicTaskConversion:
@@ -366,7 +405,11 @@ class TestPublicTaskConversion:
             video_name="sample.mp4",
             created_at="now",
             result={"status": "ok", "message": "/secret/result.txt"},
-            error={"stage": "runner", "code": "error", "message": "/secret/tmp/clip.mp4"},
+            error={
+                "stage": "runner",
+                "code": "error",
+                "message": "/secret/tmp/clip.mp4",
+            },
         )
         public = _to_public_task(task)
         assert public["result"]["message"] == "<path:redacted>"
@@ -454,7 +497,9 @@ class TestEndpoints:
         video = tmp_runtime / "uploads" / "test.mp4"
         video.write_text("fake video")
 
-        resp = client.post("/api/tasks", data={"video_path": str(video), "video_id": "demo"})
+        resp = client.post(
+            "/api/tasks", data={"video_path": str(video), "video_id": "demo"}
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["video_id"] == "demo"
@@ -475,7 +520,9 @@ class TestEndpoints:
             "reasoning_effort": "none",
             "digest": "sha256:pinned",
         }
-        monkeypatch.setattr(web_api, "_validated_model_snapshot", lambda: snapshot.copy())
+        monkeypatch.setattr(
+            web_api, "_validated_model_snapshot", lambda: snapshot.copy()
+        )
 
         resp = client.post(
             "/api/tasks", data={"video_path": str(video), "video_id": "snapshot"}
@@ -504,7 +551,9 @@ class TestEndpoints:
         assert "video_path" not in data
 
     def test_replay_events_match_sse_and_sanitized(self, client, tmp_runtime):
-        task = TaskModel(id="t1", video_id="demo", video_name="demo.mp4", created_at="now")
+        task = TaskModel(
+            id="t1", video_id="demo", video_name="demo.mp4", created_at="now"
+        )
         web_api.tasks["t1"] = task
         web_api._save_task(task)
         web_api._append_event(
@@ -527,7 +576,9 @@ class TestEndpoints:
         assert ev["data"]["video_id"] == "demo"
 
     def test_replay_events_unknown_when_data_both_missing(self, client, tmp_runtime):
-        task = TaskModel(id="t1", video_id="demo", video_name="demo.mp4", created_at="now")
+        task = TaskModel(
+            id="t1", video_id="demo", video_name="demo.mp4", created_at="now"
+        )
         web_api.tasks["t1"] = task
         web_api._save_task(task)
 
@@ -551,7 +602,9 @@ class TestEndpoints:
         assert events[0]["event"] == "unknown"
 
     def test_replay_events_fill_event_from_data_event_type(self, client, tmp_runtime):
-        task = TaskModel(id="t1", video_id="demo", video_name="demo.mp4", created_at="now")
+        task = TaskModel(
+            id="t1", video_id="demo", video_name="demo.mp4", created_at="now"
+        )
         web_api.tasks["t1"] = task
         web_api._save_task(task)
 
@@ -575,7 +628,9 @@ class TestEndpoints:
         assert events[0]["event"] == "round_started"
 
     def test_replay_events_fill_event_from_data_event_field(self, client, tmp_runtime):
-        task = TaskModel(id="t1", video_id="demo", video_name="demo.mp4", created_at="now")
+        task = TaskModel(
+            id="t1", video_id="demo", video_name="demo.mp4", created_at="now"
+        )
         web_api.tasks["t1"] = task
         web_api._save_task(task)
 
@@ -599,7 +654,9 @@ class TestEndpoints:
         assert events[0]["event"] == "round_started"
 
     def test_replay_events_skips_non_dict_lines(self, client, tmp_runtime):
-        task = TaskModel(id="t1", video_id="demo", video_name="demo.mp4", created_at="now")
+        task = TaskModel(
+            id="t1", video_id="demo", video_name="demo.mp4", created_at="now"
+        )
         web_api.tasks["t1"] = task
         web_api._save_task(task)
 
@@ -615,8 +672,10 @@ class TestEndpoints:
                 ensure_ascii=False,
             )
             + "\n"
-            + json.dumps("not a dict") + "\n"
-            + json.dumps(["also", "not", "a", "dict"]) + "\n"
+            + json.dumps("not a dict")
+            + "\n"
+            + json.dumps(["also", "not", "a", "dict"])
+            + "\n"
         )
 
         resp = client.get("/api/tasks/t1/events/replay")
@@ -626,7 +685,9 @@ class TestEndpoints:
         assert events[0]["event"] == "task_created"
 
     def test_sse_does_not_replay_history(self, tmp_runtime):
-        task = TaskModel(id="t1", video_id="demo", video_name="demo.mp4", created_at="now")
+        task = TaskModel(
+            id="t1", video_id="demo", video_name="demo.mp4", created_at="now"
+        )
         web_api.tasks["t1"] = task
         web_api._save_task(task)
 
@@ -933,7 +994,9 @@ class TestHistoryPersistence:
         assert task.question == "只告诉我是否断裂"
         assert web_api.task_queue.empty()
 
-    def test_restore_history_public_format_missing_optional_video_name(self, tmp_runtime):
+    def test_restore_history_public_format_missing_optional_video_name(
+        self, tmp_runtime
+    ):
         task_id = "t_restore_no_video_name"
         history_file = web_api.HISTORY_DIR / f"{task_id}.json"
         history_file.write_text(
@@ -1005,7 +1068,9 @@ class TestHistoryPersistence:
             "created_at": "2024-01-01T00:00:00",
         }
         history_file = web_api.HISTORY_DIR / f"{task_id}.json"
-        history_file.write_text(json.dumps(old_data, ensure_ascii=False), encoding="utf-8")
+        history_file.write_text(
+            json.dumps(old_data, ensure_ascii=False), encoding="utf-8"
+        )
 
         web_api.tasks.clear()
         web_api._restore_history()
@@ -1024,7 +1089,9 @@ class TestHistoryPersistence:
         assert task.config_path == config_path
         assert task.status == web_api.TASK_STATUS_QUEUED
 
-    def test_restore_history_queued_without_runtime_index_becomes_failed(self, tmp_runtime):
+    def test_restore_history_queued_without_runtime_index_becomes_failed(
+        self, tmp_runtime
+    ):
         task_id = "t_queued_no_path"
         history_file = web_api.HISTORY_DIR / f"{task_id}.json"
         history_file.write_text(
@@ -1054,7 +1121,9 @@ class TestHistoryPersistence:
         }
         assert web_api.task_queue.empty()
 
-    def test_restore_history_queued_with_missing_video_file_becomes_failed(self, tmp_runtime):
+    def test_restore_history_queued_with_missing_video_file_becomes_failed(
+        self, tmp_runtime
+    ):
         task_id = "t_queued_missing_file"
         history_file = web_api.HISTORY_DIR / f"{task_id}.json"
         history_file.write_text(
@@ -1084,7 +1153,9 @@ class TestHistoryPersistence:
         assert task.error["code"] == "missing_video_path"
         assert web_api.task_queue.empty()
 
-    def test_restore_history_queued_with_existing_video_file_stays_queued(self, tmp_runtime):
+    def test_restore_history_queued_with_existing_video_file_stays_queued(
+        self, tmp_runtime
+    ):
         task_id = "t_queued_ok"
         history_file = web_api.HISTORY_DIR / f"{task_id}.json"
         history_file.write_text(
@@ -1125,7 +1196,9 @@ class TestHistoryPersistence:
         video = tmp_runtime / "uploads" / "del.mp4"
         video.write_text("fake video")
 
-        resp = client.post("/api/tasks", data={"video_path": str(video), "video_id": "del"})
+        resp = client.post(
+            "/api/tasks", data={"video_path": str(video), "video_id": "del"}
+        )
         assert resp.status_code == 200
         task_id = resp.json()["id"]
         assert task_id in web_api._load_runtime_index()
@@ -1233,9 +1306,7 @@ class TestDecisionModelConfigEndpoints:
     def test_incomplete_or_invalid_snapshot_fails_closed(
         self, tmp_runtime, monkeypatch, snapshot
     ):
-        monkeypatch.setattr(
-            web_api, "_current_model_snapshot", lambda: snapshot.copy()
-        )
+        monkeypatch.setattr(web_api, "_current_model_snapshot", lambda: snapshot.copy())
         with pytest.raises(web_api.HTTPException) as exc:
             web_api._validated_model_snapshot()
         assert exc.value.status_code == 503
@@ -1249,9 +1320,7 @@ class TestDecisionModelConfigEndpoints:
             "reasoning_effort": "none",
             "digest": None,
         }
-        monkeypatch.setattr(
-            web_api, "_current_model_snapshot", lambda: snapshot.copy()
-        )
+        monkeypatch.setattr(web_api, "_current_model_snapshot", lambda: snapshot.copy())
         assert web_api._validated_model_snapshot() == snapshot
 
     def test_single_and_batch_creation_propagate_snapshot_failure(
@@ -1281,10 +1350,16 @@ class TestDecisionModelConfigEndpoints:
         assert response.json()["models"][0]["id"] == "tensile-qwen35:9b"
 
     def test_switch_fails_closed_while_task_is_queued(self, client):
-        web_api.tasks["queued"] = TaskModel(id="queued", status=web_api.TASK_STATUS_QUEUED, created_at="now")
+        web_api.tasks["queued"] = TaskModel(
+            id="queued", status=web_api.TASK_STATUS_QUEUED, created_at="now"
+        )
         response = client.put(
             "/api/config/active",
-            json={"backend": "local", "model": "tensile-qwen35:9b", "reasoning_effort": "none"},
+            json={
+                "backend": "local",
+                "model": "tensile-qwen35:9b",
+                "reasoning_effort": "none",
+            },
         )
         assert response.status_code == 409
 
@@ -1307,29 +1382,41 @@ class TestDecisionModelConfigEndpoints:
         web_api.tasks["queued"] = TaskModel(
             id="queued", status=web_api.TASK_STATUS_QUEUED, created_at="now"
         )
-        with patch.object(web_api, "get_api_key", return_value="sk-test"), patch.object(
-            web_api,
-            "list_available_models",
-            return_value={"ok": True, "models": ["qwen3.7-max"]},
+        with (
+            patch.object(web_api, "get_api_key", return_value="sk-test"),
+            patch.object(
+                web_api,
+                "list_available_models",
+                return_value={"ok": True, "models": ["qwen3.7-max"]},
+            ),
         ):
-            response = client.put(
-                "/api/config/model", json={"model": "qwen3.7-max"}
-            )
+            response = client.put("/api/config/model", json={"model": "qwen3.7-max"})
         assert response.status_code == 409
 
     def test_switch_persists_after_successful_local_test(self, client):
         local = {"ok": True, "models": [{"id": "tensile-qwen35:9b", "digest": "abc"}]}
-        with patch.object(web_api, "list_local_models", return_value=local), patch.object(web_api, "save_active_config") as save:
+        with (
+            patch.object(web_api, "list_local_models", return_value=local),
+            patch.object(web_api, "save_active_config") as save,
+        ):
             response = client.put(
                 "/api/config/active",
-                json={"backend": "local", "model": "tensile-qwen35:9b", "reasoning_effort": "none"},
+                json={
+                    "backend": "local",
+                    "model": "tensile-qwen35:9b",
+                    "reasoning_effort": "none",
+                },
             )
         assert response.status_code == 200
-        save.assert_called_once_with("local", "tensile-qwen35:9b", reasoning_effort="none")
+        save.assert_called_once_with(
+            "local", "tensile-qwen35:9b", reasoning_effort="none"
+        )
 
     def test_trace_endpoint_returns_redacted_runtime_trace(self, client):
         task_id = "trace-task"
-        web_api.tasks[task_id] = TaskModel(id=task_id, status=web_api.TASK_STATUS_COMPLETED, created_at="now")
+        web_api.tasks[task_id] = TaskModel(
+            id=task_id, status=web_api.TASK_STATUS_COMPLETED, created_at="now"
+        )
         directory = web_api.LLM_TRACES_DIR / task_id
         directory.mkdir(parents=True)
         (directory / "round-0001.json").write_text(

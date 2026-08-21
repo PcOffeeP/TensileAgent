@@ -58,9 +58,7 @@ def _macro_f1(
         precision = tp / (tp + fp) if tp + fp else 0.0
         recall = tp / (tp + fn)
         scores.append(
-            2 * precision * recall / (precision + recall)
-            if precision + recall
-            else 0.0
+            2 * precision * recall / (precision + recall) if precision + recall else 0.0
         )
     return sum(scores) / len(scores) if scores else None
 
@@ -135,13 +133,9 @@ def score_common(
     normal = [(gt, pred) for gt, pred in records if gt["special_case"] is None]
     positives = [(gt, pred) for gt, pred in normal if gt["has_fracture"] is True]
     negatives = [(gt, pred) for gt, pred in normal if gt["has_fracture"] is False]
-    presence = [
-        pred["has_fracture"] == gt["has_fracture"] for gt, pred in normal
-    ]
+    presence = [pred["has_fracture"] == gt["has_fracture"] for gt, pred in normal]
     time_hits = [
-        hit
-        for gt, pred in positives
-        if (hit := _time_hit(gt, pred)) is not None
+        hit for gt, pred in positives if (hit := _time_hit(gt, pred)) is not None
     ]
     mechanism_pairs = [
         (gt["fracture_mechanism"], pred["fracture_mechanism"])
@@ -163,13 +157,11 @@ def score_common(
                 and time_ok is not False
                 and (
                     gt["fracture_mechanism"] is None
-                    or pred["fracture_mechanism"]
-                    == gt["fracture_mechanism"]
+                    or pred["fracture_mechanism"] == gt["fracture_mechanism"]
                 )
                 and (
                     _coarse_site(gt["fracture_site"]) is None
-                    or pred["coarse_site"]
-                    == _coarse_site(gt["fracture_site"])
+                    or pred["coarse_site"] == _coarse_site(gt["fracture_site"])
                 )
             )
         joint.append(ok)
@@ -183,24 +175,18 @@ def score_common(
         if gt["special_case"] is not None
     ]
     return {
-        "has_fracture_accuracy": sum(presence) / len(presence)
-        if presence
-        else None,
+        "has_fracture_accuracy": sum(presence) / len(presence) if presence else None,
         "fracture_recall": (
-            sum(pred["has_fracture"] is True for _, pred in positives)
-            / len(positives)
+            sum(pred["has_fracture"] is True for _, pred in positives) / len(positives)
             if positives
             else None
         ),
         "no_fracture_recall": (
-            sum(pred["has_fracture"] is False for _, pred in negatives)
-            / len(negatives)
+            sum(pred["has_fracture"] is False for _, pred in negatives) / len(negatives)
             if negatives
             else None
         ),
-        "time_hit_rate": sum(time_hits) / len(time_hits)
-        if time_hits
-        else None,
+        "time_hit_rate": sum(time_hits) / len(time_hits) if time_hits else None,
         "mechanism_macro_f1": _macro_f1(
             mechanism_pairs,
             FRACTURE_MECHANISMS,
@@ -209,12 +195,9 @@ def score_common(
             coarse_site_pairs,
             {"inside_gauge", "outside_gauge"},
         ),
-        "joint_common_success_rate": sum(joint) / len(joint)
-        if joint
-        else None,
+        "joint_common_success_rate": sum(joint) / len(joint) if joint else None,
         "special_case_results": [
-            {"special_case": name, "correct": correct}
-            for name, correct in special
+            {"special_case": name, "correct": correct} for name, correct in special
         ],
         "special_case_counts": dict(Counter(name for name, _ in special)),
         "denominators": {
@@ -272,13 +255,9 @@ def load_common_records(
         ):
             raise ValueError(f"comparison manifest mismatch: {video_id}")
         prediction = batch.get("runner_result", {}).get("result")
-        if not isinstance(prediction, dict) or prediction.get(
-            "video_id"
-        ) != video_id:
+        if not isinstance(prediction, dict) or prediction.get("video_id") != video_id:
             raise ValueError(f"invalid comparison result: {video_id}")
-        records.append(
-            (truth[video_id], adapt_prediction(prediction, schema_version))
-        )
+        records.append((truth[video_id], adapt_prediction(prediction, schema_version)))
     return records
 
 
@@ -295,11 +274,9 @@ def build_v4_common_baseline(
     finalization = json.loads(finalization_path.read_text(encoding="utf-8"))
     annotations = Path(annotations_path).resolve()
     if (
-        finalization.get("schema_version")
-        != "tensile-agent/stage-g-finalization/v1"
+        finalization.get("schema_version") != "tensile-agent/stage-g-finalization/v1"
         or finalization.get("status") != "scored_awaiting_v2_comparison"
-        or finalization.get("inputs", {}).get("manifest_sha256")
-        != manifest["_sha256"]
+        or finalization.get("inputs", {}).get("manifest_sha256") != manifest["_sha256"]
         or finalization.get("inputs", {}).get("annotations_sha256")
         != sha256_file(annotations)
     ):
@@ -357,8 +334,7 @@ def compare_common_reports(
         v2 = v2_report.get(metric)
         delta = (
             float(v4) - float(v2)
-            if isinstance(v4, (int, float))
-            and isinstance(v2, (int, float))
+            if isinstance(v4, (int, float)) and isinstance(v2, (int, float))
             else None
         )
         metrics[metric] = {
@@ -397,8 +373,7 @@ def compare_special_cases(
         if not isinstance(rows, list):
             raise ValueError("common report missing special_case_results")
         correct = sum(
-            isinstance(row, dict) and row.get("correct") is True
-            for row in rows
+            isinstance(row, dict) and row.get("correct") is True for row in rows
         )
         return correct, len(rows)
 
@@ -430,10 +405,7 @@ def validate_v2_result_identity(
     inputs = json.loads(
         Path(manifest["input_list"]["path"]).read_text(encoding="utf-8")
     )
-    if (
-        not isinstance(inputs, list)
-        or len(inputs) != manifest["input_list"]["count"]
-    ):
+    if not isinstance(inputs, list) or len(inputs) != manifest["input_list"]["count"]:
         raise ValueError("invalid V2 comparison input list")
     expected: dict[str, str] = {}
     for row in inputs:
@@ -470,8 +442,7 @@ def validate_v2_result_identity(
         )
         item_errors: list[str] = []
         if (
-            value.get("v2_comparison_manifest_sha256")
-            != manifest["_sha256"]
+            value.get("v2_comparison_manifest_sha256") != manifest["_sha256"]
             or value.get("video_path") != expected[video_id]
         ):
             item_errors.append("batch identity mismatch")

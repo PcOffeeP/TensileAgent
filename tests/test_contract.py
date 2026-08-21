@@ -45,9 +45,16 @@ def test_contract_is_four_field_and_fixed_prompt():
     assert contract["contract_hash"] == EXPECTED_CONTRACT_HASH
     assert contract["anomaly_types"] == ["视频异常"]
     assert contract["model_output_fields"] == [
-        "has_fracture", "fracture_between", "type", "location"
+        "has_fracture",
+        "fracture_between",
+        "type",
+        "location",
     ]
-    assert build_user_prompt([0.0, 1.0]) == build_user_prompt([10.0, 20.0]) == PRODUCTION_USER_PROMPT
+    assert (
+        build_user_prompt([0.0, 1.0])
+        == build_user_prompt([10.0, 20.0])
+        == PRODUCTION_USER_PROMPT
+    )
 
 
 def test_runtime_accepts_matching_contract_and_rejects_drift():
@@ -66,19 +73,27 @@ def test_visual_evidence_reference_keeps_frame_trace():
     evidence = VisualEvidence(
         status="available",
         summary="试样逐渐伸长后发生分离。",
-        references=[{
-            "round": 1,
-            "sample_range": [2.0, 4.0],
-            "frame_timestamps": [2.0, 2.5, 3.0, 3.5, 4.0],
-            "clip_hash": "abc",
-            "request_id": "request-1",
-        }],
+        references=[
+            {
+                "round": 1,
+                "sample_range": [2.0, 4.0],
+                "frame_timestamps": [2.0, 2.5, 3.0, 3.5, 4.0],
+                "clip_hash": "abc",
+                "request_id": "request-1",
+            }
+        ],
     )
     assert evidence.references[0].frame_timestamps[-1] == 4.0
 
 
 def test_sibling_authoritative_contract_matches_when_available():
-    sibling = CONTRACT_PATH.parents[3] / "mVllm_2" / "pipeline" / "contracts" / CONTRACT_PATH.name
+    sibling = (
+        CONTRACT_PATH.parents[3]
+        / "mVllm_2"
+        / "pipeline"
+        / "contracts"
+        / CONTRACT_PATH.name
+    )
     if not sibling.exists():
         pytest.skip("mVllm_2 sibling checkout is not available")
     assert json.loads(sibling.read_text(encoding="utf-8")) == load_visual_contract()

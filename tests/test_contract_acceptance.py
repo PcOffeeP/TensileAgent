@@ -113,7 +113,9 @@ class TestFinalOutputFractureValid:
         assert output.status == "fracture"
         assert output.time_range == [143.9, 144.9]
 
-    @pytest.mark.parametrize("ft", FRACTURE_TYPES_TUPLE, ids=[str(v) for v in FRACTURE_TYPES_TUPLE])
+    @pytest.mark.parametrize(
+        "ft", FRACTURE_TYPES_TUPLE, ids=[str(v) for v in FRACTURE_TYPES_TUPLE]
+    )
     def test_all_seven_fracture_types(self, ft: FractureType) -> None:
         """Each of the seven fracture classes is accepted."""
         output = FinalOutput(
@@ -224,6 +226,7 @@ class TestFinalOutputFractureInvalid:
 # 1b. no_fracture state — valid / invalid combinations
 # -------------------------------------------------------------------------
 
+
 class TestFinalOutputNoFractureValid:
     """Valid no_fracture field combinations pass FinalOutput validation."""
 
@@ -297,6 +300,7 @@ class TestFinalOutputNoFractureInvalid:
 # 1c. unrecognized state — valid / invalid combinations
 # -------------------------------------------------------------------------
 
+
 class TestFinalOutputUnrecognizedValid:
     """Valid unrecognized field combinations pass FinalOutput validation."""
 
@@ -365,6 +369,7 @@ class TestFinalOutputUnrecognizedInvalid:
 # 1d. ToolTerminate — verify field constraints match FinalOutput semantics
 # -------------------------------------------------------------------------
 
+
 class TestToolTerminateConditionFields:
     """ToolTerminate validation mirrors FinalOutput contract rules."""
 
@@ -399,11 +404,19 @@ class TestToolTerminateConditionFields:
 
     @pytest.mark.parametrize(
         "reason",
-        ["video_anomaly", "not_clamped", "conflicting_results",
-         "invalid_model_output", "insufficient_confidence",
-         "incomplete_coverage", "max_rounds"],
+        [
+            "video_anomaly",
+            "not_clamped",
+            "conflicting_results",
+            "invalid_model_output",
+            "insufficient_confidence",
+            "incomplete_coverage",
+            "max_rounds",
+        ],
     )
-    def test_all_seven_unrecognized_reasons_accepted_by_schema(self, reason: str) -> None:
+    def test_all_seven_unrecognized_reasons_accepted_by_schema(
+        self, reason: str
+    ) -> None:
         """All seven valid unrecognized reasons pass ToolTerminate schema."""
         tool = ToolTerminate(
             status="unrecognized",
@@ -449,25 +462,59 @@ class TestUnrecognizedReasonsEndToEnd:
     @pytest.mark.parametrize("reason", VALID_UNRECOGNIZED_REASONS)
     def test_unrecognized_reason_accepted(self, reason: str) -> None:
         """The agent accepts an unrecognized termination with each reason."""
-        video_meta = {"video_id": "v_ure_001", "duration": 100.0, "video_path": "v_ure_001.mp4"}
+        video_meta = {
+            "video_id": "v_ure_001",
+            "duration": 100.0,
+            "video_path": "v_ure_001.mp4",
+        }
         config = make_config()
         config["agent"]["max_rounds"] = 5
 
         if reason == "video_anomaly":
-            output = {"has_fracture": None, "fracture_between": None, "type": "视频异常", "location": None, "confidence": 0.70}
+            output = {
+                "has_fracture": None,
+                "fracture_between": None,
+                "type": "视频异常",
+                "location": None,
+                "confidence": 0.70,
+            }
         elif reason == "not_clamped":
-            output = {"has_fracture": False, "fracture_between": None, "type": "未夹紧", "location": None, "confidence": 0.70}
+            output = {
+                "has_fracture": False,
+                "fracture_between": None,
+                "type": "未夹紧",
+                "location": None,
+                "confidence": 0.70,
+            }
         else:
-            output = {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.50}
+            output = {
+                "has_fracture": False,
+                "fracture_between": None,
+                "type": "未断裂",
+                "location": None,
+                "confidence": 0.50,
+            }
         responses = [output, deepcopy(output)]
 
-        sequence = [("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"})]
+        sequence = [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"})
+        ]
         if reason in {"video_anomaly", "not_clamped"}:
-            sequence.append(("sample_and_infer", {"sample_range": [10.0, 20.0], "prompt": "recheck"}))
-        sequence.append(("terminate", {
-                "status": "unrecognized",
-                "unrecognized_reason": reason,
-            }))
+            sequence.append(
+                (
+                    "sample_and_infer",
+                    {"sample_range": [10.0, 20.0], "prompt": "recheck"},
+                )
+            )
+        sequence.append(
+            (
+                "terminate",
+                {
+                    "status": "unrecognized",
+                    "unrecognized_reason": reason,
+                },
+            )
+        )
         llm = StaticLLM(sequence)
 
         agent = IterativeAgent(
@@ -495,6 +542,7 @@ class TestUnrecognizedReasonsEndToEnd:
 # 3a. Sampling stage — clip builder failure
 # -------------------------------------------------------------------------
 
+
 class FailingClipBuilder:
     """Clip builder that raises on every call, simulating a sampling failure."""
 
@@ -511,22 +559,40 @@ class TestRunnerOkFalseSampling:
     """Sampling stage failure leads to unrecognized termination."""
 
     def test_sampling_error_results_in_unrecognized(self) -> None:
-        video_meta = {"video_id": "v_samp_001", "duration": 100.0, "video_path": "v_samp_001.mp4"}
+        video_meta = {
+            "video_id": "v_samp_001",
+            "duration": 100.0,
+            "video_path": "v_samp_001.mp4",
+        }
         config = make_config()
         config["agent"]["max_rounds"] = 3
 
         # Model output is not used because sampling fails first.
         responses = [
-            {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.50},
+            {
+                "has_fracture": False,
+                "fracture_between": None,
+                "type": "未断裂",
+                "location": None,
+                "confidence": 0.50,
+            },
         ]
 
-        llm = StaticLLM([
-            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-            ("terminate", {
-                "status": "unrecognized",
-                "unrecognized_reason": "invalid_model_output",
-            }),
-        ])
+        llm = StaticLLM(
+            [
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 100.0], "prompt": "analyze"},
+                ),
+                (
+                    "terminate",
+                    {
+                        "status": "unrecognized",
+                        "unrecognized_reason": "invalid_model_output",
+                    },
+                ),
+            ]
+        )
 
         agent = IterativeAgent(
             llm_client=llm,
@@ -546,6 +612,7 @@ class TestRunnerOkFalseSampling:
 # 3b. Inference transport stage — inference call fails
 # -------------------------------------------------------------------------
 
+
 class FailingInferenceClient:
     """Inference client that raises on infer(), simulating transport failure."""
 
@@ -557,17 +624,29 @@ class TestRunnerOkFalseInference:
     """Inference transport failure leads to unrecognized termination."""
 
     def test_inference_transport_error_results_in_unrecognized(self) -> None:
-        video_meta = {"video_id": "v_inf_001", "duration": 100.0, "video_path": "v_inf_001.mp4"}
+        video_meta = {
+            "video_id": "v_inf_001",
+            "duration": 100.0,
+            "video_path": "v_inf_001.mp4",
+        }
         config = make_config()
         config["agent"]["max_rounds"] = 3
 
-        llm = StaticLLM([
-            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-            ("terminate", {
-                "status": "unrecognized",
-                "unrecognized_reason": "invalid_model_output",
-            }),
-        ])
+        llm = StaticLLM(
+            [
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 100.0], "prompt": "analyze"},
+                ),
+                (
+                    "terminate",
+                    {
+                        "status": "unrecognized",
+                        "unrecognized_reason": "invalid_model_output",
+                    },
+                ),
+            ]
+        )
 
         agent = IterativeAgent(
             llm_client=llm,
@@ -585,6 +664,7 @@ class TestRunnerOkFalseInference:
 # -------------------------------------------------------------------------
 # 3c. Decision backend stage — LLM fails to produce valid tool_calls
 # -------------------------------------------------------------------------
+
 
 class NoToolLLM(BaseAgentLLM):
     """LLM that never produces tool_calls, simulating decision backend failure."""
@@ -618,13 +698,23 @@ class TestRunnerOkFalseDecisionBackend:
     """Decision backend (LLM) failure eventually leads to termination."""
 
     def test_llm_no_tool_calls_loop_ends_in_unrecognized(self) -> None:
-        video_meta = {"video_id": "v_dec_001", "duration": 100.0, "video_path": "v_dec_001.mp4"}
+        video_meta = {
+            "video_id": "v_dec_001",
+            "duration": 100.0,
+            "video_path": "v_dec_001.mp4",
+        }
         config = make_config()
         config["agent"]["max_rounds"] = 5
 
         # Provide some valid responses but the agent never gets to use them.
         responses = [
-            {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.50},
+            {
+                "has_fracture": False,
+                "fracture_between": None,
+                "type": "未断裂",
+                "location": None,
+                "confidence": 0.50,
+            },
         ]
 
         agent = IterativeAgent(
@@ -651,12 +741,17 @@ class TestRunnerOkFalseDecisionBackend:
 # 3d. Internal stage — internal processing error
 # -------------------------------------------------------------------------
 
+
 class TestRunnerOkFalseInternal:
     """Internal processing error is handled gracefully."""
 
     def test_internal_error_via_all_rounds_invalid(self) -> None:
         """All rounds return invalid model output → internal errors accumulated."""
-        video_meta = {"video_id": "v_int_001", "duration": 100.0, "video_path": "v_int_001.mp4"}
+        video_meta = {
+            "video_id": "v_int_001",
+            "duration": 100.0,
+            "video_path": "v_int_001.mp4",
+        }
         config = make_config()
         config["agent"]["max_rounds"] = 3
 
@@ -667,11 +762,22 @@ class TestRunnerOkFalseInternal:
             None,
         ]
 
-        llm = StaticLLM([
-            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ])
+        llm = StaticLLM(
+            [
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 100.0], "prompt": "analyze"},
+                ),
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 100.0], "prompt": "analyze"},
+                ),
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 100.0], "prompt": "analyze"},
+                ),
+            ]
+        )
 
         agent = IterativeAgent(
             llm_client=llm,
@@ -698,28 +804,47 @@ class TestRunnerOkFalseInternal:
 # 3e. Input stage — bad input data handled in unrecognized path
 # -------------------------------------------------------------------------
 
+
 class TestRunnerOkFalseInput:
     """Input-level failure propagates correctly in the agent flow."""
 
     def test_input_validation_error_through_invalid_fracture_between(self) -> None:
         """Out-of-range fracture_between is an input mapping error handled gracefully."""
-        video_meta = {"video_id": "v_inp_001", "duration": 100.0, "video_path": "v_inp_001.mp4"}
+        video_meta = {
+            "video_id": "v_inp_001",
+            "duration": 100.0,
+            "video_path": "v_inp_001.mp4",
+        }
         config = make_config()
         config["agent"]["tolerance_seconds"] = 5.0
         config["agent"]["max_rounds"] = 3
 
         responses = [
             # fracture_between indices exceed manifest size → mapping failure
-            {"has_fracture": True, "fracture_between": [999, 1000], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
+            {
+                "has_fracture": True,
+                "fracture_between": [999, 1000],
+                "type": "韧性断裂",
+                "location": "inside_gauge",
+                "confidence": 0.92,
+            },
         ]
 
-        llm = StaticLLM([
-            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-            ("terminate", {
-                "status": "unrecognized",
-                "unrecognized_reason": "invalid_model_output",
-            }),
-        ])
+        llm = StaticLLM(
+            [
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 100.0], "prompt": "analyze"},
+                ),
+                (
+                    "terminate",
+                    {
+                        "status": "unrecognized",
+                        "unrecognized_reason": "invalid_model_output",
+                    },
+                ),
+            ]
+        )
 
         agent = IterativeAgent(
             llm_client=llm,
@@ -741,29 +866,57 @@ class TestRunnerOkFalseInput:
 # 3f. Configuration stage — misconfiguration leads to fallback
 # -------------------------------------------------------------------------
 
+
 class TestRunnerOkFalseConfiguration:
     """Configuration-level issues are handled in the unrecognized path."""
 
     def test_low_confidence_threshold_leads_to_unrecognized(self) -> None:
         """Very high confidence threshold makes all rounds low-confidence → expands → unrecognized."""
-        video_meta = {"video_id": "v_cfg_001", "duration": 100.0, "video_path": "v_cfg_001.mp4"}
+        video_meta = {
+            "video_id": "v_cfg_001",
+            "duration": 100.0,
+            "video_path": "v_cfg_001.mp4",
+        }
         config = make_config()
         config["agent"]["confidence_threshold"] = 0.99  # nearly impossible to meet
         config["agent"]["max_rounds"] = 3
 
         responses = [
-            {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-            {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
+            {
+                "has_fracture": True,
+                "fracture_between": [17, 18],
+                "type": "韧性断裂",
+                "location": "inside_gauge",
+                "confidence": 0.92,
+            },
+            {
+                "has_fracture": True,
+                "fracture_between": [17, 18],
+                "type": "韧性断裂",
+                "location": "inside_gauge",
+                "confidence": 0.92,
+            },
         ]
 
-        llm = StaticLLM([
-            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-            ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-            ("terminate", {
-                "status": "unrecognized",
-                "unrecognized_reason": "insufficient_confidence",
-            }),
-        ])
+        llm = StaticLLM(
+            [
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 100.0], "prompt": "analyze"},
+                ),
+                (
+                    "sample_and_infer",
+                    {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+                ),
+                (
+                    "terminate",
+                    {
+                        "status": "unrecognized",
+                        "unrecognized_reason": "insufficient_confidence",
+                    },
+                ),
+            ]
+        )
 
         agent = IterativeAgent(
             llm_client=llm,
@@ -782,11 +935,16 @@ class TestRunnerOkFalseConfiguration:
 # 4. EDGE CASES AND REGRESSION GUARDS
 # =========================================================================
 
+
 class TestEdgeCases:
     """Additional edge cases to guard against regressions."""
 
     def test_fracture_with_unavailable_location_in_finalize(self) -> None:
-        video_meta = {"video_id": "v_edge_001", "duration": 100.0, "video_path": "v_edge_001.mp4"}
+        video_meta = {
+            "video_id": "v_edge_001",
+            "duration": 100.0,
+            "video_path": "v_edge_001.mp4",
+        }
         config = make_config()
         agent = IterativeAgent(
             llm_client=StaticLLM([]),
@@ -795,14 +953,16 @@ class TestEdgeCases:
             clip_builder=FakeClipBuilder(),
             inference_client=FakeInferenceClient([]),
         )
-        result = agent._finalize({
-            "status": "fracture",
-            "time_range": [10.0, 10.5],
-            "fracture_type": "韧性断裂",
-            "location": None,
-            "confidence": UNCALIBRATED_CONFIDENCE,
-            "unrecognized_reason": None,
-        })
+        result = agent._finalize(
+            {
+                "status": "fracture",
+                "time_range": [10.0, 10.5],
+                "fracture_type": "韧性断裂",
+                "location": None,
+                "confidence": UNCALIBRATED_CONFIDENCE,
+                "unrecognized_reason": None,
+            }
+        )
         assert result["status"] == "fracture"
         assert result["location"] is None
         assert result["field_status"]["location"] == "unavailable"
@@ -820,23 +980,50 @@ class TestEdgeCases:
 
     def test_video_anomaly_model_output_flows_to_unrecognized(self) -> None:
         """Video anomaly model output leads to unrecognized with video_anomaly reason."""
-        video_meta = {"video_id": "v_edge_002", "duration": 100.0, "video_path": "v_edge_002.mp4"}
+        video_meta = {
+            "video_id": "v_edge_002",
+            "duration": 100.0,
+            "video_path": "v_edge_002.mp4",
+        }
         config = make_config()
 
         responses = [
             # has_fracture=None indicates video anomaly, presence unknown
-            {"has_fracture": None, "fracture_between": None, "type": "视频异常", "location": None, "confidence": 0.70},
-            {"has_fracture": None, "fracture_between": None, "type": "视频异常", "location": None, "confidence": 0.70},
+            {
+                "has_fracture": None,
+                "fracture_between": None,
+                "type": "视频异常",
+                "location": None,
+                "confidence": 0.70,
+            },
+            {
+                "has_fracture": None,
+                "fracture_between": None,
+                "type": "视频异常",
+                "location": None,
+                "confidence": 0.70,
+            },
         ]
 
-        llm = StaticLLM([
-            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-            ("sample_and_infer", {"sample_range": [20.0, 40.0], "prompt": "recheck"}),
-            ("terminate", {
-                "status": "unrecognized",
-                "unrecognized_reason": "video_anomaly",
-            }),
-        ])
+        llm = StaticLLM(
+            [
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 100.0], "prompt": "analyze"},
+                ),
+                (
+                    "sample_and_infer",
+                    {"sample_range": [20.0, 40.0], "prompt": "recheck"},
+                ),
+                (
+                    "terminate",
+                    {
+                        "status": "unrecognized",
+                        "unrecognized_reason": "video_anomaly",
+                    },
+                ),
+            ]
+        )
 
         agent = IterativeAgent(
             llm_client=llm,
@@ -854,6 +1041,7 @@ class TestEdgeCases:
 # =========================================================================
 # 5. RUNNER RESULT ENVELOPE
 # =========================================================================
+
 
 class TestRunnerResultEnvelope:
     """The RunnerResult envelope correctly separates success from failure."""
@@ -875,7 +1063,11 @@ class TestRunnerResultEnvelope:
     def test_runner_result_failure_ok_false_with_error(self) -> None:
         result = RunnerResult(
             ok=False,
-            error=RunnerError(stage="inference_transport", code="timeout", message="Connection timed out"),
+            error=RunnerError(
+                stage="inference_transport",
+                code="timeout",
+                message="Connection timed out",
+            ),
         )
         assert result.ok is False
         assert result.result is None
@@ -884,8 +1076,22 @@ class TestRunnerResultEnvelope:
 
     @pytest.mark.parametrize(
         "stage",
-        ["input", "configuration", "sampling", "inference_transport", "decision_backend", "internal"],
-        ids=["input", "configuration", "sampling", "inference_transport", "decision_backend", "internal"],
+        [
+            "input",
+            "configuration",
+            "sampling",
+            "inference_transport",
+            "decision_backend",
+            "internal",
+        ],
+        ids=[
+            "input",
+            "configuration",
+            "sampling",
+            "inference_transport",
+            "decision_backend",
+            "internal",
+        ],
     )
     def test_runner_error_all_six_stages(self, stage: str) -> None:
         """All six RunnerError stages are accepted by the schema."""
@@ -904,7 +1110,11 @@ class TestRunnerResultEnvelope:
         with pytest.raises(ValidationError, match="error must be None when ok=True"):
             RunnerResult(
                 ok=True,
-                result=FinalOutput(video_id="v001", status="no_fracture", confidence=UNCALIBRATED_CONFIDENCE),
+                result=FinalOutput(
+                    video_id="v001",
+                    status="no_fracture",
+                    confidence=UNCALIBRATED_CONFIDENCE,
+                ),
                 error=RunnerError(stage="input", code="E", message="x"),
             )
 
@@ -913,7 +1123,11 @@ class TestRunnerResultEnvelope:
         with pytest.raises(ValidationError, match="result must be None when ok=False"):
             RunnerResult(
                 ok=False,
-                result=FinalOutput(video_id="v001", status="no_fracture", confidence=UNCALIBRATED_CONFIDENCE),
+                result=FinalOutput(
+                    video_id="v001",
+                    status="no_fracture",
+                    confidence=UNCALIBRATED_CONFIDENCE,
+                ),
                 error=RunnerError(stage="input", code="E", message="x"),
             )
 
@@ -959,7 +1173,11 @@ class TestRunnerResultEnvelope:
         """Accessing an unknown key raises KeyError."""
         rr = RunnerResult(
             ok=True,
-            result=FinalOutput(video_id="v001", status="no_fracture", confidence=UNCALIBRATED_CONFIDENCE),
+            result=FinalOutput(
+                video_id="v001",
+                status="no_fracture",
+                confidence=UNCALIBRATED_CONFIDENCE,
+            ),
         )
         with pytest.raises(KeyError):
             _ = rr["unknown_key"]
@@ -968,6 +1186,7 @@ class TestRunnerResultEnvelope:
 # =========================================================================
 # 6. FIX 7: Pydantic validation rejects invalid tool call arguments
 # =========================================================================
+
 
 class TestToolCallValidation:
     """Invalid tool call arguments are rejected at the Pydantic layer."""
@@ -1028,6 +1247,7 @@ class TestToolCallValidation:
 # 7. FIX 2: Missing preprocessing metadata contract
 # =========================================================================
 
+
 class TestMissingPreprocessingContract:
     """Preprocessing metadata contract: missing + has_fracture → fail."""
 
@@ -1035,7 +1255,11 @@ class TestMissingPreprocessingContract:
         """When preprocessing is None and has_fracture is True, the round fails."""
         from agent.inference import InferenceResult
 
-        video_meta = {"video_id": "v_fix2_001", "duration": 100.0, "video_path": "v_fix2_001.mp4"}
+        video_meta = {
+            "video_id": "v_fix2_001",
+            "duration": 100.0,
+            "video_path": "v_fix2_001.mp4",
+        }
         config = make_config()
         config["agent"]["max_rounds"] = 3
 
@@ -1065,11 +1289,19 @@ class TestMissingPreprocessingContract:
             ),
         ]
 
-        llm = StaticLLM([
-            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-            ("terminate", {"status": "no_fracture", "confidence": 0.95}),
-        ])
+        llm = StaticLLM(
+            [
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 100.0], "prompt": "analyze"},
+                ),
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 100.0], "prompt": "analyze"},
+                ),
+                ("terminate", {"status": "no_fracture", "confidence": 0.95}),
+            ]
+        )
 
         agent = IterativeAgent(
             llm_client=llm,
@@ -1087,7 +1319,11 @@ class TestMissingPreprocessingContract:
         """When preprocessing is None and has_fracture is False, graceful degrade."""
         from agent.inference import InferenceResult
 
-        video_meta = {"video_id": "v_fix2_002", "duration": 60.0, "video_path": "v_fix2_002.mp4"}
+        video_meta = {
+            "video_id": "v_fix2_002",
+            "duration": 60.0,
+            "video_path": "v_fix2_002.mp4",
+        }
         config = make_config()
         config["agent"]["max_rounds"] = 3
 
@@ -1118,11 +1354,19 @@ class TestMissingPreprocessingContract:
             ),
         ]
 
-        llm = StaticLLM([
-            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-            ("terminate", {"status": "no_fracture", "confidence": 0.95}),
-        ])
+        llm = StaticLLM(
+            [
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 60.0], "prompt": "analyze"},
+                ),
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 60.0], "prompt": "analyze"},
+                ),
+                ("terminate", {"status": "no_fracture", "confidence": 0.95}),
+            ]
+        )
 
         agent = IterativeAgent(
             llm_client=llm,
@@ -1141,43 +1385,83 @@ class TestMissingPreprocessingContract:
 # 8. FIX 3: Evidence threshold — intersection and convergence
 # =========================================================================
 
+
 class TestEvidenceThresholdContract:
     """Evidence threshold: intersection check, max_rounds convergence."""
 
     def test_disjoint_evidence_ranges_prevent_termination(self) -> None:
         """Non-overlapping inferred_time_range across evidence rounds blocks termination."""
-        video_meta = {"video_id": "v_fix3_001", "duration": 100.0, "video_path": "v_fix3_001.mp4"}
+        video_meta = {
+            "video_id": "v_fix3_001",
+            "duration": 100.0,
+            "video_path": "v_fix3_001.mp4",
+        }
         config = make_config()
         config["agent"]["max_rounds"] = 5
 
         # Two rounds with disjoint ranges: [0.0, 2.857] and [48.571, 51.429]
         responses = [
-            {"has_fracture": True, "fracture_between": [0, 1], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-            {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.91},
-            {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.90},
+            {
+                "has_fracture": True,
+                "fracture_between": [0, 1],
+                "type": "韧性断裂",
+                "location": "inside_gauge",
+                "confidence": 0.92,
+            },
+            {
+                "has_fracture": True,
+                "fracture_between": [17, 18],
+                "type": "韧性断裂",
+                "location": "inside_gauge",
+                "confidence": 0.91,
+            },
+            {
+                "has_fracture": True,
+                "fracture_between": [17, 18],
+                "type": "韧性断裂",
+                "location": "inside_gauge",
+                "confidence": 0.90,
+            },
         ]
 
-        llm = StaticLLM([
-            ("sample_and_infer", {"sample_range": [0.0, 20.0], "prompt": "analyze"}),
-            ("sample_and_infer", {"sample_range": [48.0, 52.0], "prompt": "analyze"}),
-            # Try to terminate with disjoint evidence → rejected.
-            ("terminate", {
-                "status": "fracture",
-                "fracture_type": "韧性断裂",
-                "location": "inside_gauge",
-                "confidence": 0.92,
-                "evidence_rounds": [0, 1],
-            }),
-            ("sample_and_infer", {"sample_range": [48.0, 52.0], "prompt": "analyze"}),
-            # Terminate with overlapping evidence (rounds 1, 2 have same range).
-            ("terminate", {
-                "status": "fracture",
-                "fracture_type": "韧性断裂",
-                "location": "inside_gauge",
-                "confidence": 0.92,
-                "evidence_rounds": [1, 2],
-            }),
-        ])
+        llm = StaticLLM(
+            [
+                (
+                    "sample_and_infer",
+                    {"sample_range": [0.0, 20.0], "prompt": "analyze"},
+                ),
+                (
+                    "sample_and_infer",
+                    {"sample_range": [48.0, 52.0], "prompt": "analyze"},
+                ),
+                # Try to terminate with disjoint evidence → rejected.
+                (
+                    "terminate",
+                    {
+                        "status": "fracture",
+                        "fracture_type": "韧性断裂",
+                        "location": "inside_gauge",
+                        "confidence": 0.92,
+                        "evidence_rounds": [0, 1],
+                    },
+                ),
+                (
+                    "sample_and_infer",
+                    {"sample_range": [48.0, 52.0], "prompt": "analyze"},
+                ),
+                # Terminate with overlapping evidence (rounds 1, 2 have same range).
+                (
+                    "terminate",
+                    {
+                        "status": "fracture",
+                        "fracture_type": "韧性断裂",
+                        "location": "inside_gauge",
+                        "confidence": 0.92,
+                        "evidence_rounds": [1, 2],
+                    },
+                ),
+            ]
+        )
 
         agent = IterativeAgent(
             llm_client=llm,
@@ -1194,7 +1478,11 @@ class TestEvidenceThresholdContract:
 
     def test_build_fracture_args_intersection(self) -> None:
         """_build_fracture_args returns intersection of all positive time ranges."""
-        video_meta = {"video_id": "v_fix3_002", "duration": 100.0, "video_path": "v_fix3_002.mp4"}
+        video_meta = {
+            "video_id": "v_fix3_002",
+            "duration": 100.0,
+            "video_path": "v_fix3_002.mp4",
+        }
         config = make_config()
         llm = StaticLLM([])
         agent = IterativeAgent(
@@ -1206,23 +1494,40 @@ class TestEvidenceThresholdContract:
         )
 
         positive_rounds = [
-            {"result": {
-                "model_output": {"has_fracture": True, "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-                "inferred_time_range": [10.0, 20.0],
-                "round_confidence_level": "高",
-            }},
-            {"result": {
-                "model_output": {"has_fracture": True, "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.88},
-                "inferred_time_range": [15.0, 18.0],
-                "round_confidence_level": "中",
-            }},
+            {
+                "result": {
+                    "model_output": {
+                        "has_fracture": True,
+                        "type": "韧性断裂",
+                        "location": "inside_gauge",
+                        "confidence": 0.92,
+                    },
+                    "inferred_time_range": [10.0, 20.0],
+                    "round_confidence_level": "高",
+                }
+            },
+            {
+                "result": {
+                    "model_output": {
+                        "has_fracture": True,
+                        "type": "韧性断裂",
+                        "location": "inside_gauge",
+                        "confidence": 0.88,
+                    },
+                    "inferred_time_range": [15.0, 18.0],
+                    "round_confidence_level": "中",
+                }
+            },
         ]
 
-        args = agent._build_fracture_args(positive_rounds, {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-        })
+        args = agent._build_fracture_args(
+            positive_rounds,
+            {
+                "status": "fracture",
+                "fracture_type": "韧性断裂",
+                "location": "inside_gauge",
+                "confidence": 0.92,
+            },
+        )
         assert args["time_range"] is None  # intersection is wider than tolerance
         assert args["fracture_type"] == "韧性断裂"

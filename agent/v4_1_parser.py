@@ -92,7 +92,9 @@ class V4_1ResultParser:
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             return ParseResult(
                 ok=False,
-                error=ParseError(ResultParser.ERROR_INVALID_JSON, f"invalid JSON: {exc}"),
+                error=ParseError(
+                    ResultParser.ERROR_INVALID_JSON, f"invalid JSON: {exc}"
+                ),
             )
         if not isinstance(value, dict):
             return ParseResult(

@@ -22,8 +22,7 @@ def _empty_matrix(
 ) -> dict[str, dict[str, int]]:
     predictions = tuple(prediction_labels)
     return {
-        truth: {prediction: 0 for prediction in predictions}
-        for truth in truth_labels
+        truth: {prediction: 0 for prediction in predictions} for truth in truth_labels
     }
 
 

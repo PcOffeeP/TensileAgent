@@ -53,9 +53,7 @@ def _make_frames(
     ]
 
 
-def _make_processor_info(
-    version: str = "minicpmv4.5/0.1", max_frames: int = 8
-) -> dict:
+def _make_processor_info(version: str = "minicpmv4.5/0.1", max_frames: int = 8) -> dict:
     return {
         "processor_version": version,
         "max_frames": max_frames,
@@ -203,14 +201,20 @@ class TestRequestIdUniqueness:
         result1 = wrap_response(raw, frames, info)
         result2 = wrap_response(raw, frames, info)
 
-        assert result1["preprocessing"]["request_id"] != result2["preprocessing"]["request_id"]
+        assert (
+            result1["preprocessing"]["request_id"]
+            != result2["preprocessing"]["request_id"]
+        )
 
     def test_multiple_calls_all_unique(self):
         raw = _make_raw_response()
         frames = _make_frames(4)
         info = _make_processor_info()
 
-        ids = {wrap_response(raw, frames, info)["preprocessing"]["request_id"] for _ in range(10)}
+        ids = {
+            wrap_response(raw, frames, info)["preprocessing"]["request_id"]
+            for _ in range(10)
+        }
         assert len(ids) == 10
 
 
@@ -222,24 +226,33 @@ class TestRequestIdUniqueness:
 class TestFramesContent:
     def test_frames_count_matches_input(self):
         input_frames = _make_frames(6)
-        result = wrap_response(_make_raw_response(), input_frames, _make_processor_info())
+        result = wrap_response(
+            _make_raw_response(), input_frames, _make_processor_info()
+        )
         assert len(result["preprocessing"]["frames"]) == 6
 
     def test_each_frame_has_index_and_timestamp(self):
         input_frames = _make_frames(3)
-        result = wrap_response(_make_raw_response(), input_frames, _make_processor_info())
+        result = wrap_response(
+            _make_raw_response(), input_frames, _make_processor_info()
+        )
         for f in result["preprocessing"]["frames"]:
             assert "index" in f
             assert "timestamp" in f
 
     def test_frame_index_values(self):
-        input_frames = [{"index": 10, "timestamp": 5.0}, {"index": 20, "timestamp": 10.0}]
+        input_frames = [
+            {"index": 10, "timestamp": 5.0},
+            {"index": 20, "timestamp": 10.0},
+        ]
         with pytest.raises(ValueError, match="consecutive"):
             wrap_response(_make_raw_response(), input_frames, _make_processor_info())
 
     def test_frame_timestamp_values(self):
         input_frames = [{"index": 0, "timestamp": 1.5}, {"index": 1, "timestamp": 3.7}]
-        result = wrap_response(_make_raw_response(), input_frames, _make_processor_info())
+        result = wrap_response(
+            _make_raw_response(), input_frames, _make_processor_info()
+        )
         assert result["preprocessing"]["frames"][0]["timestamp"] == 1.5
         assert result["preprocessing"]["frames"][1]["timestamp"] == 3.7
 
@@ -248,7 +261,9 @@ class TestFramesContent:
         input_frames = [
             {"index": 0, "timestamp": 0.0, "extra_field": "should_not_appear"},
         ]
-        result = wrap_response(_make_raw_response(), input_frames, _make_processor_info())
+        result = wrap_response(
+            _make_raw_response(), input_frames, _make_processor_info()
+        )
         frame = result["preprocessing"]["frames"][0]
         assert set(frame.keys()) == {"index", "timestamp"}
 
@@ -270,7 +285,8 @@ class TestProcessorInfoMapping:
     def test_max_frames_mapped(self):
         with pytest.raises(ValueError, match="exactly 8"):
             wrap_response(
-                _make_raw_response(), _make_frames(3),
+                _make_raw_response(),
+                _make_frames(3),
                 {"processor_version": "v1", "max_frames": 12},
             )
 

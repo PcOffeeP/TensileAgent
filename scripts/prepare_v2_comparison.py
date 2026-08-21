@@ -77,9 +77,7 @@ def main() -> None:
         results_root=args.v4_results_root,
     )
     baseline_path = (
-        args.output_root
-        / "v4_common_baselines"
-        / f"{baseline['baseline_id']}.json"
+        args.output_root / "v4_common_baselines" / f"{baseline['baseline_id']}.json"
     )
     _write_json_once(baseline_path, baseline)
     commit = subprocess.run(
@@ -103,11 +101,7 @@ def main() -> None:
         agent_runtime_commit=commit,
         batch_runner_path=runner_path,
     )
-    output = (
-        args.output_root
-        / manifest["manifest_id"]
-        / "v2_comparison_manifest.json"
-    )
+    output = args.output_root / manifest["manifest_id"] / "v2_comparison_manifest.json"
     freeze_v2_comparison_manifest(output, manifest)
     print(
         json.dumps(

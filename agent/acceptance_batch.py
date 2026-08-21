@@ -124,7 +124,9 @@ def load_stage_g_authorization(
     if list_name not in authorization.get("allowed_input_lists", []):
         raise ValueError(f"Stage G authorization does not allow {list_name}")
     if authorization.get("heldout_semantics_opened") is not False:
-        raise ValueError("Stage G authorization must be created before semantic opening")
+        raise ValueError(
+            "Stage G authorization must be created before semantic opening"
+        )
     run_id = authorization.get("one_time_run_id")
     if not isinstance(run_id, str) or not run_id.strip():
         raise ValueError("Stage G authorization missing one_time_run_id")
@@ -155,9 +157,7 @@ def run_acceptance_batch(
         is False
     ):
         if stage_g_authorization_path is None:
-            raise ValueError(
-                f"{list_name} requires a frozen Stage G authorization"
-            )
+            raise ValueError(f"{list_name} requires a frozen Stage G authorization")
         stage_g_authorization = load_stage_g_authorization(
             stage_g_authorization_path,
             manifest,
@@ -181,9 +181,10 @@ def run_acceptance_batch(
         failure_path = task_dir / "failure.json"
         if success_path.exists():
             existing = json.loads(success_path.read_text(encoding="utf-8"))
-            if (
-                existing.get("acceptance_manifest_sha256") != manifest["_sha256"]
-                or not _deployment_matches(existing["runner_result"], expected_deployment)
+            if existing.get("acceptance_manifest_sha256") != manifest[
+                "_sha256"
+            ] or not _deployment_matches(
+                existing["runner_result"], expected_deployment
             ):
                 raise ValueError(f"immutable success identity mismatch: {video_id}")
             skipped += 1
@@ -232,7 +233,9 @@ def run_acceptance_batch(
         }
         if result.get("ok") is True:
             if not _deployment_matches(result, expected_deployment):
-                record["identity_error"] = "visual deployment does not match frozen manifest"
+                record["identity_error"] = (
+                    "visual deployment does not match frozen manifest"
+                )
                 _atomic_json(failure_path, record)
                 failed += 1
                 continue

@@ -84,7 +84,9 @@ def _atomic_write_new(path: Path, payload: dict[str, Any]) -> None:
     temp.replace(path)
 
 
-def _guard_locked_run(manifest_path: Path, results_root: Path, acknowledgement: str | None) -> None:
+def _guard_locked_run(
+    manifest_path: Path, results_root: Path, acknowledgement: str | None
+) -> None:
     marker = manifest_path.with_name("LOCKED80_STARTED.json")
     resolved_root = str(results_root.resolve())
     if marker.exists():
@@ -144,9 +146,7 @@ def _validate_existing_result(
     a = payload.get("strategy_a") or {}
     b = payload.get("strategy_b") or {}
     c_history = (
-        (payload.get("strategy_c") or {})
-        .get("evaluation_trace", {})
-        .get("history", [])
+        (payload.get("strategy_c") or {}).get("evaluation_trace", {}).get("history", [])
     )
     if a.get("request_count") != 1 or len(a.get("rounds", [])) != 1:
         raise ValueError(f"strategy A request mismatch: {video_id}")
@@ -228,7 +228,9 @@ def main() -> None:
         video_path = Path(manifest["videos"][video_id]["path"])
         requested_path = Path(args.videos_root) / f"{video_id}.mp4"
         if requested_path.resolve() != video_path.resolve():
-            raise RuntimeError(f"--videos-root differs from pinned manifest: {video_id}")
+            raise RuntimeError(
+                f"--videos-root differs from pinned manifest: {video_id}"
+            )
         meta = build_video_meta(video_path, video_id=video_id)
         duration = float(meta["duration"])
 
@@ -269,8 +271,7 @@ def main() -> None:
             raise RuntimeError(f"visual deployment drift before A/B calls: {video_id}")
         c_decision = strategy_c.get("runtime_identity", {}).get("decision_model") or {}
         expected_c_decision = {
-            key: decision_identity.get(key)
-            for key in ("backend", "model", "digest")
+            key: decision_identity.get(key) for key in ("backend", "model", "digest")
         }
         if c_decision != expected_c_decision:
             raise RuntimeError(f"decision model selection drift: {video_id}")

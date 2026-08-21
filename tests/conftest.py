@@ -20,4 +20,3 @@ collect_ignore = [
     "test_validate_no_oob.py",
     "test_validation_common.py",
 ]
-

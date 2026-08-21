@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Index / time conversion utilities
 # ---------------------------------------------------------------------------
-def _resolve_between_indices(fracture_between: list[int], num_frames: int) -> tuple[int, int]:
+def _resolve_between_indices(
+    fracture_between: list[int], num_frames: int
+) -> tuple[int, int]:
     """Validate and return ``(i, j)`` indices for ``fracture_between``."""
     if fracture_between is None or len(fracture_between) != 2:
         raise ValueError("fracture_between must be a two-element list")
@@ -85,11 +87,16 @@ def _probe_video(video_path: str) -> dict[str, Any]:
     ffprobe = _which_ffprobe()
     cmd = [
         ffprobe,
-        "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=r_frame_rate,avg_frame_rate,nb_frames,duration,width,height",
-        "-show_entries", "format=duration",
-        "-of", "json",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=r_frame_rate,avg_frame_rate,nb_frames,duration,width,height",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "json",
         video_path,
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -119,10 +126,14 @@ def _probe_frame_timestamps(video_path: str) -> list[float]:
     proc = subprocess.run(
         [
             _which_ffprobe(),
-            "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "frame=best_effort_timestamp_time",
-            "-of", "json",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "frame=best_effort_timestamp_time",
+            "-of",
+            "json",
             video_path,
         ],
         capture_output=True,
@@ -291,7 +302,11 @@ class FfmpegVideoClipBuilder(VideoClipBuilder):
             end = start
         clip_duration = end - start
 
-        out_dir = Path(self.output_dir) if self.output_dir else Path("data/08_runtime/agent_clips")
+        out_dir = (
+            Path(self.output_dir)
+            if self.output_dir
+            else Path("data/08_runtime/agent_clips")
+        )
         out_dir.mkdir(parents=True, exist_ok=True)
 
         video_stem = Path(source_video).stem
@@ -301,12 +316,17 @@ class FfmpegVideoClipBuilder(VideoClipBuilder):
         _run_ffmpeg(
             [
                 "-y",
-                "-ss", str(start),
-                "-i", source_video,
-                "-t", str(clip_duration),
+                "-ss",
+                str(start),
+                "-i",
+                source_video,
+                "-t",
+                str(clip_duration),
                 "-an",
-                "-c:v", "libx264",
-                "-pix_fmt", "yuv420p",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
                 str(output_path),
             ]
         )
@@ -320,7 +340,9 @@ class FfmpegVideoClipBuilder(VideoClipBuilder):
         manifest: list[dict[str, Any]] = []
         for k, temp_timestamp in enumerate(temp_timestamps):
             target_timestamp = start + (temp_timestamp - temp_origin)
-            original_frame = _nearest_timestamp_index(source_timestamps, target_timestamp)
+            original_frame = _nearest_timestamp_index(
+                source_timestamps, target_timestamp
+            )
             timestamp = source_timestamps[original_frame]
             if timestamp > end + 1e-6:
                 break

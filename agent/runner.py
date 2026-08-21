@@ -48,9 +48,7 @@ def create_inference_client(config: dict[str, Any]):
     return _create_inference_client(config)
 
 
-def create_clip_builder(
-    config: dict[str, Any], output_dir: str | Path | None = None
-):
+def create_clip_builder(config: dict[str, Any], output_dir: str | Path | None = None):
     """Create a ``FfmpegVideoClipBuilder``.
 
     Defaults ``output_dir`` to ``data/08_runtime/agent_clips`` if not provided.
@@ -196,7 +194,9 @@ def run_one(
         if agent_config_snapshot is not None:
             snapshot_backend = agent_config_snapshot.get("backend")
             if snapshot_backend not in {"local", "remote"}:
-                raise ValueError("agent_config_snapshot backend must be local or remote")
+                raise ValueError(
+                    "agent_config_snapshot backend must be local or remote"
+                )
             required_fields = ("provider", "model", "base_url", "reasoning_effort")
             missing = [
                 field
@@ -285,9 +285,19 @@ def run_one(
 
         # Normal success path: filter to the public FinalOutput contract fields.
         _FO_FIELDS = {
-            "schema_version", "video_id", "status", "has_fracture", "time_range",
-            "fracture_type", "location", "confidence", "field_status",
-            "visual_evidence", "special_case", "unrecognized_reason", "warnings",
+            "schema_version",
+            "video_id",
+            "status",
+            "has_fracture",
+            "time_range",
+            "fracture_type",
+            "location",
+            "confidence",
+            "field_status",
+            "visual_evidence",
+            "special_case",
+            "unrecognized_reason",
+            "warnings",
         }
         fo_dict = {k: v for k, v in raw_result.items() if k in _FO_FIELDS}
         # Historical agents returned a model-supplied scalar. It is not a
@@ -297,23 +307,25 @@ def run_one(
         elif isinstance(fo_dict.get("confidence"), dict):
             for field in ("decision", "localization", "classification", "overall"):
                 fo_dict["confidence"][field] = None
-        envelope = RunnerResult(
-            ok=True, result=FinalOutput(**fo_dict)
-        ).model_dump()
+        envelope = RunnerResult(ok=True, result=FinalOutput(**fo_dict)).model_dump()
         envelope["runtime_identity"] = {
             "visual_deployment": visual_snapshot,
             "decision_model": {
                 "backend": config["agent"].get("backend"),
-                "model": config["agent"].get(
+                "model": config["agent"]
+                .get(
                     config["agent"].get("backend", ""),
                     {},
-                ).get("model"),
+                )
+                .get("model"),
                 "digest": config["_runtime"].get("model_digest"),
             },
         }
         if include_internal_trace:
             envelope["evaluation_trace"] = {
-                "rounds": int(raw_result.get("rounds", len(raw_result.get("history", [])))),
+                "rounds": int(
+                    raw_result.get("rounds", len(raw_result.get("history", [])))
+                ),
                 "history": raw_result.get("history", []),
             }
         envelope["response"] = project_result(envelope["result"], intent)

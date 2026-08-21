@@ -21,7 +21,9 @@ def test_doctor_authenticates_visual_contract_preflight(monkeypatch, tmp_path):
     monkeypatch.setattr("agent.doctor.load_config", lambda _path: config)
     monkeypatch.setattr("agent.doctor.get_local_model_digest", lambda *_args: "digest")
     monkeypatch.setattr("agent.doctor.get_inference_api_key", lambda: "visual-secret")
-    monkeypatch.setattr("agent.doctor.shutil.which", lambda binary: f"/usr/bin/{binary}")
+    monkeypatch.setattr(
+        "agent.doctor.shutil.which", lambda binary: f"/usr/bin/{binary}"
+    )
 
     response = MagicMock()
     response.ok = True
@@ -61,7 +63,9 @@ def test_doctor_uses_configured_v4_1_contract(monkeypatch, tmp_path):
     monkeypatch.setattr("agent.doctor.load_config", lambda _path: config)
     monkeypatch.setattr("agent.doctor.get_local_model_digest", lambda *_args: "digest")
     monkeypatch.setattr("agent.doctor.get_inference_api_key", lambda: "visual-secret")
-    monkeypatch.setattr("agent.doctor.shutil.which", lambda binary: f"/usr/bin/{binary}")
+    monkeypatch.setattr(
+        "agent.doctor.shutil.which", lambda binary: f"/usr/bin/{binary}"
+    )
     response = MagicMock()
     response.ok = True
     response.json.return_value = {

@@ -45,7 +45,7 @@ def build_user_prompt(sample_range: list[float]) -> str:
 # TensileAgent prompts
 # ---------------------------------------------------------------------------
 TENSILE_AGENT_SYSTEM_PROMPT = (
-    "你是一名\"材料拉伸试验视频分析协调者\"，负责通过多轮工具调用定位材料拉伸试验视频中"
+    '你是一名"材料拉伸试验视频分析协调者"，负责通过多轮工具调用定位材料拉伸试验视频中'
     "试样是否断裂、断裂发生在哪两帧之间、断裂模式和断裂位置。\n\n"
     "## 任务目标\n"
     "1. 通过调用 `sample_and_infer` 工具，在指定时间区间内采样视频帧并调用微调模型，"
@@ -174,8 +174,7 @@ def build_tensile_agent_user_context(
 
     width = candidate[1] - candidate[0]
     contract_version = (
-        config.get("backend", {}).get("contract_version")
-        or "tensile-vlm/v2"
+        config.get("backend", {}).get("contract_version") or "tensile-vlm/v2"
     )
     mapping_note = (
         "> **V4.1 搜索说明**: 时间区间由 Agent 根据 clip 边界和搜索轨迹确定。"

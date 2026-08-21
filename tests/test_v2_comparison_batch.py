@@ -60,9 +60,7 @@ def _prepare(tmp_path: Path) -> tuple[dict, Path]:
                 "schema_version": "tensile-agent/stage-g-finalization/v1",
                 "status": "scored_awaiting_v2_comparison",
                 "finalization_id": "final",
-                "stage_g_gate": {
-                    "final_acceptance_pending_v2_comparison": True
-                },
+                "stage_g_gate": {"final_acceptance_pending_v2_comparison": True},
             }
         ),
         encoding="utf-8",

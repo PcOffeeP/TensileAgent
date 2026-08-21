@@ -22,6 +22,7 @@ from agent.config_util import (
 
 # ── Colors for terminal output ──
 
+
 class Colors:
     CYAN = "\033[36m"
     GREEN = "\033[32m"
@@ -34,11 +35,17 @@ class Colors:
 def _print_banner() -> None:
     """Print the setup wizard banner."""
     print()
-    print(f"{Colors.CYAN}{Colors.BOLD}╭─ TensileAgent 配置向导 ─────────────────────────╮{Colors.RESET}")
+    print(
+        f"{Colors.CYAN}{Colors.BOLD}╭─ TensileAgent 配置向导 ─────────────────────────╮{Colors.RESET}"
+    )
     print(f"{Colors.CYAN}{Colors.BOLD}│{'':62}│{Colors.RESET}")
-    print(f"{Colors.CYAN}{Colors.BOLD}│  欢迎！使用此向导来配置远程决策模型。            │{Colors.RESET}")
+    print(
+        f"{Colors.CYAN}{Colors.BOLD}│  欢迎！使用此向导来配置远程决策模型。            │{Colors.RESET}"
+    )
     print(f"{Colors.CYAN}{Colors.BOLD}│{'':62}│{Colors.RESET}")
-    print(f"{Colors.CYAN}{Colors.BOLD}╰──────────────────────────────────────────────────╯{Colors.RESET}")
+    print(
+        f"{Colors.CYAN}{Colors.BOLD}╰──────────────────────────────────────────────────╯{Colors.RESET}"
+    )
     print()
 
 
@@ -56,13 +63,16 @@ def _print_info(msg: str) -> None:
 
 # ── Interactive Wizard ──
 
+
 def _interactive_setup() -> None:
     """Run the interactive setup wizard."""
     _print_banner()
 
     # ── Step 1: API Key ──
     print(f"{Colors.BOLD}Step 1: 请输入你的百炼 API Key{Colors.RESET}")
-    print(f"  (将保存在 {Colors.YELLOW}agent/.env{Colors.RESET} 文件中，不会提交到 Git)")
+    print(
+        f"  (将保存在 {Colors.YELLOW}agent/.env{Colors.RESET} 文件中，不会提交到 Git)"
+    )
     existing = get_api_key()
     if existing:
         masked = existing[:6] + "*" * (len(existing) - 10) + existing[-4:]
@@ -94,7 +104,7 @@ def _interactive_setup() -> None:
     # ── Step 3: Select model ──
     print(f"{Colors.BOLD}Step 3: 请选择要使用的模型{Colors.RESET}")
     print(f"  {'#':>3}  │ 模型 ID")
-    print(f"  {'─'*3}──┼──{'─'*40}")
+    print(f"  {'─' * 3}──┼──{'─' * 40}")
     for i, model in enumerate(models, 1):
         print(f"  {i:>3}  │ {model}")
 
@@ -119,12 +129,17 @@ def _interactive_setup() -> None:
     _print_info(f"API Key 已保存到 agent/.env")
     _print_info(f"当前模型: {selected_model}")
     print()
-    print(f"  运行 {Colors.CYAN}python3 -m agent.run --video xxx.mp4{Colors.RESET} 开始使用")
-    print(f"  或运行 {Colors.CYAN}python3 -m agent.web_api{Colors.RESET} 启动 Web 工作台")
+    print(
+        f"  运行 {Colors.CYAN}python3 -m agent.run --video xxx.mp4{Colors.RESET} 开始使用"
+    )
+    print(
+        f"  或运行 {Colors.CYAN}python3 -m agent.web_api{Colors.RESET} 启动 Web 工作台"
+    )
     print()
 
 
 # ── Non-interactive Mode ──
+
 
 def _non_interactive_setup(api_key: str, model: str) -> None:
     """Run setup with provided arguments."""
@@ -137,15 +152,21 @@ def _non_interactive_setup(api_key: str, model: str) -> None:
 
 # ── CLI Entry ──
 
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python3 -m agent.setup",
         description="TensileAgent 配置向导 — 配置远程决策模型的 API Key 和模型选择",
     )
-    parser.add_argument("--api-key", type=str, default=None,
-                        help="百炼 API Key（不传则进入交互模式）")
-    parser.add_argument("--model", type=str, default=None,
-                        help="模型名称，如 qwen-max（不传则进入交互模式）")
+    parser.add_argument(
+        "--api-key", type=str, default=None, help="百炼 API Key（不传则进入交互模式）"
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="模型名称，如 qwen-max（不传则进入交互模式）",
+    )
     return parser.parse_args()
 
 

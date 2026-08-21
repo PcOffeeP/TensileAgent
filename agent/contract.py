@@ -12,7 +12,9 @@ from typing import Any
 CONTRACT_ROOT = Path(__file__).with_name("contracts")
 CONTRACT_PATH = CONTRACT_ROOT / "tensile_vlm_v2.json"
 CONTRACT_VERSION = "tensile-vlm/v2"
-EXPECTED_CONTRACT_HASH = "d26adabe7d7236fc3c5f15dcaa3a7eb7cbeb681102be2c926fe5f4c4b0111102"
+EXPECTED_CONTRACT_HASH = (
+    "d26adabe7d7236fc3c5f15dcaa3a7eb7cbeb681102be2c926fe5f4c4b0111102"
+)
 V4_1_CONTRACT_VERSION = "tensile-vlm/v4.1"
 V4_1_EXPECTED_CONTRACT_HASH = (
     "3798f00cbec7a3cad3e50de66dd2b5bdeecca1a95ae74297cbd0d71e7ec438ab"
@@ -82,12 +84,16 @@ def load_visual_contract(
             isinstance(analysis.get(key), str) and analysis[key].strip()
             for key in ("system_prompt", "user_prompt", "retry_prompt")
         ):
-            raise RuntimeError("V4.1 visual contract analysis prompts must be non-empty")
+            raise RuntimeError(
+                "V4.1 visual contract analysis prompts must be non-empty"
+            )
         if not isinstance(evidence, dict) or not all(
             isinstance(evidence.get(key), str) and evidence[key].strip()
             for key in ("system_prompt", "user_prompt")
         ):
-            raise RuntimeError("V4.1 visual contract evidence prompts must be non-empty")
+            raise RuntimeError(
+                "V4.1 visual contract evidence prompts must be non-empty"
+            )
         actual_hash = hashlib.sha256(canonical_contract_bytes(contract)).hexdigest()
         if contract.get("contract_hash") != actual_hash or actual_hash != expected_hash:
             raise RuntimeError("V4.1 visual contract hash mismatch")
@@ -115,9 +121,13 @@ def load_visual_contract(
         "type",
         "location",
     ]:
-        raise RuntimeError("visual contract model_output_fields must be the trained four-field order")
+        raise RuntimeError(
+            "visual contract model_output_fields must be the trained four-field order"
+        )
     if contract["contract_version"] != CONTRACT_VERSION:
-        raise RuntimeError(f"unsupported visual contract: {contract['contract_version']}")
+        raise RuntimeError(
+            f"unsupported visual contract: {contract['contract_version']}"
+        )
     if contract["fracture_types"] != [
         "韧性断裂",
         "脆性断裂",
@@ -128,9 +138,13 @@ def load_visual_contract(
         "界面脱粘、齐根断裂",
         "脆性断裂、齐根断裂",
     ]:
-        raise RuntimeError("visual contract fracture_types do not match the production enum")
+        raise RuntimeError(
+            "visual contract fracture_types do not match the production enum"
+        )
     if contract["other_types"] != ["未断裂", "未夹紧"]:
-        raise RuntimeError("visual contract other_types do not match the production enum")
+        raise RuntimeError(
+            "visual contract other_types do not match the production enum"
+        )
     if contract["anomaly_types"] != ["视频异常"]:
         raise RuntimeError("visual contract anomaly_types must contain only 视频异常")
     if contract["locations"] != ["inside_gauge", "outside_gauge"]:

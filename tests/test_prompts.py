@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from agent.prompts import PRODUCTION_USER_PROMPT, PROMPT_CONTRACT_HASH, SYSTEM_PROMPT, build_user_prompt
+from agent.prompts import (
+    PRODUCTION_USER_PROMPT,
+    PROMPT_CONTRACT_HASH,
+    SYSTEM_PROMPT,
+    build_user_prompt,
+)
 
 
 def test_system_prompt_contains_exact_four_field_contract():

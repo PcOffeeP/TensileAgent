@@ -29,7 +29,9 @@ class _FakePreprocessor:
         self._mappings = mappings
         self._call_count = 0
 
-    def sample(self, video_path: str, start_time: float, end_time: float) -> list[FrameMapping]:
+    def sample(
+        self, video_path: str, start_time: float, end_time: float
+    ) -> list[FrameMapping]:
         self.calls.append((video_path, start_time, end_time))
         if self._mappings is not None:
             idx = min(self._call_count, len(self._mappings) - 1)
@@ -110,8 +112,12 @@ def test_parse_fps_rejects_nan_and_inf():
     assert builder._parse_fps("29.97") == 29.97
 
 
-def test_subvideo_builder_write_json_rejects_nan(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    monkeypatch.setattr(builder, "_create_preprocessor", lambda *_args: _FakePreprocessor())
+def test_subvideo_builder_write_json_rejects_nan(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    monkeypatch.setattr(
+        builder, "_create_preprocessor", lambda *_args: _FakePreprocessor()
+    )
     video_meta = tmp_path / "video_meta.json"
     splits_dir = tmp_path / "splits"
     subvideo_dir = tmp_path / "subvideos"
@@ -142,24 +148,26 @@ def test_subvideo_builder_write_json_rejects_nan(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(
         builder,
         "build_subvideos_for_record",
-        lambda rec, split_info, *args, **kwargs: [{
-            "subvideo_id": "v001_full",
-            "source_video": "v001",
-            "video_path": "03_subvideos/v001_full.mp4",
-            "crop_type": "full_pos",
-            "start_time": 0.0,
-            "end_time": 10.0,
-            "duration": 10.0,
-            "actual_frame_mapping": [
-                {"input_index": i, "original_frame": i, "timestamp": float(i)}
-                for i in range(8)
-            ],
-            "fold_assignments": ["fold_0_train"],
-            "has_fracture": True,
-            "has_fracture_canonical": True,
-            "type": "韧性断裂",
-            "bad_value": float("nan"),
-        }],
+        lambda rec, split_info, *args, **kwargs: [
+            {
+                "subvideo_id": "v001_full",
+                "source_video": "v001",
+                "video_path": "03_subvideos/v001_full.mp4",
+                "crop_type": "full_pos",
+                "start_time": 0.0,
+                "end_time": 10.0,
+                "duration": 10.0,
+                "actual_frame_mapping": [
+                    {"input_index": i, "original_frame": i, "timestamp": float(i)}
+                    for i in range(8)
+                ],
+                "fold_assignments": ["fold_0_train"],
+                "has_fracture": True,
+                "has_fracture_canonical": True,
+                "type": "韧性断裂",
+                "bad_value": float("nan"),
+            }
+        ],
     )
     monkeypatch.setattr(
         sys,
@@ -284,10 +292,14 @@ def test_build_subvideos_for_record_generates_all_classes_for_fracture(
         },
     )
     monkeypatch.setattr(
-        builder, "build_focus_subvideos", lambda r, s, *args, **kwargs: [{"crop_type": "focus"}] * 3
+        builder,
+        "build_focus_subvideos",
+        lambda r, s, *args, **kwargs: [{"crop_type": "focus"}] * 3,
     )
     monkeypatch.setattr(
-        builder, "build_neg_before_after", lambda r, s, *args, **kwargs: [{"crop_type": "neg"}] * 2
+        builder,
+        "build_neg_before_after",
+        lambda r, s, *args, **kwargs: [{"crop_type": "neg"}] * 2,
     )
 
     result = builder.build_subvideos_for_record(rec, split_info)
@@ -339,8 +351,12 @@ def test_build_subvideos_for_record_abnormal_only_full(
             "fold_assignments": s.get("fold_assignments", []),
         },
     )
-    monkeypatch.setattr(builder, "build_focus_subvideos", lambda r, s, *args, **kwargs: [])
-    monkeypatch.setattr(builder, "build_neg_before_after", lambda r, s, *args, **kwargs: [])
+    monkeypatch.setattr(
+        builder, "build_focus_subvideos", lambda r, s, *args, **kwargs: []
+    )
+    monkeypatch.setattr(
+        builder, "build_neg_before_after", lambda r, s, *args, **kwargs: []
+    )
 
     result = builder.build_subvideos_for_record(rec, split_info)
     assert len(result) == 1
@@ -389,9 +405,15 @@ def test_build_subvideos_for_record_non_fracture_only_full(
             "fold_assignments": s.get("fold_assignments", []),
         },
     )
-    monkeypatch.setattr(builder, "build_focus_subvideos", lambda r, s, *args, **kwargs: [])
-    monkeypatch.setattr(builder, "build_neg_before_after", lambda r, s, *args, **kwargs: [])
-    monkeypatch.setattr(builder, "build_non_fracture_clips", lambda r, s, *args, **kwargs: [])
+    monkeypatch.setattr(
+        builder, "build_focus_subvideos", lambda r, s, *args, **kwargs: []
+    )
+    monkeypatch.setattr(
+        builder, "build_neg_before_after", lambda r, s, *args, **kwargs: []
+    )
+    monkeypatch.setattr(
+        builder, "build_non_fracture_clips", lambda r, s, *args, **kwargs: []
+    )
 
     result = builder.build_subvideos_for_record(rec, split_info)
     assert len(result) == 1
@@ -443,7 +465,8 @@ def test_build_full_subvideo_preserves_original_and_outputs_canonical(
 
 
 def test_candidates_for_confirmed_fracture_include_focus_and_negatives(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ):
     """确认断裂且时间可靠应生成完整视频 + 聚焦 + 断裂前/后负样本。"""
     fake_video = tmp_path / "v_frac.mp4"
@@ -463,7 +486,11 @@ def test_candidates_for_confirmed_fracture_include_focus_and_negatives(
         "duration": 20.0,
         "video_path": str(fake_video),
     }
-    split_info = {"split": "train", "fold": "fold_0_train", "fold_assignments": ["fold_0_train"]}
+    split_info = {
+        "split": "train",
+        "fold": "fold_0_train",
+        "fold_assignments": ["fold_0_train"],
+    }
 
     monkeypatch.setattr(builder, "copy_as_subvideo", lambda src, dst: None)
     monkeypatch.setattr(builder, "crop_video", lambda src, dst, st, ed: None)
@@ -471,7 +498,9 @@ def test_candidates_for_confirmed_fracture_include_focus_and_negatives(
         builder, "extract_sampled_frames", lambda path, out_dir, n, duration: []
     )
 
-    candidates = builder.build_subvideos_for_record(rec, split_info, generate_media=False, preprocessor=_FakePreprocessor())
+    candidates = builder.build_subvideos_for_record(
+        rec, split_info, generate_media=False, preprocessor=_FakePreprocessor()
+    )
     crop_types = [c["crop_type"] for c in candidates]
     assert any(c.startswith("full") for c in crop_types)
     assert any(c.startswith("focus_") for c in crop_types)
@@ -480,7 +509,8 @@ def test_candidates_for_confirmed_fracture_include_focus_and_negatives(
 
 
 def test_candidates_for_no_fracture_include_fixed_negative_clips(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ):
     """确认未断裂应生成完整视频 + 3s/10s/30s 前/中/后固定位置负样本。"""
     fake_video = tmp_path / "v_no.mp4"
@@ -499,22 +529,31 @@ def test_candidates_for_no_fracture_include_fixed_negative_clips(
         "duration": 60.0,
         "video_path": str(fake_video),
     }
-    split_info = {"split": "train", "fold": "fold_0_train", "fold_assignments": ["fold_0_train"]}
+    split_info = {
+        "split": "train",
+        "fold": "fold_0_train",
+        "fold_assignments": ["fold_0_train"],
+    }
 
     monkeypatch.setattr(builder, "copy_as_subvideo", lambda src, dst: None)
     monkeypatch.setattr(builder, "crop_video", lambda src, dst, st, ed: None)
 
-    candidates = builder.build_subvideos_for_record(rec, split_info, generate_media=False, preprocessor=_FakePreprocessor())
+    candidates = builder.build_subvideos_for_record(
+        rec, split_info, generate_media=False, preprocessor=_FakePreprocessor()
+    )
     crop_types = [c["crop_type"] for c in candidates]
     assert any(c.startswith("full") for c in crop_types)
     assert all(c == "neg_position" or c.startswith("full") for c in crop_types)
     neg_ids = [c["subvideo_id"] for c in candidates if c["crop_type"] == "neg_position"]
-    durations = sorted({int(re.search(r"_neg_pos_(\d+)s_", sid).group(1)) for sid in neg_ids})
+    durations = sorted(
+        {int(re.search(r"_neg_pos_(\d+)s_", sid).group(1)) for sid in neg_ids}
+    )
     assert durations == [3, 10, 30]
 
 
 def test_candidates_for_not_clamped_only_full(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ):
     """未夹紧只保留完整视频。"""
     fake_video = tmp_path / "v_clamp.mp4"
@@ -533,18 +572,25 @@ def test_candidates_for_not_clamped_only_full(
         "duration": 6.0,
         "video_path": str(fake_video),
     }
-    split_info = {"split": "train", "fold": "fold_0_train", "fold_assignments": ["fold_0_train"]}
+    split_info = {
+        "split": "train",
+        "fold": "fold_0_train",
+        "fold_assignments": ["fold_0_train"],
+    }
 
     monkeypatch.setattr(builder, "copy_as_subvideo", lambda src, dst: None)
 
-    candidates = builder.build_subvideos_for_record(rec, split_info, generate_media=False, preprocessor=_FakePreprocessor())
+    candidates = builder.build_subvideos_for_record(
+        rec, split_info, generate_media=False, preprocessor=_FakePreprocessor()
+    )
     assert len(candidates) == 1
     assert candidates[0]["crop_type"] == "full_not_clamped"
     assert candidates[0]["type"] == "未夹紧"
 
 
 def test_candidates_for_video_anomaly_only_full(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ):
     """视频异常只保留完整视频，且 has_fracture_canonical 可为 null。"""
     fake_video = tmp_path / "v_anom.mp4"
@@ -563,11 +609,17 @@ def test_candidates_for_video_anomaly_only_full(
         "duration": 10.0,
         "video_path": str(fake_video),
     }
-    split_info = {"split": "train", "fold": "fold_0_train", "fold_assignments": ["fold_0_train"]}
+    split_info = {
+        "split": "train",
+        "fold": "fold_0_train",
+        "fold_assignments": ["fold_0_train"],
+    }
 
     monkeypatch.setattr(builder, "copy_as_subvideo", lambda src, dst: None)
 
-    candidates = builder.build_subvideos_for_record(rec, split_info, generate_media=False, preprocessor=_FakePreprocessor())
+    candidates = builder.build_subvideos_for_record(
+        rec, split_info, generate_media=False, preprocessor=_FakePreprocessor()
+    )
     assert len(candidates) == 1
     assert candidates[0]["has_fracture_canonical"] is None
     assert candidates[0]["type"] == "视频异常"
@@ -592,7 +644,9 @@ def test_test_split_videos_are_skipped(monkeypatch: pytest.MonkeyPatch):
     }
     split_info = {"split": "test", "fold": "test", "fold_assignments": ["test"]}
 
-    candidates = builder.build_subvideos_for_record(rec, split_info, generate_media=False, preprocessor=_FakePreprocessor())
+    candidates = builder.build_subvideos_for_record(
+        rec, split_info, generate_media=False, preprocessor=_FakePreprocessor()
+    )
     assert candidates == []
 
 
@@ -612,12 +666,18 @@ def test_negative_clips_have_unified_labels(monkeypatch: pytest.MonkeyPatch):
         "duration": 20.0,
         "video_path": "data/01_videos/v_no.mp4",
     }
-    split_info = {"split": "train", "fold": "fold_0_train", "fold_assignments": ["fold_0_train"]}
+    split_info = {
+        "split": "train",
+        "fold": "fold_0_train",
+        "fold_assignments": ["fold_0_train"],
+    }
 
     monkeypatch.setattr(builder, "copy_as_subvideo", lambda src, dst: None)
     monkeypatch.setattr(builder, "crop_video", lambda src, dst, st, ed: None)
 
-    candidates = builder.build_subvideos_for_record(rec, split_info, generate_media=False, preprocessor=_FakePreprocessor())
+    candidates = builder.build_subvideos_for_record(
+        rec, split_info, generate_media=False, preprocessor=_FakePreprocessor()
+    )
     for c in candidates:
         if c["crop_type"] == "neg_position":
             assert c["has_fracture_canonical"] is False
@@ -644,18 +704,26 @@ def test_pre_event_negative_keeps_safe_gap(monkeypatch: pytest.MonkeyPatch):
         "duration": 30.0,
         "video_path": "data/01_videos/v_frac.mp4",
     }
-    split_info = {"split": "train", "fold": "fold_0_train", "fold_assignments": ["fold_0_train"]}
+    split_info = {
+        "split": "train",
+        "fold": "fold_0_train",
+        "fold_assignments": ["fold_0_train"],
+    }
 
     monkeypatch.setattr(builder, "crop_video", lambda src, dst, st, ed: None)
 
-    candidates = builder.build_neg_before_after(rec, split_info, generate_media=False, preprocessor=_FakePreprocessor())
+    candidates = builder.build_neg_before_after(
+        rec, split_info, generate_media=False, preprocessor=_FakePreprocessor()
+    )
     pre_event = [c for c in candidates if c["crop_type"] == "neg_before"]
     assert pre_event
     for c in pre_event:
         assert c["end_time"] <= rec["event_time"] - 1.0 + 1e-6, c["subvideo_id"]
 
 
-def test_post_event_hard_negative_frames_all_after_event(monkeypatch: pytest.MonkeyPatch):
+def test_post_event_hard_negative_frames_all_after_event(
+    monkeypatch: pytest.MonkeyPatch,
+):
     """断裂后困难负样本的所有采样帧必须晚于事件。"""
     rec = {
         "video_id": "v_frac",
@@ -672,11 +740,17 @@ def test_post_event_hard_negative_frames_all_after_event(monkeypatch: pytest.Mon
         "duration": 30.0,
         "video_path": "data/01_videos/v_frac.mp4",
     }
-    split_info = {"split": "train", "fold": "fold_0_train", "fold_assignments": ["fold_0_train"]}
+    split_info = {
+        "split": "train",
+        "fold": "fold_0_train",
+        "fold_assignments": ["fold_0_train"],
+    }
 
     monkeypatch.setattr(builder, "crop_video", lambda src, dst, st, ed: None)
 
-    candidates = builder.build_neg_before_after(rec, split_info, generate_media=False, preprocessor=_FakePreprocessor())
+    candidates = builder.build_neg_before_after(
+        rec, split_info, generate_media=False, preprocessor=_FakePreprocessor()
+    )
     post_event = [c for c in candidates if c["crop_type"] == "neg_after"]
     assert post_event
     for c in post_event:
@@ -689,33 +763,50 @@ def test_select_train_candidates_balances_pos_neg():
     candidates = []
     # 20 正
     for i in range(20):
-        candidates.append({
-            "subvideo_id": f"pos_{i:03d}",
-            "source_video": f"v_{i:03d}",
-            "fold_assignments": ["fold_0_train"],
-            "crop_type": "full_pos",
-            "has_fracture": True,
-            "has_fracture_canonical": True,
-            "type": "韧性断裂",
-        })
+        candidates.append(
+            {
+                "subvideo_id": f"pos_{i:03d}",
+                "source_video": f"v_{i:03d}",
+                "fold_assignments": ["fold_0_train"],
+                "crop_type": "full_pos",
+                "has_fracture": True,
+                "has_fracture_canonical": True,
+                "type": "韧性断裂",
+            }
+        )
     # 10 负
     for i in range(10):
-        candidates.append({
-            "subvideo_id": f"neg_{i:03d}",
-            "source_video": f"v_n_{i:03d}",
-            "fold_assignments": ["fold_0_train"],
-            "crop_type": "neg_position",
-            "has_fracture": False,
-            "has_fracture_canonical": False,
-            "type": "未断裂",
-        })
+        candidates.append(
+            {
+                "subvideo_id": f"neg_{i:03d}",
+                "source_video": f"v_n_{i:03d}",
+                "fold_assignments": ["fold_0_train"],
+                "crop_type": "neg_position",
+                "has_fracture": False,
+                "has_fracture_canonical": False,
+                "type": "未断裂",
+            }
+        )
 
-    split_defs = {"fold_0_train": {f"v_{i:03d}" for i in range(20)} | {f"v_n_{i:03d}" for i in range(10)}}
+    split_defs = {
+        "fold_0_train": {f"v_{i:03d}" for i in range(20)}
+        | {f"v_n_{i:03d}" for i in range(10)}
+    }
     builder._select_train_candidates(candidates, split_defs, n_folds=1, seed=42)
 
     selected = [c for c in candidates if "fold_0_train" in c.get("selected_splits", [])]
-    pos = [c for c in selected if c["has_fracture_canonical"] is True and c["type"] in builder.FRACTURE_TYPES]
-    neg = [c for c in selected if not (c["has_fracture_canonical"] is True and c["type"] in builder.FRACTURE_TYPES)]
+    pos = [
+        c
+        for c in selected
+        if c["has_fracture_canonical"] is True and c["type"] in builder.FRACTURE_TYPES
+    ]
+    neg = [
+        c
+        for c in selected
+        if not (
+            c["has_fracture_canonical"] is True and c["type"] in builder.FRACTURE_TYPES
+        )
+    ]
     ratio = len(pos) / len(neg) if neg else float("inf")
     assert 1.0 <= ratio <= 2.0, f"pos={len(pos)}, neg={len(neg)}, ratio={ratio}"
 
@@ -861,7 +952,11 @@ def test_build_subvideos_for_record_populates_actual_frame_mapping_and_fingerpri
         "duration": 30.0,
         "video_path": str(fake_video),
     }
-    split_info = {"split": "train", "fold": "fold_0_train", "fold_assignments": ["fold_0_train"]}
+    split_info = {
+        "split": "train",
+        "fold": "fold_0_train",
+        "fold_assignments": ["fold_0_train"],
+    }
 
     monkeypatch.setattr(builder, "crop_video", lambda src, dst, st, ed: None)
 
@@ -881,12 +976,20 @@ def test_build_subvideos_for_record_populates_actual_frame_mapping_and_fingerpri
         }
         assert cand["sampled_frames"] == cand["actual_frame_mapping"]
 
-    pos = [c for c in candidates if c.get("has_fracture") is True and c["type"] in builder.FRACTURE_TYPES]
+    pos = [
+        c
+        for c in candidates
+        if c.get("has_fracture") is True and c["type"] in builder.FRACTURE_TYPES
+    ]
     for c in pos:
         fb = c["fracture_between"]
         mapping = c["actual_frame_mapping"]
         assert fb is not None
-        assert mapping[fb[0]]["original_frame"] < rec["event_frame_original"] <= mapping[fb[1]]["original_frame"]
+        assert (
+            mapping[fb[0]]["original_frame"]
+            < rec["event_frame_original"]
+            <= mapping[fb[1]]["original_frame"]
+        )
 
 
 def test_positive_candidate_excluded_when_fracture_between_unsatisfiable(
@@ -910,7 +1013,11 @@ def test_positive_candidate_excluded_when_fracture_between_unsatisfiable(
         "duration": 30.0,
         "video_path": str(fake_video),
     }
-    split_info = {"split": "train", "fold": "fold_0_train", "fold_assignments": ["fold_0_train"]}
+    split_info = {
+        "split": "train",
+        "fold": "fold_0_train",
+        "fold_assignments": ["fold_0_train"],
+    }
 
     monkeypatch.setattr(builder, "crop_video", lambda src, dst, st, ed: None)
 
@@ -928,7 +1035,10 @@ def test_positive_candidate_excluded_when_fracture_between_unsatisfiable(
     pos_ids = {c["subvideo_id"] for c in candidates if c.get("has_fracture")}
     # 所有聚焦正样本应被排除
     assert all("focus" not in sid for sid in pos_ids), pos_ids
-    assert any(exc.get("reason") == "无法生成严格相邻的 fracture_between" for exc in builder.EXCLUSIONS)
+    assert any(
+        exc.get("reason") == "无法生成严格相邻的 fracture_between"
+        for exc in builder.EXCLUSIONS
+    )
 
 
 if __name__ == "__main__":

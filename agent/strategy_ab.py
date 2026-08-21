@@ -194,10 +194,7 @@ def reduce_fixed_scan(
     ]
     fracture_confirmed = len(positives) >= 2 and bool(local_positives)
     special_case = _vote(
-        (
-            (_legal_output(item) or {}).get("special_case")
-            for item in legal_rounds
-        ),
+        ((_legal_output(item) or {}).get("special_case") for item in legal_rounds),
         {"未夹紧", "视频异常"},
     )
     complete_negative_coverage = all(

@@ -205,10 +205,7 @@ def test_incomplete_run_fails_before_reading_results(tmp_path: Path) -> None:
 
 def test_unrecognized_round_must_not_set_direction(tmp_path: Path) -> None:
     manifest, authorization, root = _fixture(tmp_path)
-    summary = (
-        root
-        / "v/data/08_runtime/diagnostics/v_diagnostics_summary.json"
-    )
+    summary = root / "v/data/08_runtime/diagnostics/v_diagnostics_summary.json"
     _write_json(
         summary,
         {
@@ -239,9 +236,7 @@ def test_bound_infrastructure_recovery_history_is_allowed(
         {"event_type": "video_failed", "video_id": "v"},
     ]
     events_path.write_text(
-        "\n".join(json.dumps(event) for event in historical)
-        + "\n"
-        + current,
+        "\n".join(json.dumps(event) for event in historical) + "\n" + current,
         encoding="utf-8",
     )
     _write_json(
@@ -283,9 +278,7 @@ def test_interrupted_pending_task_history_is_bound_to_recovery_manifest(
         {"event_type": "sample_and_infer_started", "video_id": "v"},
     ]
     events_path.write_text(
-        "\n".join(json.dumps(event) for event in interrupted)
-        + "\n"
-        + current,
+        "\n".join(json.dumps(event) for event in interrupted) + "\n" + current,
         encoding="utf-8",
     )
     _write_json(

@@ -43,9 +43,7 @@ def run_doctor(config_path: str | Path = "agent/config.yaml") -> dict[str, Any]:
     contract_url = f"{str(backend.get('api_url', 'http://localhost:8000/v1')).rstrip('/')}/tensile/contract"
     inference_api_key = get_inference_api_key()
     headers = (
-        {"Authorization": f"Bearer {inference_api_key}"}
-        if inference_api_key
-        else {}
+        {"Authorization": f"Bearer {inference_api_key}"} if inference_api_key else {}
     )
     try:
         response = requests.get(contract_url, headers=headers, timeout=3)
@@ -77,13 +75,19 @@ def run_doctor(config_path: str | Path = "agent/config.yaml") -> dict[str, Any]:
             pass
         checks["runtime_dir"] = {"ok": True, "path": str(runtime_dir)}
     except OSError as exc:
-        checks["runtime_dir"] = {"ok": False, "path": str(runtime_dir), "error": str(exc)}
+        checks["runtime_dir"] = {
+            "ok": False,
+            "path": str(runtime_dir),
+            "error": str(exc),
+        }
 
     return {"ok": all(check["ok"] for check in checks.values()), "checks": checks}
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Check TensileAgent local runtime dependencies")
+    parser = argparse.ArgumentParser(
+        description="Check TensileAgent local runtime dependencies"
+    )
     parser.add_argument("--config", default="agent/config.yaml")
     args = parser.parse_args()
     import json

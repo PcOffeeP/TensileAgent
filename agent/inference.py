@@ -101,9 +101,7 @@ class EvidenceInferenceResult:
 class InferenceClient(Protocol):
     """Protocol for clients that call the fine-tuned MiniCPM-V model."""
 
-    def infer(
-        self, video_input: str | ClipBuildResult, prompt: str
-    ) -> InferenceResult:
+    def infer(self, video_input: str | ClipBuildResult, prompt: str) -> InferenceResult:
         """Run inference on ``video_input`` with ``prompt``.
 
         ``video_input`` may be a local temporary MP4 path or a
@@ -166,7 +164,12 @@ def _is_retryable_error(exc: Exception) -> bool:
 
             return isinstance(
                 exc,
-                (APIConnectionError, APITimeoutError, InternalServerError, RateLimitError),
+                (
+                    APIConnectionError,
+                    APITimeoutError,
+                    InternalServerError,
+                    RateLimitError,
+                ),
             )
         except Exception:  # pragma: no cover - defensive
             pass
@@ -296,7 +299,10 @@ def _validate_deployment_manifest(
     contract: dict[str, Any] | None = None,
 ) -> str | None:
     """Validate a complete visual deployment identity and optional task pin."""
-    if not isinstance(deployment, dict) or set(deployment) != _REQUIRED_DEPLOYMENT_FIELDS:
+    if (
+        not isinstance(deployment, dict)
+        or set(deployment) != _REQUIRED_DEPLOYMENT_FIELDS
+    ):
         return "missing_or_invalid_deployment_manifest"
     if any(
         not isinstance(deployment.get(key), str) or not deployment[key].strip()
@@ -358,7 +364,8 @@ def _validate_preprocessing_meta(
     if len(frames) > _CONTRACT_MAX_FRAMES:
         logger.warning(
             "Preprocessing frames count %d exceeds max_frames %d",
-            len(frames), max_frames,
+            len(frames),
+            max_frames,
         )
         return "too_many_frames"
 
@@ -368,9 +375,7 @@ def _validate_preprocessing_meta(
             return "missing_or_invalid_frames"
         idx = entry.get("index")
         if isinstance(idx, bool) or not isinstance(idx, int) or idx < 0:
-            logger.warning(
-                "Preprocessing frame[%d] has invalid index: %r", i, idx
-            )
+            logger.warning("Preprocessing frame[%d] has invalid index: %r", i, idx)
             return "non_monotonic_indices"
 
         timestamp = entry.get("timestamp")
@@ -385,7 +390,9 @@ def _validate_preprocessing_meta(
         if idx != i:
             logger.warning(
                 "Preprocessing frame[%d] index %d is not expected %d",
-                i, idx, i,
+                i,
+                idx,
+                i,
             )
             return "non_monotonic_indices"
 
@@ -479,9 +486,7 @@ class LlamaFactoryInferenceClient:
             "deployment_manifest": dict(deployment),
         }
 
-    def infer(
-        self, video_input: str | ClipBuildResult, prompt: str
-    ) -> InferenceResult:
+    def infer(self, video_input: str | ClipBuildResult, prompt: str) -> InferenceResult:
         """Call the model and return the parsed JSON output plus diagnostics."""
         # ``prompt`` is retained only for transport-interface compatibility.
         # Production visual text is program-owned and cannot be overridden by
@@ -509,7 +514,7 @@ class LlamaFactoryInferenceClient:
                 "role": "user",
                 "content": [
                     {"type": "video_url", "video_url": {"url": data_url}},
-                        {"type": "text", "text": self.analysis["user_prompt"]},
+                    {"type": "text", "text": self.analysis["user_prompt"]},
                 ],
             },
         ]
@@ -541,8 +546,12 @@ class LlamaFactoryInferenceClient:
                     kwargs: dict[str, Any] = {
                         "model": self.model,
                         "messages": current_messages,
-                        "temperature": float(self.analysis["generation"]["temperature"]),
-                        "max_tokens": int(self.analysis["generation"]["max_new_tokens"]),
+                        "temperature": float(
+                            self.analysis["generation"]["temperature"]
+                        ),
+                        "max_tokens": int(
+                            self.analysis["generation"]["max_new_tokens"]
+                        ),
                     }
                     if extra_body is not None:
                         kwargs["extra_body"] = extra_body
@@ -552,7 +561,7 @@ class LlamaFactoryInferenceClient:
                     if attempt >= self.max_retries or not _is_retryable_error(exc):
                         raise
                     transport_retries += 1
-                    sleep_seconds = DEFAULT_RETRY_BACKOFF ** attempt
+                    sleep_seconds = DEFAULT_RETRY_BACKOFF**attempt
                     logger.warning(
                         "Inference transport retryable error on attempt %d: %s. "
                         "Retrying in %.1fs",
@@ -593,15 +602,15 @@ class LlamaFactoryInferenceClient:
                 )
                 if err_code is None:
                     logger.info(
-                        "Server preprocessing metadata OK: max_frames=%s, "
-                        "frames=%d",
+                        "Server preprocessing metadata OK: max_frames=%s, frames=%d",
                         raw_pp.get("max_frames"),
                         len(raw_pp.get("frames", [])),
                     )
                 else:
                     logger.warning(
                         "Server preprocessing metadata invalid (%s): %s",
-                        err_code, raw_pp,
+                        err_code,
+                        raw_pp,
                     )
                 # Always store the raw dict so caller can distinguish
                 # "present but invalid" from "missing entirely".
@@ -786,7 +795,9 @@ class MockInferenceClient:
         }
 
     def _preprocessing(self, video_input: str | ClipBuildResult) -> dict[str, Any]:
-        manifest = video_input.manifest if isinstance(video_input, ClipBuildResult) else []
+        manifest = (
+            video_input.manifest if isinstance(video_input, ClipBuildResult) else []
+        )
         if manifest:
             stride = max(1, len(manifest) // _CONTRACT_MAX_FRAMES)
             selected = manifest[::stride][:_CONTRACT_MAX_FRAMES]
@@ -795,7 +806,10 @@ class MockInferenceClient:
                 for index, entry in enumerate(selected)
             ]
         else:
-            frames = [{"index": index, "timestamp": float(index)} for index in range(_CONTRACT_MAX_FRAMES)]
+            frames = [
+                {"index": index, "timestamp": float(index)}
+                for index in range(_CONTRACT_MAX_FRAMES)
+            ]
         return {
             "request_id": f"mock-{uuid.uuid4()}",
             "processor_version": self.deployment_snapshot["processor_version"],
@@ -804,18 +818,14 @@ class MockInferenceClient:
             "deployment_manifest": dict(self.deployment_snapshot),
         }
 
-    def infer(
-        self, video_input: str | ClipBuildResult, prompt: str
-    ) -> InferenceResult:
+    def infer(self, video_input: str | ClipBuildResult, prompt: str) -> InferenceResult:
         if callable(self._response):
             raw = self._response(video_input, prompt)
         else:
             raw = self._response
 
         if isinstance(raw, dict):
-            parsed_dict = self.result_parser.parse(
-                json.dumps(raw, ensure_ascii=False)
-            )
+            parsed_dict = self.result_parser.parse(json.dumps(raw, ensure_ascii=False))
             if not parsed_dict.ok:
                 return InferenceResult(
                     ok=False,

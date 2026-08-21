@@ -49,8 +49,7 @@ def _load_bound_finalization(manifest: dict[str, Any]) -> dict[str, Any]:
     path = Path(binding["finalization_manifest_path"]).resolve()
     value = json.loads(path.read_text(encoding="utf-8"))
     if (
-        value.get("schema_version")
-        != "tensile-agent/stage-g-finalization/v1"
+        value.get("schema_version") != "tensile-agent/stage-g-finalization/v1"
         or value.get("finalization_id") != binding["finalization_id"]
         or sha256_file(path) != binding["finalization_manifest_sha256"]
     ):
@@ -77,22 +76,16 @@ def finalize_v2_comparison(
     spec_path = Path(manifest["comparison_spec"]["path"])
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     if (
-        spec.get("schema_version")
-        != "tensile-agent/v2-comparison-spec/v1"
-        or spec.get("comparison_version")
-        != "v2-v4.1-common-metrics-v1"
+        spec.get("schema_version") != "tensile-agent/v2-comparison-spec/v1"
+        or spec.get("comparison_version") != "v2-v4.1-common-metrics-v1"
     ):
         raise ValueError("invalid V2 comparison specification")
     baseline = json.loads(
-        Path(manifest["v4_common_baseline"]["path"]).read_text(
-            encoding="utf-8"
-        )
+        Path(manifest["v4_common_baseline"]["path"]).read_text(encoding="utf-8")
     )
     if (
-        baseline.get("schema_version")
-        != "tensile-agent/v4-common-baseline/v1"
-        or baseline.get("annotations_sha256")
-        != manifest["annotations"]["sha256"]
+        baseline.get("schema_version") != "tensile-agent/v4-common-baseline/v1"
+        or baseline.get("annotations_sha256") != manifest["annotations"]["sha256"]
         or baseline.get("v4_finalization_manifest_sha256")
         != manifest["v4_acceptance"]["finalization_manifest_sha256"]
     ):
@@ -133,9 +126,7 @@ def finalize_v2_comparison(
         "numeric_non_regression_passed": numeric["passed"],
         "special_case_comparison_passed": special["passed"],
         "final_acceptance_passed": (
-            stage_g_before_v2 is True
-            and numeric["passed"]
-            and special["passed"]
+            stage_g_before_v2 is True and numeric["passed"] and special["passed"]
         ),
     }
 
@@ -149,18 +140,19 @@ def finalize_v2_comparison(
         "annotations_sha256": manifest["annotations"]["sha256"],
         "comparison_spec_sha256": manifest["comparison_spec"]["sha256"],
         "comparison_scorer_sha256": manifest["comparison_scorer"]["sha256"],
-        "comparison_finalizer_sha256": manifest["comparison_finalizer"][
-            "sha256"
-        ],
+        "comparison_finalizer_sha256": manifest["comparison_finalizer"]["sha256"],
     }
-    comparison_id = "v2-comparison-finalization-" + hashlib.sha256(
-        json.dumps(
-            identity,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()[:12]
+    comparison_id = (
+        "v2-comparison-finalization-"
+        + hashlib.sha256(
+            json.dumps(
+                identity,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()[:12]
+    )
     output_dir = Path(output_root).resolve() / comparison_id
     output_dir.mkdir(parents=True, exist_ok=False, mode=0o700)
     artifacts = {
@@ -189,7 +181,5 @@ def finalize_v2_comparison(
     return {
         **completion,
         "output_dir": str(output_dir),
-        "comparison_finalization_manifest_sha256": sha256_file(
-            completion_path
-        ),
+        "comparison_finalization_manifest_sha256": sha256_file(completion_path),
     }

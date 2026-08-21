@@ -42,7 +42,10 @@ def fake_project(tmp_path: Path) -> Path:
         "fold_2_val.json",
         "test.json",
     ]:
-        _write_json(splits_dir / name, {"video_ids": ["video_0001"], "split": name.replace(".json", "")})
+        _write_json(
+            splits_dir / name,
+            {"video_ids": ["video_0001"], "split": name.replace(".json", "")},
+        )
 
     # 产物目录
     merged_dir = tmp_path / "data" / "06_merged"
@@ -51,19 +54,37 @@ def fake_project(tmp_path: Path) -> Path:
         "id": "video_0001_full",
         "videos": ["data/01_videos/video_0001.mp4"],
         "messages": [
-            {"role": "assistant", "content": '{"has_fracture":true,"fracture_between":[6,7],"type":"韧性断裂","location":"inside_gauge","confidence":0.9}'}
+            {
+                "role": "assistant",
+                "content": '{"has_fracture":true,"fracture_between":[6,7],"type":"韧性断裂","location":"inside_gauge","confidence":0.9}',
+            }
         ],
         "source_video": "video_0001",
         "processor_fingerprint": "processor:v2:stable",
         "actual_frame_mapping": [{"input_index": i} for i in range(8)],
     }
-    for name in ["fold_0_train.json", "fold_0_val.json", "fold_1_train.json", "fold_1_val.json", "fold_2_train.json", "fold_2_val.json"]:
+    for name in [
+        "fold_0_train.json",
+        "fold_0_val.json",
+        "fold_1_train.json",
+        "fold_1_val.json",
+        "fold_2_train.json",
+        "fold_2_val.json",
+    ]:
         _write_json(merged_dir / name, [sample])
     _write_json(
         merged_dir / "samples_meta.json",
-        {"total_samples": 6, "total_video_sources": 1, "total_positive": 6, "total_negative": 0},
+        {
+            "total_samples": 6,
+            "total_video_sources": 1,
+            "total_positive": 6,
+            "total_negative": 0,
+        },
     )
-    _write_json(merged_dir / "test_inputs.json", [{"id": "video_0003", "video_id": "video_0003"}])
+    _write_json(
+        merged_dir / "test_inputs.json",
+        [{"id": "video_0003", "video_id": "video_0003"}],
+    )
 
     # 配置文件
     config_files = [
@@ -94,7 +115,10 @@ class TestFieldPresence:
         ]
         lock = run_freeze(
             merged_dir=merged_dir,
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             video_meta_path=fake_project / "data" / "07_metadata" / "video_meta.json",
             splits_dir=fake_project / "data" / "05_splits",
             subvideo_dir=fake_project / "data" / "03_subvideos",
@@ -116,7 +140,10 @@ class TestFieldPresence:
     def test_input_video_count(self, fake_project: Path):
         lock = run_freeze(
             merged_dir=fake_project / "data" / "06_merged",
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             video_meta_path=fake_project / "data" / "07_metadata" / "video_meta.json",
             splits_dir=fake_project / "data" / "05_splits",
             subvideo_dir=fake_project / "data" / "03_subvideos",
@@ -137,7 +164,10 @@ class TestHashReproducibility:
         ]
         lock1 = run_freeze(
             merged_dir=fake_project / "data" / "06_merged",
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             video_meta_path=fake_project / "data" / "07_metadata" / "video_meta.json",
             splits_dir=fake_project / "data" / "05_splits",
             subvideo_dir=fake_project / "data" / "03_subvideos",
@@ -147,7 +177,10 @@ class TestHashReproducibility:
         )
         lock2 = run_freeze(
             merged_dir=fake_project / "data" / "06_merged",
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             video_meta_path=fake_project / "data" / "07_metadata" / "video_meta.json",
             splits_dir=fake_project / "data" / "05_splits",
             subvideo_dir=fake_project / "data" / "03_subvideos",
@@ -155,7 +188,10 @@ class TestHashReproducibility:
             config_files=config_files,
             project_root=fake_project,
         )
-        assert lock1["input_video_manifest"]["sha256"] == lock2["input_video_manifest"]["sha256"]
+        assert (
+            lock1["input_video_manifest"]["sha256"]
+            == lock2["input_video_manifest"]["sha256"]
+        )
         assert lock1["split_manifest"]["sha256"] == lock2["split_manifest"]["sha256"]
         assert lock1["sample_manifest"]["sha256"] == lock2["sample_manifest"]["sha256"]
         assert lock1["config"]["combined_sha256"] == lock2["config"]["combined_sha256"]
@@ -183,7 +219,9 @@ class TestGitCommit:
             mock.stderr = ""
             return mock
 
-        monkeypatch.setattr("pipeline.scripts.freeze_data_version.subprocess.run", fake_run)
+        monkeypatch.setattr(
+            "pipeline.scripts.freeze_data_version.subprocess.run", fake_run
+        )
         result = _collect_git_commit(fake_project)
         assert result["commit"] == "abc123def456"
         assert result["dirty"] is False
@@ -207,7 +245,9 @@ class TestCli:
             mock.stderr = ""
             return mock
 
-        monkeypatch.setattr("pipeline.scripts.freeze_data_version.subprocess.run", fake_run)
+        monkeypatch.setattr(
+            "pipeline.scripts.freeze_data_version.subprocess.run", fake_run
+        )
         lock_path = fake_project / "cli_lock.json"
         rc = main(
             [

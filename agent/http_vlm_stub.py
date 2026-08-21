@@ -86,8 +86,7 @@ def _scenario_output(
             '"type":"韧性断裂","location":"inside_gauge"}'
         ),
         "partial": (
-            '{"has_fracture":true,"fracture_between":null,'
-            '"type":null,"location":null}'
+            '{"has_fracture":true,"fracture_between":null,"type":null,"location":null}'
         ),
         "no-fracture": (
             '{"has_fracture":false,"fracture_between":null,'
@@ -98,8 +97,7 @@ def _scenario_output(
             '"type":"未夹紧","location":null}'
         ),
         "unknown": (
-            '{"has_fracture":null,"fracture_between":null,'
-            '"type":null,"location":null}'
+            '{"has_fracture":null,"fracture_between":null,"type":null,"location":null}'
         ),
         "invalid": '{"has_fracture":true,"unexpected":1}',
         "drift": (
@@ -110,7 +108,9 @@ def _scenario_output(
     return outputs.get(scenario, outputs["fracture"])
 
 
-def _extract_video_and_manifest(payload: dict[str, Any]) -> tuple[bytes, list[dict[str, Any]]]:
+def _extract_video_and_manifest(
+    payload: dict[str, Any],
+) -> tuple[bytes, list[dict[str, Any]]]:
     messages = payload.get("messages")
     if not isinstance(messages, list):
         raise HTTPException(status_code=400, detail="messages must be an array")
@@ -122,7 +122,9 @@ def _extract_video_and_manifest(payload: dict[str, Any]) -> tuple[bytes, list[di
         for item in content:
             if isinstance(item, dict) and item.get("type") == "video_url":
                 data_url = (item.get("video_url") or {}).get("url")
-    if not isinstance(data_url, str) or not data_url.startswith("data:video/mp4;base64,"):
+    if not isinstance(data_url, str) or not data_url.startswith(
+        "data:video/mp4;base64,"
+    ):
         raise HTTPException(status_code=400, detail="a Base64 video/mp4 is required")
     try:
         video = base64.b64decode(data_url.split(",", 1)[1], validate=True)
@@ -137,7 +139,11 @@ def _extract_video_and_manifest(payload: dict[str, Any]) -> tuple[bytes, list[di
 
 def _frame_table(manifest: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if manifest:
-        indexes = [round(i * (len(manifest) - 1) / 7) for i in range(8)] if len(manifest) > 8 else range(len(manifest))
+        indexes = (
+            [round(i * (len(manifest) - 1) / 7) for i in range(8)]
+            if len(manifest) > 8
+            else range(len(manifest))
+        )
         selected = [manifest[index] for index in indexes]
         return [
             {"index": index, "timestamp": float(item.get("clip_timestamp", index))}
@@ -185,11 +191,13 @@ def create_app(
             "object": "chat.completion",
             "created": 0,
             "model": payload.get("model", "tensile-http-stub"),
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": content},
-                "finish_reason": "stop",
-            }],
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": content},
+                    "finish_reason": "stop",
+                }
+            ],
             "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
             "preprocessing": {
                 "request_id": request_id,
@@ -207,12 +215,20 @@ def create_app(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run a version-pinned Tensile VLM HTTP stub")
+    parser = argparse.ArgumentParser(
+        description="Run a version-pinned Tensile VLM HTTP stub"
+    )
     parser.add_argument(
         "--scenario",
         choices=[
-            "fracture", "partial", "no-fracture", "not-clamped",
-            "unknown", "invalid", "drift", "transport-failure",
+            "fracture",
+            "partial",
+            "no-fracture",
+            "not-clamped",
+            "unknown",
+            "invalid",
+            "drift",
+            "transport-failure",
         ],
         default="fracture",
     )

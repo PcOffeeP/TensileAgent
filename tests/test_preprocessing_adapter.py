@@ -27,9 +27,12 @@ def _make_test_video(path: Path, duration: float, fps: float = 30.0) -> None:
     cmd = [
         "ffmpeg",
         "-y",
-        "-f", "lavfi",
-        "-i", f"color=c=black:s=64x64:d={duration}:r={fps}",
-        "-pix_fmt", "yuv420p",
+        "-f",
+        "lavfi",
+        "-i",
+        f"color=c=black:s=64x64:d={duration}:r={fps}",
+        "-pix_fmt",
+        "yuv420p",
         "-an",
         str(path),
     ]
@@ -64,7 +67,9 @@ def test_video_preprocessor_is_abstract():
 def test_video_preprocessor_interface_shape():
     """确认抽象类声明的接口方法存在且签名正确。"""
     required_methods = {"get_info", "healthcheck", "sample", "fingerprint"}
-    assert required_methods.issubset({m for m in dir(VideoPreprocessor) if not m.startswith("_")})
+    assert required_methods.issubset(
+        {m for m in dir(VideoPreprocessor) if not m.startswith("_")}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +110,9 @@ def test_mock_sample_outputs_monotonic_frames_and_timestamps(short_video: Path):
 
 
 def test_mock_sample_input_index_is_sequential(short_video: Path):
-    frames = MockVideoPreprocessor().sample(str(short_video), start_time=0.0, end_time=5.0)
+    frames = MockVideoPreprocessor().sample(
+        str(short_video), start_time=0.0, end_time=5.0
+    )
     assert [f.input_index for f in frames] == list(range(len(frames)))
 
 
@@ -121,14 +128,18 @@ def test_mock_sample_input_index_is_sequential(short_video: Path):
 def test_mock_sample_short_intervals_up_to_eight_frames(
     long_video: Path, start: float, end: float, expected_max: int
 ):
-    frames = MockVideoPreprocessor().sample(str(long_video), start_time=start, end_time=end)
+    frames = MockVideoPreprocessor().sample(
+        str(long_video), start_time=start, end_time=end
+    )
     assert len(frames) <= expected_max
     if (end - start) >= 8 / 30.0:
         assert len(frames) == expected_max
 
 
 def test_mock_sample_full_video(long_video: Path):
-    frames = MockVideoPreprocessor().sample(str(long_video), start_time=0.0, end_time=35.0)
+    frames = MockVideoPreprocessor().sample(
+        str(long_video), start_time=0.0, end_time=35.0
+    )
     assert len(frames) == 8
     assert frames[0].original_frame == 0
     assert frames[-1].original_frame >= 30 * 35 - 2  # 允许 ±1 帧舍入
@@ -136,7 +147,9 @@ def test_mock_sample_full_video(long_video: Path):
 
 def test_mock_sample_very_short_interval_returns_fewer_than_eight(short_video: Path):
     # 0.1s 区间约 3 帧，应返回 <=3 帧
-    frames = MockVideoPreprocessor().sample(str(short_video), start_time=1.0, end_time=1.1)
+    frames = MockVideoPreprocessor().sample(
+        str(short_video), start_time=1.0, end_time=1.1
+    )
     assert 1 <= len(frames) <= 3
 
 
@@ -283,7 +296,8 @@ def test_minicpm_processor_uses_real_sampling_defaults(short_video: Path):
     preprocessor._processor_loaded = True
 
     with patch.object(
-        preprocessor, "_decode_frame_range",
+        preprocessor,
+        "_decode_frame_range",
         return_value=(fake_frames, fake_indices, [i / 30 for i in fake_indices]),
     ):
         frames = preprocessor.sample(str(short_video), start_time=0.0, end_time=5.0)
@@ -309,6 +323,7 @@ def test_minicpm_processor_sample_per_frame_matching(short_video: Path):
 
     # 为每帧创建不同的 tensor 用于匹配
     import torch
+
     ind_pv0 = torch.tensor([[[[0.1]]]], dtype=torch.float32)
     ind_pv1 = torch.tensor([[[[0.3]]]], dtype=torch.float32)
     ind_pv2 = torch.tensor([[[[0.5]]]], dtype=torch.float32)
@@ -336,7 +351,8 @@ def test_minicpm_processor_sample_per_frame_matching(short_video: Path):
     preprocessor._processor_loaded = True
 
     with patch.object(
-        preprocessor, "_decode_frame_range",
+        preprocessor,
+        "_decode_frame_range",
         return_value=(fake_frames, fake_indices, [i / 30 for i in fake_indices]),
     ):
         frames = preprocessor.sample(str(short_video), start_time=0.0, end_time=5.0)
@@ -383,7 +399,8 @@ def test_minicpm_processor_sample_one_to_one_mapping(short_video: Path):
     preprocessor._processor_loaded = True
 
     with patch.object(
-        preprocessor, "_decode_frame_range",
+        preprocessor,
+        "_decode_frame_range",
         return_value=(fake_frames, fake_indices, [i / 30 for i in fake_indices]),
     ):
         frames = preprocessor.sample(str(short_video), start_time=0.0, end_time=5.0)
@@ -485,6 +502,7 @@ def test_configure_processor_max_frames_46_style():
 
 def test_configure_processor_max_frames_set_failure():
     """属性设置不生效时应抛出 RuntimeError。"""
+
     class _ReadOnlyMaxFrames:
         max_frames = 4
 
@@ -501,7 +519,9 @@ def test_configure_processor_max_frames_set_failure():
 def test_configure_processor_max_frames_not_found():
     """找不到任何 max_frames/video_maxlen 参数时应抛出 RuntimeError。"""
     processor = SimpleNamespace(foo="bar")
-    with pytest.raises(RuntimeError, match="cannot locate MiniCPM actual max-frame parameter"):
+    with pytest.raises(
+        RuntimeError, match="cannot locate MiniCPM actual max-frame parameter"
+    ):
         configure_processor_max_frames(processor, max_frames=8)
 
 

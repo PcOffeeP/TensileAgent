@@ -34,7 +34,9 @@ def _make_event_writer(run_id: str, events_dir: Path) -> Any:
     return write_event
 
 
-def _write_jsonl(results: dict[str, Any] | list[dict[str, Any]] | list[Any], output_path: Path) -> None:
+def _write_jsonl(
+    results: dict[str, Any] | list[dict[str, Any]] | list[Any], output_path: Path
+) -> None:
     """Write one or more result dicts as JSON lines to ``output_path``.
 
     ``RunnerResult`` objects are serialized via ``.model_dump()``.
@@ -61,24 +63,29 @@ def _parse_args() -> argparse.Namespace:
     )
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument(
-        "--video", "-v",
+        "--video",
+        "-v",
         help="Path to a single video to process.",
     )
     source.add_argument(
-        "--videos-dir", "-d",
+        "--videos-dir",
+        "-d",
         help="Directory containing .mp4 videos to process in batch.",
     )
     source.add_argument(
-        "--input-list", "-l",
+        "--input-list",
+        "-l",
         help="Text file containing one video path per line.",
     )
     parser.add_argument(
-        "--config", "-c",
+        "--config",
+        "-c",
         default="agent/config.yaml",
         help="Agent configuration file path. (default: agent/config.yaml)",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         default="data/08_runtime/results/run.jsonl",
         help="Result output JSONL path. (default: data/08_runtime/results/run.jsonl)",
     )
@@ -92,12 +99,21 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable mock inference mode (sets INFERENCE_MOCK=1).",
     )
-    parser.add_argument("--agent-backend", choices=["remote", "local"], default=None,
-                        help="Override agent backend (remote or local). Useful for quickly switching between models for comparison.")
-    parser.add_argument("--agent-model", type=str, default=None,
-                        help="Override agent model name. E.g. 'qwen-max', 'qwen3.5:7b'. Useful for testing different models.")
     parser.add_argument(
-        "--question", "-q",
+        "--agent-backend",
+        choices=["remote", "local"],
+        default=None,
+        help="Override agent backend (remote or local). Useful for quickly switching between models for comparison.",
+    )
+    parser.add_argument(
+        "--agent-model",
+        type=str,
+        default=None,
+        help="Override agent model name. E.g. 'qwen-max', 'qwen3.5:7b'. Useful for testing different models.",
+    )
+    parser.add_argument(
+        "--question",
+        "-q",
         default="请完整分析这段拉伸试验视频",
         help="Natural-language question about the video. It is parsed by the Agent and never forwarded to MiniCPM.",
     )
@@ -135,7 +151,10 @@ def main() -> None:
             question=args.question,
         )
         if not result["ok"]:
-            print(f"Run failed for {args.video}: {result['error']['message']}", file=sys.stderr)
+            print(
+                f"Run failed for {args.video}: {result['error']['message']}",
+                file=sys.stderr,
+            )
             sys.exit(1)
         _write_jsonl(result, output_path)
         print(f"Result written to {output_path}")

@@ -15,7 +15,15 @@ def test_transport_trace_is_complete_and_redacted(tmp_path):
     )
     response = MagicMock()
     response.model_dump.return_value = {
-        "choices": [{"message": {"content": "done", "reasoning_content": "hidden", "tool_calls": []}}],
+        "choices": [
+            {
+                "message": {
+                    "content": "done",
+                    "reasoning_content": "hidden",
+                    "tool_calls": [],
+                }
+            }
+        ],
         "usage": {"prompt_tokens": 10, "completion_tokens": 2},
     }
     path = recorder.write(
@@ -45,7 +53,9 @@ def test_transport_trace_is_complete_and_redacted(tmp_path):
 def test_transport_trace_includes_reasoning_only_when_enabled(tmp_path):
     recorder = TransportTraceRecorder(tmp_path, "task-2", {"backend": "local"})
     response = MagicMock()
-    response.model_dump.return_value = {"choices": [{"message": {"content": "ok", "reasoning_content": "trace"}}]}
+    response.model_dump.return_value = {
+        "choices": [{"message": {"content": "ok", "reasoning_content": "trace"}}]
+    }
     path = recorder.write(
         request={"messages": []},
         response=response,
@@ -74,7 +84,9 @@ def test_response_reasoning_is_removed_recursively_and_repr_is_never_persisted()
     response.model_dump.return_value = {
         "thinking": "top-secret-thought",
         "nested": [{"reasoning": "nested-secret", "safe": "ok"}],
-        "choices": [{"message": {"reasoning_content": "message-secret", "content": "done"}}],
+        "choices": [
+            {"message": {"reasoning_content": "message-secret", "content": "done"}}
+        ],
     }
     data = response_to_dict(response, include_reasoning=False)
     encoded = json.dumps(data)

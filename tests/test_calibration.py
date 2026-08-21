@@ -700,14 +700,18 @@ def test_build_calibration_cases_integration():
     assert "around_event" not in v002_positions  # no event_time
     assert "v002_3s_start" in v002_case_ids
     # 5s >= 3s，所以有 3s 窗口
-    v002_window_sizes = {c["window_size"] for c in v002_cases if c["event_position"] != "full"}
+    v002_window_sizes = {
+        c["window_size"] for c in v002_cases if c["event_position"] != "full"
+    }
     assert 3 in v002_window_sizes
     assert 10 not in v002_window_sizes  # 5 < 10
     assert 30 not in v002_window_sizes  # 5 < 30
 
     # v003（abnormal，45s）应有 30s/10s/3s 窗口
     v003_cases = [c for c in cases if c["video_id"] == "v003"]
-    v003_window_sizes = {c["window_size"] for c in v003_cases if c["event_position"] != "full"}
+    v003_window_sizes = {
+        c["window_size"] for c in v003_cases if c["event_position"] != "full"
+    }
     assert 30 in v003_window_sizes
     assert 10 in v003_window_sizes
     assert 3 in v003_window_sizes
@@ -778,7 +782,9 @@ def test_run_calibration_basic():
         """纯内存 preprocessor，不依赖视频文件。"""
 
         def get_info(self):
-            return ProcessorInfo(name="fake", version="0.0.0", max_frames=4, backend="test")
+            return ProcessorInfo(
+                name="fake", version="0.0.0", max_frames=4, backend="test"
+            )
 
         def healthcheck(self):
             return True
@@ -858,15 +864,17 @@ def test_run_calibration_compares_the_same_continuous_clip(monkeypatch):
     monkeypatch.setattr(calibration, "_try_load_llama_factory_batch", fake_batch)
     report = calibration.run_calibration(
         FakePreprocessor(),
-        [{
-            "case_id": "v_3s_middle",
-            "video_id": "v",
-            "video_path": "source.mp4",
-            "start_time": 1.0,
-            "end_time": 2.0,
-            "window_size": 1.0,
-            "event_position": "middle",
-        }],
+        [
+            {
+                "case_id": "v_3s_middle",
+                "video_id": "v",
+                "video_path": "source.mp4",
+                "start_time": 1.0,
+                "end_time": 2.0,
+                "window_size": 1.0,
+                "event_position": "middle",
+            }
+        ],
     )
 
     assert report["all_passed"] is True
@@ -888,7 +896,9 @@ def test_formal_calibration_cli_rejects_mock():
 
 
 def _fixture_preprocessor_info() -> ProcessorInfo:
-    return ProcessorInfo(name="mock-ffmpeg-uniform", version="0.1.0", max_frames=8, backend="ffmpeg")
+    return ProcessorInfo(
+        name="mock-ffmpeg-uniform", version="0.1.0", max_frames=8, backend="ffmpeg"
+    )
 
 
 def _fixture_adapter_frames() -> list[FrameMapping]:
@@ -944,6 +954,7 @@ def _make_mock_torch():
     """创建假冒的 torch 模块。"""
     import sys as _sys
     from unittest.mock import MagicMock
+
     if "torch" not in _sys.modules:
         _sys.modules["torch"] = MagicMock()
 
@@ -951,6 +962,7 @@ def _make_mock_torch():
 def _cleanup_mock_modules():
     """清理注入的所有 mock 模块。"""
     import sys as _sys
+
     for key in list(_sys.modules):
         if key.startswith("llamafactory") or key == "transformers" or key == "torch":
             del _sys.modules[key]
@@ -972,6 +984,7 @@ def test_try_load_llama_factory_batch_requires_transformers(mock_llamafactory):
 
     # 让 transformers 导入失败
     import builtins
+
     original_import = builtins.__import__
 
     def _side_effect(name, *args, **kwargs):
@@ -979,8 +992,9 @@ def test_try_load_llama_factory_batch_requires_transformers(mock_llamafactory):
             raise ImportError("no transformers")
         return original_import(name, *args, **kwargs)
 
-    with patch("builtins.__import__", side_effect=_side_effect), pytest.raises(
-        RuntimeError, match="transformers is required"
+    with (
+        patch("builtins.__import__", side_effect=_side_effect),
+        pytest.raises(RuntimeError, match="transformers is required"),
     ):
         _try_load_llama_factory_batch("dummy.mp4", info, frames)
 
@@ -989,10 +1003,16 @@ def test_try_load_llama_factory_batch_processor_load_fails_closed(mock_llamafact
     info = _fixture_preprocessor_info()
     frames = _fixture_adapter_frames()
 
-    with patch(
-        "transformers.AutoProcessor.from_pretrained", side_effect=OSError("model not found")
-    ), pytest.raises(OSError, match="model not found"):
-        _try_load_llama_factory_batch("dummy.mp4", info, frames, model_name="fake/model")
+    with (
+        patch(
+            "transformers.AutoProcessor.from_pretrained",
+            side_effect=OSError("model not found"),
+        ),
+        pytest.raises(OSError, match="model not found"),
+    ):
+        _try_load_llama_factory_batch(
+            "dummy.mp4", info, frames, model_name="fake/model"
+        )
 
 
 def test_try_load_llama_factory_batch_get_mm_inputs_fails_closed(mock_llamafactory):
@@ -1016,6 +1036,7 @@ def test_try_load_llama_factory_batch_get_mm_inputs_fails_closed(mock_llamafacto
     # 注入 mock torch
     import sys
     from unittest.mock import MagicMock
+
     sys.modules["torch"] = MagicMock()
 
     def fake_sample(self, *_args, **_kwargs):
@@ -1023,13 +1044,19 @@ def test_try_load_llama_factory_batch_get_mm_inputs_fails_closed(mock_llamafacto
         self.last_tensor_shape = [1, len(frames), 3, 2, 2]
         return frames
 
-    with patch(
-        "transformers.AutoProcessor.from_pretrained", return_value=FakeProcessor()
-    ), patch(
-        "pipeline.scripts.calibration._probe_video", return_value={"duration": 1.0}
-    ), patch(
-        "pipeline.scripts.calibration.MiniCPMVideoPreprocessor.sample", new=fake_sample
-    ), pytest.raises(RuntimeError, match="simulated error"):
+    with (
+        patch(
+            "transformers.AutoProcessor.from_pretrained", return_value=FakeProcessor()
+        ),
+        patch(
+            "pipeline.scripts.calibration._probe_video", return_value={"duration": 1.0}
+        ),
+        patch(
+            "pipeline.scripts.calibration.MiniCPMVideoPreprocessor.sample",
+            new=fake_sample,
+        ),
+        pytest.raises(RuntimeError, match="simulated error"),
+    ):
         _try_load_llama_factory_batch("dummy.mp4", info, frames)
 
     _cleanup_mock_modules()
@@ -1043,6 +1070,7 @@ def test_try_load_llama_factory_batch_requires_explicit_mapping(mock_llamafactor
         __class__ = type("FakeProcessor", (), {})()
 
     import builtins
+
     original_import = builtins.__import__
 
     def _side_effect(name, *args, **kwargs):
@@ -1051,7 +1079,9 @@ def test_try_load_llama_factory_batch_requires_explicit_mapping(mock_llamafactor
         return original_import(name, *args, **kwargs)
 
     with (
-        patch("transformers.AutoProcessor.from_pretrained", return_value=FakeProcessor()),
+        patch(
+            "transformers.AutoProcessor.from_pretrained", return_value=FakeProcessor()
+        ),
         patch("builtins.__import__", side_effect=_side_effect),
     ):
         with pytest.raises((RuntimeError, AttributeError)):

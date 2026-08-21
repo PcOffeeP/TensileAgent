@@ -84,21 +84,56 @@ def fake_project(tmp_path: Path) -> Path:
         return _make_sample(sid, vid, False, None, ftype, None)
 
     # 各 split 使用互不重叠的 source_video
-    _write_json(merged_dir / "fold_0_train.json", [pos("video_0001", "t0_1"), pos("video_0002", "t0_2"), neg("video_0003", "t0_3"), neg("video_0004", "t0_4")])
-    _write_json(merged_dir / "fold_0_val.json", [pos("video_0005", "v0_1"), neg("video_0006", "v0_2")])
-    _write_json(merged_dir / "fold_1_train.json", [pos("video_0007", "t1_1"), pos("video_0008", "t1_2"), neg("video_0009", "t1_3"), neg("video_0010", "t1_4")])
+    _write_json(
+        merged_dir / "fold_0_train.json",
+        [
+            pos("video_0001", "t0_1"),
+            pos("video_0002", "t0_2"),
+            neg("video_0003", "t0_3"),
+            neg("video_0004", "t0_4"),
+        ],
+    )
+    _write_json(
+        merged_dir / "fold_0_val.json",
+        [pos("video_0005", "v0_1"), neg("video_0006", "v0_2")],
+    )
+    _write_json(
+        merged_dir / "fold_1_train.json",
+        [
+            pos("video_0007", "t1_1"),
+            pos("video_0008", "t1_2"),
+            neg("video_0009", "t1_3"),
+            neg("video_0010", "t1_4"),
+        ],
+    )
     _write_json(merged_dir / "fold_1_val.json", [pos("video_0011", "v1_1")])
-    _write_json(merged_dir / "fold_2_train.json", [pos("video_0012", "t2_1"), pos("video_0013", "t2_2"), neg("video_0014", "t2_3")])
+    _write_json(
+        merged_dir / "fold_2_train.json",
+        [
+            pos("video_0012", "t2_1"),
+            pos("video_0013", "t2_2"),
+            neg("video_0014", "t2_3"),
+        ],
+    )
     _write_json(merged_dir / "fold_2_val.json", [neg("video_0004", "v2_1", "未夹紧")])
 
     test_inputs = [
-        {"id": "video_0100", "video_id": "video_0100", "video_path": "data/01_videos/video_0100.mp4"}
+        {
+            "id": "video_0100",
+            "video_id": "video_0100",
+            "video_path": "data/01_videos/video_0100.mp4",
+        }
     ]
     _write_json(merged_dir / "test_inputs.json", test_inputs)
 
     _write_json(
         merged_dir / "samples_meta.json",
-        {"total_samples": 15, "total_video_sources": 14, "total_positive": 9, "total_negative": 6},
+        {
+            "total_samples": 15,
+            "total_video_sources": 14,
+            "total_positive": 9,
+            "total_negative": 6,
+        },
     )
 
     subvideos_meta = tmp_path / "data" / "07_metadata" / "subvideos_meta.json"
@@ -191,7 +226,10 @@ class TestQualityCheck:
         report_path = fake_project / "quality_check_report.json"
         errors, warnings, summary = run_quality_check(
             merged_dir=merged_dir,
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             report_path=report_path,
             project_root=fake_project,
         )
@@ -202,12 +240,20 @@ class TestQualityCheck:
     def test_illegal_field_combination_reported(self, fake_project: Path):
         merged_dir = fake_project / "data" / "06_merged"
         bad_sample = _make_sample(
-            "bad", "video_0001", has_fracture=True, fracture_between=[6, 7], ftype="未断裂", location=None
+            "bad",
+            "video_0001",
+            has_fracture=True,
+            fracture_between=[6, 7],
+            ftype="未断裂",
+            location=None,
         )
         _write_json(merged_dir / "fold_0_train.json", [bad_sample])
         errors, _warnings, _summary = run_quality_check(
             merged_dir=merged_dir,
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             report_path=fake_project / "report.json",
             project_root=fake_project,
         )
@@ -216,12 +262,20 @@ class TestQualityCheck:
     def test_invalid_type_reported(self, fake_project: Path):
         merged_dir = fake_project / "data" / "06_merged"
         bad_sample = _make_sample(
-            "bad", "video_0001", has_fracture=False, fracture_between=None, ftype="unknown", location=None
+            "bad",
+            "video_0001",
+            has_fracture=False,
+            fracture_between=None,
+            ftype="unknown",
+            location=None,
         )
         _write_json(merged_dir / "fold_0_train.json", [bad_sample])
         errors, _warnings, _summary = run_quality_check(
             merged_dir=merged_dir,
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             report_path=fake_project / "report.json",
             project_root=fake_project,
         )
@@ -230,12 +284,20 @@ class TestQualityCheck:
     def test_fracture_between_bounds(self, fake_project: Path):
         merged_dir = fake_project / "data" / "06_merged"
         bad_sample = _make_sample(
-            "bad", "video_0001", has_fracture=True, fracture_between=[6, 8], ftype="韧性断裂", location="inside_gauge"
+            "bad",
+            "video_0001",
+            has_fracture=True,
+            fracture_between=[6, 8],
+            ftype="韧性断裂",
+            location="inside_gauge",
         )
         _write_json(merged_dir / "fold_0_train.json", [bad_sample])
         errors, _warnings, _summary = run_quality_check(
             merged_dir=merged_dir,
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             report_path=fake_project / "report.json",
             project_root=fake_project,
         )
@@ -253,11 +315,17 @@ class TestQualityCheck:
         _write_json(merged_dir / "fold_0_train.json", samples)
         errors, _warnings, _summary = run_quality_check(
             merged_dir=merged_dir,
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             report_path=fake_project / "report.json",
             project_root=fake_project,
         )
-        assert any(e["check"] == "train_ratio" and e["detail"] == "ratio_out_of_range" for e in errors)
+        assert any(
+            e["check"] == "train_ratio" and e["detail"] == "ratio_out_of_range"
+            for e in errors
+        )
 
     def test_truth_leakage_in_test_inputs(self, fake_project: Path):
         merged_dir = fake_project / "data" / "06_merged"
@@ -270,7 +338,10 @@ class TestQualityCheck:
         _write_json(merged_dir / "test_inputs.json", [bad_input])
         errors, _warnings, _summary = run_quality_check(
             merged_dir=merged_dir,
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             report_path=fake_project / "report.json",
             project_root=fake_project,
         )
@@ -279,13 +350,22 @@ class TestQualityCheck:
     def test_cross_split_leakage(self, fake_project: Path):
         merged_dir = fake_project / "data" / "06_merged"
         # video_0001 in both train and val
-        train = [_make_sample("v1", "video_0001", True, [6, 7], "韧性断裂", "inside_gauge")]
-        val = [_make_sample("v1_val", "video_0001", True, [6, 7], "韧性断裂", "inside_gauge")]
+        train = [
+            _make_sample("v1", "video_0001", True, [6, 7], "韧性断裂", "inside_gauge")
+        ]
+        val = [
+            _make_sample(
+                "v1_val", "video_0001", True, [6, 7], "韧性断裂", "inside_gauge"
+            )
+        ]
         _write_json(merged_dir / "fold_0_train.json", train)
         _write_json(merged_dir / "fold_0_val.json", val)
         errors, _warnings, _summary = run_quality_check(
             merged_dir=merged_dir,
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             report_path=fake_project / "report.json",
             project_root=fake_project,
         )
@@ -297,7 +377,10 @@ class TestQualityCheck:
         _write_json(merged_dir / "fold_0_train.json", [sample])
         errors, _warnings, _summary = run_quality_check(
             merged_dir=merged_dir,
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             report_path=fake_project / "report.json",
             project_root=fake_project,
         )
@@ -309,7 +392,10 @@ class TestQualityCheck:
         _write_json(merged_dir / "fold_0_train.json", [sample])
         errors, _warnings, _summary = run_quality_check(
             merged_dir=merged_dir,
-            subvideos_meta_path=fake_project / "data" / "07_metadata" / "subvideos_meta.json",
+            subvideos_meta_path=fake_project
+            / "data"
+            / "07_metadata"
+            / "subvideos_meta.json",
             report_path=fake_project / "report.json",
             project_root=fake_project,
         )
@@ -322,7 +408,10 @@ class TestQualityCheck:
     def test_exclusion_without_reason(self, fake_project: Path):
         merged_dir = fake_project / "data" / "06_merged"
         subvideos_meta = fake_project / "data" / "07_metadata" / "subvideos_meta.json"
-        _write_json(subvideos_meta, {"subvideos": [], "exclusions": [{"source_video": "video_0001"}]})
+        _write_json(
+            subvideos_meta,
+            {"subvideos": [], "exclusions": [{"source_video": "video_0001"}]},
+        )
         errors, _warnings, _summary = run_quality_check(
             merged_dir=merged_dir,
             subvideos_meta_path=subvideos_meta,
@@ -351,7 +440,12 @@ class TestQualityCheck:
 
     def test_cli_returns_nonzero_on_fail(self, fake_project: Path):
         merged_dir = fake_project / "data" / "06_merged"
-        bad_input = {"id": "video_0003", "video_id": "video_0003", "video_path": "data/01_videos/video_0003.mp4", "type": "韧性断裂"}
+        bad_input = {
+            "id": "video_0003",
+            "video_id": "video_0003",
+            "video_path": "data/01_videos/video_0003.mp4",
+            "type": "韧性断裂",
+        }
         _write_json(merged_dir / "test_inputs.json", [bad_input])
         rc = main(
             [

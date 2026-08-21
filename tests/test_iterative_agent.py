@@ -192,7 +192,9 @@ class FakeInferenceClient:
                             # ``index`` is the model-input position; the
                             # timestamp carries the mapping to the clip.
                             "index": i,
-                            "timestamp": float(frame.get("clip_timestamp", frame["timestamp"])),
+                            "timestamp": float(
+                                frame.get("clip_timestamp", frame["timestamp"])
+                            ),
                         }
                         for i, frame in enumerate(selected)
                     ],
@@ -208,12 +210,15 @@ class FakeInferenceClient:
             return InferenceResult(
                 ok=False,
                 model_output=None,
-                error=MagicMock(code="inference_failed", message="模型输出解析失败", field=None),
+                error=MagicMock(
+                    code="inference_failed", message="模型输出解析失败", field=None
+                ),
                 attempts=1,
             )
 
         # String: parse via ResultParser to produce ok/error.
         from agent.parser import ResultParser
+
         parsed = ResultParser.parse(resp)
         if parsed.ok:
             return InferenceResult(ok=True, model_output=parsed.data, attempts=1)
@@ -256,24 +261,35 @@ def test_iterative_agent_terminates_on_converged_fracture():
         },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [0],
-        }),
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0],
+                },
+            ),
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -298,18 +314,35 @@ def test_iterative_agent_no_fracture_global_scope():
     config["agent"]["max_rounds"] = 3
 
     responses = [
-        {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.95},
-        {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.95},
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未断裂",
+            "location": None,
+            "confidence": 0.95,
+        },
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未断裂",
+            "location": None,
+            "confidence": 0.95,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "no_fracture",
-            "confidence": 0.95,
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "no_fracture",
+                    "confidence": 0.95,
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -334,31 +367,48 @@ def test_iterative_agent_rejects_early_terminate_until_converged():
     config["agent"]["max_rounds"] = 4
 
     responses = [
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
     ]
 
-    llm = StaticLLM([
-        # Round 0: sample full range.
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        # Round 1: LLM tries to terminate with only 1 evidence round -> rejected.
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [0],
-        }),
-        # Round 2: sample narrowed range.
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        # Round 3: terminate with 2 evidence rounds -> allowed.
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            # Round 0: sample full range.
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            # Round 1: LLM tries to terminate with only 1 evidence round -> rejected.
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0],
+                },
+            ),
+            # Round 2: sample narrowed range.
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            # Round 3: terminate with 2 evidence rounds -> allowed.
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -377,23 +427,27 @@ def test_initial_round_forces_complete_video_against_decision_model_subrange():
     config = make_config()
     config["agent"]["max_rounds"] = 1
     clip_builder = RecordingClipBuilder()
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [40.0, 45.0], "prompt": "analyze"}),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [40.0, 45.0], "prompt": "analyze"}),
+        ]
+    )
     agent = IterativeAgent(
         llm_client=llm,
         video_meta=video_meta,
         config=config,
         clip_builder=clip_builder,
-        inference_client=FakeInferenceClient([
-            {
-                "has_fracture": False,
-                "fracture_between": None,
-                "type": "未断裂",
-                "location": None,
-                "confidence": 0.9,
-            }
-        ]),
+        inference_client=FakeInferenceClient(
+            [
+                {
+                    "has_fracture": False,
+                    "fracture_between": None,
+                    "type": "未断裂",
+                    "location": None,
+                    "confidence": 0.9,
+                }
+            ]
+        ),
     )
 
     agent.run()
@@ -410,20 +464,31 @@ def test_iterative_agent_handles_parse_error():
     # First response is a parse failure as a string.
     responses = [
         "this is not valid json",
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-    ]
-
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
             "location": "inside_gauge",
             "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+        },
+    ]
+
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -449,26 +514,55 @@ def test_iterative_agent_rejects_boundary_sentinel_as_parse_error():
 
     responses = [
         # Round 0: full range, valid fracture in the middle.
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "脆性断裂", "location": "inside_gauge", "confidence": 0.85},
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "脆性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.85,
+        },
         # Round 1: focused interval returns illegal boundary sentinel.
         # The parser rejects [0,0] because it's not strictly adjacent [i, i+1].
-        {"has_fracture": True, "fracture_between": [0, 0], "type": "脆性断裂", "location": "inside_gauge", "confidence": 0.85},
+        {
+            "has_fracture": True,
+            "fracture_between": [0, 0],
+            "type": "脆性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.85,
+        },
         # Round 2: focused interval returns valid left-edge adjacent pair.
-        {"has_fracture": True, "fracture_between": [0, 1], "type": "脆性断裂", "location": "inside_gauge", "confidence": 0.90},
-    ]
-
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "脆性断裂",
+        {
+            "has_fracture": True,
+            "fracture_between": [0, 1],
+            "type": "脆性断裂",
             "location": "inside_gauge",
             "confidence": 0.90,
-            "evidence_rounds": [0, 2],
-        }),
-    ])
+        },
+    ]
+
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "脆性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.90,
+                    "evidence_rounds": [0, 2],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -495,25 +589,54 @@ def test_iterative_agent_focus_false_expands_candidate():
 
     responses = [
         # Round 0: full range, fracture in the middle.
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        # Round 1: focused interval returns false -> focus miss, expand candidate.
-        {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.80},
-        # Round 2: expanded interval returns a converged normal interval.
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-    ]
-
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [47.857143, 52.142857], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
             "location": "inside_gauge",
             "confidence": 0.92,
-            "evidence_rounds": [0, 2],
-        }),
-    ])
+        },
+        # Round 1: focused interval returns false -> focus miss, expand candidate.
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未断裂",
+            "location": None,
+            "confidence": 0.80,
+        },
+        # Round 2: expanded interval returns a converged normal interval.
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+    ]
+
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            (
+                "sample_and_infer",
+                {"sample_range": [47.857143, 52.142857], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 2],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -528,7 +651,10 @@ def test_iterative_agent_focus_false_expands_candidate():
     assert result["fracture_type"] == "韧性断裂"
     # Focus misses must not pollute the conflict counter.
     assert agent.conflict_count == 0
-    assert result["history"][1]["result"].get("fallback") == "focus_false_expanded_to_parent_range"
+    assert (
+        result["history"][1]["result"].get("fallback")
+        == "focus_false_expanded_to_parent_range"
+    )
 
 
 def test_iterative_agent_conflict_expands_candidate():
@@ -539,25 +665,48 @@ def test_iterative_agent_conflict_expands_candidate():
 
     responses = [
         # Round 0: full range, fracture in the middle.
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        # Round 1: wider interval returns a range entirely left of the candidate.
-        {"has_fracture": True, "fracture_between": [0, 1], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.88},
-        # Round 2: re-sample the expanded candidate and converge.
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-    ]
-
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 20.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [44.0, 47.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
             "location": "inside_gauge",
             "confidence": 0.92,
-            "evidence_rounds": [0, 2],
-        }),
-    ])
+        },
+        # Round 1: wider interval returns a range entirely left of the candidate.
+        {
+            "has_fracture": True,
+            "fracture_between": [0, 1],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.88,
+        },
+        # Round 2: re-sample the expanded candidate and converge.
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+    ]
+
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 20.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [44.0, 47.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 2],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -570,7 +719,9 @@ def test_iterative_agent_conflict_expands_candidate():
     result = agent.run()
     assert result["status"] == "fracture"
     assert result["fracture_type"] == "韧性断裂"
-    assert result["history"][1]["result"].get("conflict_handled") == "expanded_candidate"
+    assert (
+        result["history"][1]["result"].get("conflict_handled") == "expanded_candidate"
+    )
 
 
 def test_iterative_agent_does_not_trust_legacy_model_confidence():
@@ -581,25 +732,57 @@ def test_iterative_agent_does_not_trust_legacy_model_confidence():
     config["agent"]["confidence_threshold"] = 0.5
 
     responses = [
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        {"has_fracture": True, "fracture_between": [0, 1], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.3},
-        {"has_fracture": True, "fracture_between": [0, 1], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.3},
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-    ]
-
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 20.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 20.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [47.857143, 52.142857], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
             "location": "inside_gauge",
             "confidence": 0.92,
-            "evidence_rounds": [0, 3],
-        }),
-    ])
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [0, 1],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.3,
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [0, 1],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.3,
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+    ]
+
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 20.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 20.0], "prompt": "analyze"}),
+            (
+                "sample_and_infer",
+                {"sample_range": [47.857143, 52.142857], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 3],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -641,22 +824,42 @@ def test_iterative_agent_out_of_bounds_fracture_between():
                 "frames": [{"index": i, "timestamp": float(i)} for i in range(8)],
             },
         },
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-    ]
-
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
             "location": "inside_gauge",
             "confidence": 0.92,
-            "evidence_rounds": [1, 2],
-        }),
-    ])
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+    ]
+
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [1, 2],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -686,20 +889,31 @@ def test_iterative_agent_inference_returns_none_is_parse_error():
 
     responses = [
         None,  # signals inference failure
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-    ]
-
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
             "location": "inside_gauge",
             "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+        },
+    ]
+
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -762,21 +976,41 @@ def test_terminate_uses_code_layer_aggregation_not_llm_args():
 
     # Both positive rounds predict 脆性断裂; round 1 is narrower and becomes best.
     responses = [
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "脆性断裂", "location": "inside_gauge", "confidence": 0.92},
-        {"has_fracture": True, "fracture_between": [15, 16], "type": "脆性断裂", "location": "inside_gauge", "confidence": 0.91},
-    ]
-
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",  # LLM proposes wrong type
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "脆性断裂",
             "location": "inside_gauge",
             "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [15, 16],
+            "type": "脆性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.91,
+        },
+    ]
+
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",  # LLM proposes wrong type
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -802,18 +1036,35 @@ def test_no_fracture_terminate_uses_contract_schema():
     config["agent"]["max_rounds"] = 3
 
     responses = [
-        {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.95},
-        {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.95},
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未断裂",
+            "location": None,
+            "confidence": 0.95,
+        },
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未断裂",
+            "location": None,
+            "confidence": 0.95,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "no_fracture",
-            "confidence": 0.95,
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "no_fracture",
+                    "confidence": 0.95,
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -837,21 +1088,41 @@ def test_each_round_appends_updated_state_context():
     config = make_config()
 
     responses = [
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        {"has_fracture": True, "fracture_between": [15, 16], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-    ]
-
-    llm = RecordingLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
             "location": "inside_gauge",
             "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [15, 16],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+    ]
+
+    llm = RecordingLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -996,7 +1267,7 @@ def test_force_terminate_no_fracture_state_ignores_positive_history(caplog):
                     "type": "韧性断裂",
                     "location": "inside_gauge",
                     "confidence": 0.92,
-                }
+                },
             }
         }
     ]
@@ -1015,16 +1286,27 @@ def test_unrecognized_termination():
     config = make_config()
 
     responses = [
-        {"has_fracture": None, "fracture_between": None, "type": "视频异常", "location": None, "confidence": 0.7},
+        {
+            "has_fracture": None,
+            "fracture_between": None,
+            "type": "视频异常",
+            "location": None,
+            "confidence": 0.7,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "unrecognized",
-            "unrecognized_reason": "video_anomaly",
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "unrecognized",
+                    "unrecognized_reason": "video_anomaly",
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1050,18 +1332,35 @@ def test_unrecognized_termination_invalid_reason_rejected():
     config["agent"]["max_rounds"] = 3
 
     responses = [
-        {"has_fracture": None, "fracture_between": None, "type": "视频异常", "location": None, "confidence": 0.7},
-        {"has_fracture": None, "fracture_between": None, "type": "视频异常", "location": None, "confidence": 0.7},
+        {
+            "has_fracture": None,
+            "fracture_between": None,
+            "type": "视频异常",
+            "location": None,
+            "confidence": 0.7,
+        },
+        {
+            "has_fracture": None,
+            "fracture_between": None,
+            "type": "视频异常",
+            "location": None,
+            "confidence": 0.7,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "unrecognized",
-            "unrecognized_reason": "bad_reason",
-        }),
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "unrecognized",
+                    "unrecognized_reason": "bad_reason",
+                },
+            ),
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1113,20 +1412,34 @@ def test_iterative_agent_uses_server_frames_when_preprocessing_valid():
             attempts=1,
             preprocessing=preprocessing,
         ),
-        {"has_fracture": True, "fracture_between": [0, 1], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.91},
+        {
+            "has_fracture": True,
+            "fracture_between": [0, 1],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.91,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 2.857143], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "sample_and_infer",
+                {"sample_range": [0.0, 2.857143], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1177,14 +1490,19 @@ def test_iterative_agent_missing_preprocessing_with_fracture_fails():
         ),
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "no_fracture",
-            "confidence": 0.95,
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "no_fracture",
+                    "confidence": 0.95,
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1231,14 +1549,19 @@ def test_iterative_agent_missing_preprocessing_no_fracture_graceful():
         ),
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "no_fracture",
-            "confidence": 0.95,
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "no_fracture",
+                    "confidence": 0.95,
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1278,14 +1601,19 @@ def test_fake_inference_client_explicit_no_preprocessing_with_fracture():
         },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "no_fracture",
-            "confidence": 0.95,
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "no_fracture",
+                    "confidence": 0.95,
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1311,9 +1639,13 @@ def test_iterative_agent_invalid_preprocessing_too_many_frames_errors():
         "processor_version": "wrong-version",
         "deployment_manifest": TEST_DEPLOYMENT_MANIFEST,
         "max_frames": 4,
-        "frames": [{"index": 0, "timestamp": 0.0}, {"index": 1, "timestamp": 1.0},
-                   {"index": 2, "timestamp": 2.0}, {"index": 3, "timestamp": 3.0},
-                   {"index": 4, "timestamp": 4.0}],  # 5 frames > max_frames=4
+        "frames": [
+            {"index": 0, "timestamp": 0.0},
+            {"index": 1, "timestamp": 1.0},
+            {"index": 2, "timestamp": 2.0},
+            {"index": 3, "timestamp": 3.0},
+            {"index": 4, "timestamp": 4.0},
+        ],  # 5 frames > max_frames=4
     }
 
     responses = [
@@ -1330,29 +1662,49 @@ def test_iterative_agent_invalid_preprocessing_too_many_frames_errors():
             preprocessing=preprocessing,  # Present but invalid
         ),
         # Subsequent rounds use the normal valid 8-frame server fixture.
-        {"has_fracture": True, "fracture_between": [3, 4], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        {"has_fracture": True, "fracture_between": [3, 4], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
+        {
+            "has_fracture": True,
+            "fracture_between": [3, 4],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [3, 4],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [1],
-        }),
-        ("sample_and_infer", {"sample_range": [48.0, 52.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [1, 2],
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [1],
+                },
+            ),
+            ("sample_and_infer", {"sample_range": [48.0, 52.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [1, 2],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1378,7 +1730,9 @@ def test_iterative_agent_too_many_frames_preprocessing_error():
         "processor_version": "minicpmv4.5/0.1",
         "deployment_manifest": TEST_DEPLOYMENT_MANIFEST,
         "max_frames": 8,
-        "frames": [{"index": i, "timestamp": float(i)} for i in range(9)],  # 9 frames > 8
+        "frames": [
+            {"index": i, "timestamp": float(i)} for i in range(9)
+        ],  # 9 frames > 8
     }
 
     responses = [
@@ -1407,14 +1761,19 @@ def test_iterative_agent_too_many_frames_preprocessing_error():
         ),
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "no_fracture",
-            "confidence": 0.95,
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "no_fracture",
+                    "confidence": 0.95,
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1433,6 +1792,7 @@ def test_iterative_agent_too_many_frames_preprocessing_error():
 # Fix 7: Pydantic schema validation for tool call arguments
 # =============================================================================
 
+
 def test_pydantic_validation_catches_invalid_sample_and_infer_args():
     """LLM returns invalid sample_range → ValidationError caught, agent continues."""
     video_meta = {"video_id": "v501", "duration": 100.0, "video_path": "v501.mp4"}
@@ -1440,25 +1800,48 @@ def test_pydantic_validation_catches_invalid_sample_and_infer_args():
     config["agent"]["max_rounds"] = 4
 
     responses = [
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-    ]
-
-    llm = StaticLLM([
-        # Round 0: bad sample_range (3 elements instead of 2) → Pydantic rejects
-        ("sample_and_infer", {"sample_range": [0.0, 50.0, 100.0], "prompt": "analyze"}),
-        # Round 1: valid sample
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        # Round 2: valid sample (narrowed)
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
             "location": "inside_gauge",
             "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+    ]
+
+    llm = StaticLLM(
+        [
+            # Round 0: bad sample_range (3 elements instead of 2) → Pydantic rejects
+            (
+                "sample_and_infer",
+                {"sample_range": [0.0, 50.0, 100.0], "prompt": "analyze"},
+            ),
+            # Round 1: valid sample
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            # Round 2: valid sample (narrowed)
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1482,29 +1865,52 @@ def test_pydantic_validation_catches_invalid_terminate_args():
     config["agent"]["max_rounds"] = 5
 
     responses = [
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        # Bad terminate: fracture_type is invalid for "fracture" status
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "未断裂",  # invalid for fracture status
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [0],
-        }),
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            # Bad terminate: fracture_type is invalid for "fracture" status
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "未断裂",  # invalid for fracture status
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0],
+                },
+            ),
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1526,29 +1932,52 @@ def test_pydantic_validation_catches_missing_required_fields():
     config["agent"]["max_rounds"] = 5
 
     responses = [
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-    ]
-
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        # Bad terminate: missing confidence for fracture status
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            # confidence is missing
-            "evidence_rounds": [0],
-        }),
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
             "location": "inside_gauge",
             "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+    ]
+
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            # Bad terminate: missing confidence for fracture status
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    # confidence is missing
+                    "evidence_rounds": [0],
+                },
+            ),
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1569,30 +1998,53 @@ def test_pydantic_validation_catches_state_field_mutual_exclusion():
     config["agent"]["max_rounds"] = 5
 
     responses = [
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        # Bad: fracture status with unrecognized_reason set (mutually exclusive)
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "unrecognized_reason": "max_rounds",  # must be null for fracture
-            "evidence_rounds": [0],
-        }),
-        ("sample_and_infer", {"sample_range": [48.571429, 51.428571], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            # Bad: fracture status with unrecognized_reason set (mutually exclusive)
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "unrecognized_reason": "max_rounds",  # must be null for fracture
+                    "evidence_rounds": [0],
+                },
+            ),
+            (
+                "sample_and_infer",
+                {"sample_range": [48.571429, 51.428571], "prompt": "analyze"},
+            ),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1610,6 +2062,7 @@ def test_pydantic_validation_catches_state_field_mutual_exclusion():
 # Fix 3a: intersection check in _can_terminate
 # =============================================================================
 
+
 def test_can_terminate_rejects_non_overlapping_evidence_ranges():
     """Positive evidence rounds with disjoint time ranges must be rejected."""
     video_meta = {"video_id": "v601", "duration": 100.0, "video_path": "v601.mp4"}
@@ -1618,31 +2071,51 @@ def test_can_terminate_rejects_non_overlapping_evidence_ranges():
 
     # Two fracture rounds with non-overlapping ranges.
     responses = [
-        {"has_fracture": True, "fracture_between": [1, 2], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        {"has_fracture": True, "fracture_between": [30, 31], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
+        {
+            "has_fracture": True,
+            "fracture_between": [1, 2],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [30, 31],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 20.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [80.0, 100.0], "prompt": "analyze"}),
-        # Terminate with both evidence rounds — should be rejected due to non-overlapping ranges.
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-        # Agent continues sampling.
-        ("sample_and_infer", {"sample_range": [96.0, 100.0], "prompt": "analyze"}),
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
-            "location": "inside_gauge",
-            "confidence": 0.92,
-            "evidence_rounds": [1, 2],
-        }),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 20.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [80.0, 100.0], "prompt": "analyze"}),
+            # Terminate with both evidence rounds — should be rejected due to non-overlapping ranges.
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+            # Agent continues sampling.
+            ("sample_and_infer", {"sample_range": [96.0, 100.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [1, 2],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1660,6 +2133,7 @@ def test_can_terminate_rejects_non_overlapping_evidence_ranges():
 # =============================================================================
 # Fix 3b: intersection in _build_fracture_args
 # =============================================================================
+
 
 def test_build_fracture_args_uses_intersection_of_all_positive_ranges():
     """_build_fracture_args must use intersection of all positive rounds' time ranges."""
@@ -1747,6 +2221,7 @@ def test_build_fracture_args_uses_intersection_of_all_positive_ranges():
 # Fix 3c: max_rounds convergence check
 # =============================================================================
 
+
 def test_max_rounds_rejects_non_converged_candidate():
     """At max_rounds, candidate must be within k*tolerance to terminate."""
     video_meta = {"video_id": "v801", "duration": 100.0, "video_path": "v801.mp4"}
@@ -1756,22 +2231,39 @@ def test_max_rounds_rejects_non_converged_candidate():
 
     # Two fracture rounds, but candidate stays wide (> 2*tolerance).
     responses = [
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-        {"has_fracture": True, "fracture_between": [17, 18], "type": "韧性断裂", "location": "inside_gauge", "confidence": 0.92},
-    ]
-
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
-        # Round 2: at max_rounds-1, terminate is rejected because candidate width > 2*tolerance.
-        ("terminate", {
-            "status": "fracture",
-            "fracture_type": "韧性断裂",
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
             "location": "inside_gauge",
             "confidence": 0.92,
-            "evidence_rounds": [0, 1],
-        }),
-    ])
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [17, 18],
+            "type": "韧性断裂",
+            "location": "inside_gauge",
+            "confidence": 0.92,
+        },
+    ]
+
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+            # Round 2: at max_rounds-1, terminate is rejected because candidate width > 2*tolerance.
+            (
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.92,
+                    "evidence_rounds": [0, 1],
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1802,10 +2294,13 @@ def test_runtime_max_prompt_length_config_override():
         inference_client=FakeInferenceClient([]),
     )
 
-    result = agent._execute_sample_and_infer({
-        "sample_range": [0.0, 100.0],
-        "prompt": "this prompt is way too long",
-    }, round_idx=0)
+    result = agent._execute_sample_and_infer(
+        {
+            "sample_range": [0.0, 100.0],
+            "prompt": "this prompt is way too long",
+        },
+        round_idx=0,
+    )
     assert result["ok"] is False
     assert result["validation_error"]["code"] == "prompt_too_long"
     assert result["validation_error"]["field"] == "prompt"
@@ -1822,15 +2317,29 @@ def test_diagnostics_persisted_to_runtime_dir(tmp_path: Path):
     config["agent"]["max_rounds"] = 3
 
     responses = [
-        {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.95},
-        {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.95},
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未断裂",
+            "location": None,
+            "confidence": 0.95,
+        },
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未断裂",
+            "location": None,
+            "confidence": 0.95,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("terminate", {"status": "no_fracture", "confidence": 0.95}),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            ("terminate", {"status": "no_fracture", "confidence": 0.95}),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1900,7 +2409,13 @@ def test_summary_redacts_model_video_path(tmp_path: Path):
 
     agent._persist_summary(result)
 
-    summary_file = tmp_path / "data" / "08_runtime" / "diagnostics" / "v800r_diagnostics_summary.json"
+    summary_file = (
+        tmp_path
+        / "data"
+        / "08_runtime"
+        / "diagnostics"
+        / "v800r_diagnostics_summary.json"
+    )
     assert summary_file.exists()
     summary = json.loads(summary_file.read_text(encoding="utf-8"))
     assert summary["history"][0]["result"]["model_video_path"] == "[REDACTED]"
@@ -1916,13 +2431,27 @@ def test_visual_indeterminate_diagnostics():
     config["agent"]["max_rounds"] = 2
 
     responses = [
-        {"has_fracture": None, "fracture_between": None, "type": None, "location": None, "confidence": 0.7},
+        {
+            "has_fracture": None,
+            "fracture_between": None,
+            "type": None,
+            "location": None,
+            "confidence": 0.7,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("terminate", {"status": "unrecognized", "unrecognized_reason": "visual_indeterminate"}),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "unrecognized",
+                    "unrecognized_reason": "visual_indeterminate",
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1944,13 +2473,27 @@ def test_positive_without_secondary_fields_is_not_visual_unknown():
     config["agent"]["max_rounds"] = 2
 
     responses = [
-        {"has_fracture": True, "fracture_between": None, "type": None, "location": None, "confidence": 0.7},
+        {
+            "has_fracture": True,
+            "fracture_between": None,
+            "type": None,
+            "location": None,
+            "confidence": 0.7,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("terminate", {"status": "unrecognized", "unrecognized_reason": "visual_indeterminate"}),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            (
+                "terminate",
+                {
+                    "status": "unrecognized",
+                    "unrecognized_reason": "visual_indeterminate",
+                },
+            ),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -1975,13 +2518,21 @@ def test_diagnostics_include_temp_video_hash_and_bytes():
     config["agent"]["max_rounds"] = 2
 
     responses = [
-        {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.95},
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未断裂",
+            "location": None,
+            "confidence": 0.95,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("terminate", {"status": "no_fracture", "confidence": 0.95}),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            ("terminate", {"status": "no_fracture", "confidence": 0.95}),
+        ]
+    )
 
     clip_builder = FakeClipBuilder()
     agent = IterativeAgent(
@@ -2052,10 +2603,12 @@ def test_consecutive_sampling_failures_terminate_runner():
     config = make_config()
     config["agent"]["max_rounds"] = 5
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 30.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [30.0, 60.0], "prompt": "analyze"}),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 30.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [30.0, 60.0], "prompt": "analyze"}),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,
@@ -2091,9 +2644,17 @@ def test_persist_diagnostics_oserror_isolated(monkeypatch, tmp_path: Path):
         video_meta=video_meta,
         config=config,
         clip_builder=FakeClipBuilder(),
-        inference_client=FakeInferenceClient([
-            {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.95},
-        ]),
+        inference_client=FakeInferenceClient(
+            [
+                {
+                    "has_fracture": False,
+                    "fracture_between": None,
+                    "type": "未断裂",
+                    "location": None,
+                    "confidence": 0.95,
+                },
+            ]
+        ),
         work_dir=str(tmp_path),
     )
 
@@ -2127,15 +2688,29 @@ def test_persist_summary_oserror_isolated(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(Path, "write_text", selective_failing_write_text)
 
     responses = [
-        {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.95},
-        {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None, "confidence": 0.95},
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未断裂",
+            "location": None,
+            "confidence": 0.95,
+        },
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未断裂",
+            "location": None,
+            "confidence": 0.95,
+        },
     ]
 
-    llm = StaticLLM([
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
-        ("terminate", {"status": "no_fracture", "confidence": 0.95}),
-    ])
+    llm = StaticLLM(
+        [
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            ("sample_and_infer", {"sample_range": [0.0, 60.0], "prompt": "analyze"}),
+            ("terminate", {"status": "no_fracture", "confidence": 0.95}),
+        ]
+    )
 
     agent = IterativeAgent(
         llm_client=llm,

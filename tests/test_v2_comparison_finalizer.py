@@ -170,16 +170,12 @@ def test_v2_comparison_finalizer_freezes_passing_common_gate(
             {
                 "v2_comparison_manifest_sha256": manifest_hash,
                 "video_path": next(
-                    row["video_path"]
-                    for row in videos
-                    if row["video_id"] == video_id
+                    row["video_path"] for row in videos if row["video_id"] == video_id
                 ),
                 "runner_result": {
                     "ok": True,
                     "runtime_identity": {
-                        "visual_deployment": {
-                            "deployment_manifest": deployment
-                        }
+                        "visual_deployment": {"deployment_manifest": deployment}
                     },
                     "result": {
                         "schema_version": "tensile-agent/result/v2",

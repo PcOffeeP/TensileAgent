@@ -43,17 +43,42 @@ def test_contract_is_self_contained_and_canonical() -> None:
 @pytest.mark.parametrize(
     "payload",
     [
-        {"has_fracture": True, "fracture_between": None, "type": None, "location": None},
-        {"has_fracture": True, "fracture_between": [2, 3], "type": None, "location": None},
+        {
+            "has_fracture": True,
+            "fracture_between": None,
+            "type": None,
+            "location": None,
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [2, 3],
+            "type": None,
+            "location": None,
+        },
         {
             "has_fracture": True,
             "fracture_between": None,
             "type": "脆性断裂、齐根断裂",
             "location": "outside_gauge",
         },
-        {"has_fracture": False, "fracture_between": None, "type": "未断裂", "location": None},
-        {"has_fracture": False, "fracture_between": None, "type": "未夹紧", "location": None},
-        {"has_fracture": None, "fracture_between": None, "type": "视频异常", "location": None},
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未断裂",
+            "location": None,
+        },
+        {
+            "has_fracture": False,
+            "fracture_between": None,
+            "type": "未夹紧",
+            "location": None,
+        },
+        {
+            "has_fracture": None,
+            "fracture_between": None,
+            "type": "视频异常",
+            "location": None,
+        },
     ],
 )
 def test_v2_model_output_legal_matrix(payload: dict) -> None:
@@ -63,10 +88,30 @@ def test_v2_model_output_legal_matrix(payload: dict) -> None:
 @pytest.mark.parametrize(
     "payload",
     [
-        {"has_fracture": None, "fracture_between": None, "type": None, "location": None},
-        {"has_fracture": False, "fracture_between": [0, 1], "type": "未断裂", "location": None},
-        {"has_fracture": True, "fracture_between": [1, 3], "type": None, "location": None},
-        {"has_fracture": True, "fracture_between": None, "type": "未知类型", "location": None},
+        {
+            "has_fracture": None,
+            "fracture_between": None,
+            "type": None,
+            "location": None,
+        },
+        {
+            "has_fracture": False,
+            "fracture_between": [0, 1],
+            "type": "未断裂",
+            "location": None,
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": [1, 3],
+            "type": None,
+            "location": None,
+        },
+        {
+            "has_fracture": True,
+            "fracture_between": None,
+            "type": "未知类型",
+            "location": None,
+        },
         {
             "has_fracture": True,
             "fracture_between": None,
@@ -157,7 +202,12 @@ def test_http_stub_contract_and_base64_transport() -> None:
     )
     assert response.status_code == 200
     body = response.json()
-    assert ModelOutput.model_validate_json(body["choices"][0]["message"]["content"]).has_fracture is True
+    assert (
+        ModelOutput.model_validate_json(
+            body["choices"][0]["message"]["content"]
+        ).has_fracture
+        is True
+    )
     assert _validate_preprocessing_meta(body["preprocessing"]) is None
 
 
@@ -166,16 +216,29 @@ def test_http_stub_drift_and_transport_failure_scenarios() -> None:
     expected = drift.get("/v1/tensile/contract").json()["deployment_manifest"]
     video = b"\x00\x00\x00\x18ftypisom\x00\x00\x00\x00"
     payload = {
-        "messages": [{
-            "role": "user",
-            "content": [{
-                "type": "video_url",
-                "video_url": {
-                    "url": "data:video/mp4;base64," + base64.b64encode(video).decode()
-                },
-            }],
-        }],
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "video_url",
+                        "video_url": {
+                            "url": "data:video/mp4;base64,"
+                            + base64.b64encode(video).decode()
+                        },
+                    }
+                ],
+            }
+        ],
     }
     drift_response = drift.post("/v1/chat/completions", json=payload)
-    assert _validate_preprocessing_meta(drift_response.json()["preprocessing"], expected) == "deployment_drift"
-    assert TestClient(create_app("transport-failure")).post("/v1/chat/completions", json=payload).status_code == 503
+    assert (
+        _validate_preprocessing_meta(drift_response.json()["preprocessing"], expected)
+        == "deployment_drift"
+    )
+    assert (
+        TestClient(create_app("transport-failure"))
+        .post("/v1/chat/completions", json=payload)
+        .status_code
+        == 503
+    )

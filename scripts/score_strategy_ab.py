@@ -75,8 +75,7 @@ def _validate_payload(
     if c_runtime.get("visual_deployment") != visual_identity:
         raise ValueError(f"C visual deployment mismatch: {video_id}")
     expected_c_decision = {
-        key: decision_identity.get(key)
-        for key in ("backend", "model", "digest")
+        key: decision_identity.get(key) for key in ("backend", "model", "digest")
     }
     if c_runtime.get("decision_model") != expected_c_decision:
         raise ValueError(f"C decision model mismatch: {video_id}")
@@ -118,9 +117,7 @@ def main() -> None:
         method: {"logical_requests": 0, "valid_responses": 0, "invalid_or_failed": 0}
         for method in ("A", "B", "C")
     }
-    records_by_id: dict[
-        str, dict[str, tuple[dict[str, Any], dict[str, Any], int]]
-    ] = {}
+    records_by_id: dict[str, dict[str, tuple[dict[str, Any], dict[str, Any], int]]] = {}
     results_root = Path(args.results_root)
     for video_id in manifest["sets"][args.set]:
         candidate_sets = [args.set]
@@ -232,7 +229,9 @@ def main() -> None:
             if not members:
                 continue
             subgroup_reports[dimension][value] = {
-                method: score_method([records_by_id[video_id][method] for video_id in members])
+                method: score_method(
+                    [records_by_id[video_id][method] for video_id in members]
+                )
                 for method in ("A", "B", "C")
             }
 

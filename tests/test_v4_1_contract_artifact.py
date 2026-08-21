@@ -28,17 +28,11 @@ def test_v4_1_incipient_summary_is_prospective_not_final():
     semantics = contract["search_semantics"]
     assert semantics["临界未断裂"].endswith("visible_precursors")
     assert semantics["summary_evidence_phase"]["临界未断裂"] == "prospective"
-    assert contract["validation_rules"]["未断裂"].startswith(
-        "fracture_mechanism"
-    )
+    assert contract["validation_rules"]["未断裂"].startswith("fracture_mechanism")
 
 
 def test_v4_1_authoritative_sibling_contract_is_byte_identical():
-    sibling = (
-        PATH.parents[3]
-        / "mVllm_2"
-        / "pipeline/contracts/tensile_vlm_v4_1.json"
-    )
+    sibling = PATH.parents[3] / "mVllm_2" / "pipeline/contracts/tensile_vlm_v4_1.json"
     if not sibling.exists():
         pytest.skip("mVllm_2 sibling checkout is not available")
     assert sibling.read_bytes() == PATH.read_bytes()

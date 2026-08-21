@@ -452,7 +452,9 @@ def test_runner_result_success():
 def test_runner_result_failure():
     result = RunnerResult(
         ok=False,
-        error=RunnerError(stage="inference_transport", code="timeout", message="connection timeout"),
+        error=RunnerError(
+            stage="inference_transport", code="timeout", message="connection timeout"
+        ),
     )
     assert result.ok is False
     assert result.result is None

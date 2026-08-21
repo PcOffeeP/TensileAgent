@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from agent.inference import InferenceClient, LlamaFactoryInferenceClient, MockInferenceClient
+from agent.inference import (
+    InferenceClient,
+    LlamaFactoryInferenceClient,
+    MockInferenceClient,
+)
 from agent.iterative_agent import IterativeAgent, TOOLS_SCHEMA
 from agent.llm import AgentLLMFactory, BaseAgentLLM, LocalClient, RemoteAPIClient
 from agent.parser import ResultParser

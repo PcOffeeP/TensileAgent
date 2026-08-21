@@ -107,9 +107,7 @@ def _macro_f1(pairs: Iterable[tuple[Any, Any]], labels: set[Any]) -> float | Non
         precision = tp / (tp + fp) if tp + fp else 0.0
         recall = tp / (tp + fn)
         scores.append(
-            2 * precision * recall / (precision + recall)
-            if precision + recall
-            else 0.0
+            2 * precision * recall / (precision + recall) if precision + recall else 0.0
         )
     return sum(scores) / len(scores) if scores else None
 
@@ -118,12 +116,18 @@ def _time_hit(gt: dict[str, Any], pred: dict[str, Any]) -> bool | None:
     timestamp = gt.get("fracture_time")
     duration = gt.get("duration")
     interval = pred.get("time_range")
-    if not isinstance(timestamp, (int, float)) or not isinstance(duration, (int, float)):
+    if not isinstance(timestamp, (int, float)) or not isinstance(
+        duration, (int, float)
+    ):
         return None
     if not isinstance(interval, list) or len(interval) != 2:
         return False
     tolerance = max(1.0, float(duration) * 0.05)
-    return float(interval[0]) - tolerance <= float(timestamp) <= float(interval[1]) + tolerance
+    return (
+        float(interval[0]) - tolerance
+        <= float(timestamp)
+        <= float(interval[1]) + tolerance
+    )
 
 
 def score_predictions(
@@ -137,9 +141,7 @@ def score_predictions(
         pred.get("has_fracture") == gt["has_fracture"] for gt, pred in normal
     ]
     time_hits = [
-        hit
-        for gt, pred in positives
-        if (hit := _time_hit(gt, pred)) is not None
+        hit for gt, pred in positives if (hit := _time_hit(gt, pred)) is not None
     ]
     mechanism_pairs = [
         (gt["fracture_mechanism"], pred.get("fracture_type"))
@@ -179,14 +181,18 @@ def score_predictions(
         if gt["special_case"] is not None
     ]
     return {
-        "has_fracture_accuracy": sum(presence_hits) / len(presence_hits) if presence_hits else None,
+        "has_fracture_accuracy": sum(presence_hits) / len(presence_hits)
+        if presence_hits
+        else None,
         "fracture_recall": (
-            sum(pred.get("has_fracture") is True for _, pred in positives) / len(positives)
+            sum(pred.get("has_fracture") is True for _, pred in positives)
+            / len(positives)
             if positives
             else None
         ),
         "no_fracture_recall": (
-            sum(pred.get("has_fracture") is False for _, pred in negatives) / len(negatives)
+            sum(pred.get("has_fracture") is False for _, pred in negatives)
+            / len(negatives)
             if negatives
             else None
         ),
@@ -225,10 +231,7 @@ def load_scoring_records(
     with Path(annotations_csv).open(encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle):
             video_id = str(
-                row.get("video_id")
-                or row.get("video")
-                or row.get("id")
-                or ""
+                row.get("video_id") or row.get("video") or row.get("id") or ""
             ).strip()
             if not video_id:
                 raise ValueError("annotation row is missing video_id")

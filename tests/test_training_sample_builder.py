@@ -27,7 +27,9 @@ def _subvideo(
         "subvideo_id": f"{video_id}_focus_3s_50pct",
         "source_video": video_id,
         "video_path": video_path or f"03_subvideos/{video_id}_focus_3s_50pct.mp4",
-        "frame_paths": [f"04_frames/{video_id}_focus_3s_50pct/frame_{i:04d}.jpg" for i in range(8)],
+        "frame_paths": [
+            f"04_frames/{video_id}_focus_3s_50pct/frame_{i:04d}.jpg" for i in range(8)
+        ],
         "start_time": 143.9,
         "end_time": 146.9,
         "start_frame": 4317,
@@ -44,7 +46,11 @@ def _subvideo(
         "source_type": source_type,
         "source_location": "inside_gauge",
         "actual_frame_mapping": [
-            {"input_index": i, "original_frame": 4317 + i, "timestamp": round(143.9 + i / 30.0, 4)}
+            {
+                "input_index": i,
+                "original_frame": 4317 + i,
+                "timestamp": round(143.9 + i / 30.0, 4),
+            }
             for i in range(8)
         ],
         "processor_fingerprint": "minicpm-v-4.5:test:fingerprint",
@@ -165,7 +171,13 @@ def test_convert_assistant_json_has_exactly_five_fields():
     sub = _subvideo(has_fracture=True)
     sample = builder.convert_subvideo_to_sample(sub)
     assistant = json.loads(sample["messages"][2]["content"])
-    assert set(assistant.keys()) == {"has_fracture", "fracture_between", "type", "location", "confidence"}
+    assert set(assistant.keys()) == {
+        "has_fracture",
+        "fracture_between",
+        "type",
+        "location",
+        "confidence",
+    }
     assert isinstance(assistant["confidence"], float)
     assert assistant["confidence"] == pytest.approx(1.0)
 
@@ -202,9 +214,7 @@ def test_build_split_samples_groups_by_source_video():
         "fold_0_train": {"video_0001"},
         "fold_0_val": {"video_0002"},
     }
-    split_samples = builder.build_split_samples(
-        [sub1, sub2], split_ids
-    )
+    split_samples = builder.build_split_samples([sub1, sub2], split_ids)
     assert len(split_samples["fold_0_train"]) == 1
     assert len(split_samples["fold_0_val"]) == 1
     assert split_samples["fold_0_train"][0]["source_video"] == "video_0001"
@@ -339,7 +349,9 @@ def test_build_all_outputs_test_artifacts_with_isolation(tmp_path):
     assert len(gt) == 1
     assert gt[0]["video_id"] == "video_test"
 
-    train_samples = json.loads((out_dir / "fold_0_train.json").read_text(encoding="utf-8"))
+    train_samples = json.loads(
+        (out_dir / "fold_0_train.json").read_text(encoding="utf-8")
+    )
     assert all(s["source_video"] != "video_test" for s in train_samples)
 
 
@@ -487,7 +499,9 @@ def test_time_unknown_anomaly_samples_keep_true_has_fracture(tmp_path):
 
     subs = []
     for vid in ["video_tu_001", "video_tu_002"]:
-        sub = _subvideo(vid, has_fracture=True, ftype="视频异常", source_type="视频异常")
+        sub = _subvideo(
+            vid, has_fracture=True, ftype="视频异常", source_type="视频异常"
+        )
         sub["fracture_between"] = None
         subs.append(sub)
 
@@ -605,7 +619,12 @@ def test_assistant_fracture_between_matches_actual_frame_mapping():
     assistant = json.loads(sample["messages"][2]["content"])
     assert assistant["fracture_between"] == [2, 3]
     mapping = sample["actual_frame_mapping"]
-    assert 0 <= assistant["fracture_between"][0] < assistant["fracture_between"][1] < len(mapping)
+    assert (
+        0
+        <= assistant["fracture_between"][0]
+        < assistant["fracture_between"][1]
+        < len(mapping)
+    )
     assert mapping[2]["original_frame"] < 125 <= mapping[3]["original_frame"]
 
 

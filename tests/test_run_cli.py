@@ -38,7 +38,9 @@ class TestRunCliArgs:
         assert args.video is None
         assert args.videos_dir is None
 
-    def test_contract_version_can_be_pinned(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_contract_version_can_be_pinned(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(
             sys,
             "argv",

@@ -22,7 +22,9 @@ class _FakeFrameMapper:
     def __init__(self, model_dir: str, processor: Any = None) -> None:
         self.model_dir = model_dir
 
-    def sample(self, video_path: str, start_time: float, end_time: float) -> list[FrameMapping]:
+    def sample(
+        self, video_path: str, start_time: float, end_time: float
+    ) -> list[FrameMapping]:
         return [FrameMapping(i, i, float(i)) for i in range(8)]
 
     def get_info(self):
@@ -40,6 +42,7 @@ def _stub_actual_frame_mapper(monkeypatch: pytest.MonkeyPatch):
 # ---------------------------------------------------------------------------
 # _parse_pred_time_range
 # ---------------------------------------------------------------------------
+
 
 def test_parse_pred_time_range_new_protocol_positive():
     payload = {"has_fracture": True, "fracture_between": [1, 2]}
@@ -59,44 +62,61 @@ def test_parse_pred_time_range_rejects_legacy_interval_fields():
 
 def test_parse_pred_time_range_rejects_boundary_sentinels():
     frames = [FrameMapping(i, i, float(i)) for i in range(3)]
-    assert _parse_pred_time_range(
-        {"has_fracture": True, "fracture_between": [0, 0]}, frames
-    ) is None
+    assert (
+        _parse_pred_time_range(
+            {"has_fracture": True, "fracture_between": [0, 0]}, frames
+        )
+        is None
+    )
 
 
 def test_parse_pred_time_range_rejects_invalid_fracture_between():
     """Invalid indices fall back to legacy fields or None."""
     frames = [FrameMapping(i, i, float(i)) for i in range(8)]
     # Out of bounds.
-    assert _parse_pred_time_range(
-        {"has_fracture": True, "fracture_between": [8, 9]}, frames,
-    ) is None
+    assert (
+        _parse_pred_time_range(
+            {"has_fracture": True, "fracture_between": [8, 9]},
+            frames,
+        )
+        is None
+    )
     # Wrong spacing (not adjacent and not sentinel).
-    assert _parse_pred_time_range(
-        {"has_fracture": True, "fracture_between": [1, 3]},
-        frames,
-    ) is None
+    assert (
+        _parse_pred_time_range(
+            {"has_fracture": True, "fracture_between": [1, 3]},
+            frames,
+        )
+        is None
+    )
     # Wrong length.
-    assert _parse_pred_time_range(
-        {"has_fracture": True, "fracture_between": [1]},
-        frames,
-    ) is None
+    assert (
+        _parse_pred_time_range(
+            {"has_fracture": True, "fracture_between": [1]},
+            frames,
+        )
+        is None
+    )
 
 
 def test_parse_pred_time_range_requires_actual_frames():
-    assert _parse_pred_time_range(
-        {"has_fracture": True, "fracture_between": [0, 1]}, None
-    ) is None
+    assert (
+        _parse_pred_time_range({"has_fracture": True, "fracture_between": [0, 1]}, None)
+        is None
+    )
 
 
 def test_parse_pred_time_range_rejects_non_boundary_zero_width():
     """A zero-width interval [k, k] is only accepted at the boundaries."""
     frames = [FrameMapping(i, i, float(i)) for i in range(5)]
     # Non-boundary zero-width must be rejected.
-    assert _parse_pred_time_range(
-        {"has_fracture": True, "fracture_between": [3, 3]},
-        frames,
-    ) is None
+    assert (
+        _parse_pred_time_range(
+            {"has_fracture": True, "fracture_between": [3, 3]},
+            frames,
+        )
+        is None
+    )
     # Adjacent frames remain valid.
     assert _parse_pred_time_range(
         {"has_fracture": True, "fracture_between": [3, 4]},
@@ -106,27 +126,37 @@ def test_parse_pred_time_range_rejects_non_boundary_zero_width():
 
 def test_parse_pred_time_range_rejects_missing_fracture_between():
     """New protocol with has_fracture=True but no fracture_between returns None."""
-    assert _parse_pred_time_range(
-        {"has_fracture": True},
-        [],
-    ) is None
-    assert _parse_pred_time_range(
-        {"has_fracture": True, "fracture_between": None},
-        [],
-    ) is None
+    assert (
+        _parse_pred_time_range(
+            {"has_fracture": True},
+            [],
+        )
+        is None
+    )
+    assert (
+        _parse_pred_time_range(
+            {"has_fracture": True, "fracture_between": None},
+            [],
+        )
+        is None
+    )
 
 
 def test_parse_pred_time_range_rejects_boolean_indices():
     payload = {"has_fracture": True, "fracture_between": [0, 1]}
-    assert _parse_pred_time_range(
-        {"has_fracture": True, "fracture_between": [False, 1]},
-        [FrameMapping(0, 0, 0.0), FrameMapping(1, 1, 1.0)],
-    ) is None
+    assert (
+        _parse_pred_time_range(
+            {"has_fracture": True, "fracture_between": [False, 1]},
+            [FrameMapping(0, 0, 0.0), FrameMapping(1, 1, 1.0)],
+        )
+        is None
+    )
 
 
 # ---------------------------------------------------------------------------
 # _parse_confidence
 # ---------------------------------------------------------------------------
+
 
 def test_parse_confidence_rejects_nan_and_inf(caplog: pytest.LogCaptureFixture):
     """NaN/inf confidence values trigger a warning and fall back to 0.5."""
@@ -137,7 +167,9 @@ def test_parse_confidence_rejects_nan_and_inf(caplog: pytest.LogCaptureFixture):
     assert sum("not finite" in rec.message for rec in caplog.records) == 3
 
 
-def test_parse_confidence_out_of_bounds_triggers_warning(caplog: pytest.LogCaptureFixture):
+def test_parse_confidence_out_of_bounds_triggers_warning(
+    caplog: pytest.LogCaptureFixture,
+):
     """Finite out-of-range confidence values are clipped with a warning."""
     with caplog.at_level("WARNING", logger="run_inference"):
         assert _parse_confidence({"confidence": 1.5}) == (1.0, "高")
@@ -159,7 +191,10 @@ def test_parse_confidence_four_level_mapping():
 
 def test_parse_confidence_new_protocol_priority():
     """New protocol ``confidence`` key is preferred over legacy fields."""
-    assert _parse_confidence({"confidence": 0.92, "confidence_score": 0.3}) == (0.92, "高")
+    assert _parse_confidence({"confidence": 0.92, "confidence_score": 0.3}) == (
+        0.92,
+        "高",
+    )
 
 
 def test_parse_confidence_string_fallback():
@@ -190,7 +225,10 @@ def test_parse_confidence_output_is_json_serializable():
 # main
 # ---------------------------------------------------------------------------
 
-def test_main_writes_jsonl_with_allow_nan_false(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+
+def test_main_writes_jsonl_with_allow_nan_false(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     import json as json_module
 
     captured_kwargs: dict[str, Any] = {}
@@ -212,13 +250,19 @@ def test_main_writes_jsonl_with_allow_nan_false(monkeypatch: pytest.MonkeyPatch,
         "clarity": None,
     }
 
-    monkeypatch.setattr(run_inference, "load_ground_truth", lambda path: {sample["video_name"]: sample})
-    monkeypatch.setattr(run_inference, "load_fold_samples", lambda fold, gt_map: [sample])
+    monkeypatch.setattr(
+        run_inference, "load_ground_truth", lambda path: {sample["video_name"]: sample}
+    )
+    monkeypatch.setattr(
+        run_inference, "load_fold_samples", lambda fold, gt_map: [sample]
+    )
     monkeypatch.setattr(run_inference, "load_model", lambda model_dir: (None, None))
     monkeypatch.setattr(
         run_inference,
         "run_single_inference",
-        lambda model, processor, video_path, prompt: '{"time": "10.0s", "type": "韧性断裂"}',
+        lambda model, processor, video_path, prompt: (
+            '{"time": "10.0s", "type": "韧性断裂"}'
+        ),
     )
 
     (tmp_path / "v001.mp4").write_text("fake", encoding="utf-8")
@@ -244,7 +288,11 @@ def test_main_writes_jsonl_with_allow_nan_false(monkeypatch: pytest.MonkeyPatch,
     run_inference.main()
     assert captured_kwargs["kwargs"].get("allow_nan") is False
     assert output_path.exists()
-    lines = [line for line in output_path.read_text(encoding="utf-8").strip().split("\n") if line]
+    lines = [
+        line
+        for line in output_path.read_text(encoding="utf-8").strip().split("\n")
+        if line
+    ]
     assert len(lines) == 1
     record = json.loads(lines[0])
     assert record["video_id"] == "v001"
@@ -254,7 +302,9 @@ def test_main_writes_jsonl_with_allow_nan_false(monkeypatch: pytest.MonkeyPatch,
     assert record["pred_location"] is None
 
 
-def test_main_new_protocol_records_has_fracture_and_location(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_main_new_protocol_records_has_fracture_and_location(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     sample = {
         "video_id": "v002",
         "video_name": "v002.mp4",
@@ -265,8 +315,12 @@ def test_main_new_protocol_records_has_fracture_and_location(monkeypatch: pytest
         "clarity": None,
     }
 
-    monkeypatch.setattr(run_inference, "load_ground_truth", lambda path: {sample["video_name"]: sample})
-    monkeypatch.setattr(run_inference, "load_fold_samples", lambda fold, gt_map: [sample])
+    monkeypatch.setattr(
+        run_inference, "load_ground_truth", lambda path: {sample["video_name"]: sample}
+    )
+    monkeypatch.setattr(
+        run_inference, "load_fold_samples", lambda fold, gt_map: [sample]
+    )
     monkeypatch.setattr(run_inference, "load_model", lambda model_dir: (None, None))
     monkeypatch.setattr(
         run_inference,
@@ -300,7 +354,11 @@ def test_main_new_protocol_records_has_fracture_and_location(monkeypatch: pytest
 
     run_inference.main()
     assert output_path.exists()
-    lines = [line for line in output_path.read_text(encoding="utf-8").strip().split("\n") if line]
+    lines = [
+        line
+        for line in output_path.read_text(encoding="utf-8").strip().split("\n")
+        if line
+    ]
     assert len(lines) == 1
     record = json.loads(lines[0])
     assert record["pred_has_fracture"] is True
@@ -309,7 +367,9 @@ def test_main_new_protocol_records_has_fracture_and_location(monkeypatch: pytest
     assert record["pred_time_range"] is not None
 
 
-def test_main_rejects_old_protocol_non_fracture_type(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_main_rejects_old_protocol_non_fracture_type(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     sample = {
         "video_id": "v003",
         "video_name": "v003.mp4",
@@ -320,13 +380,19 @@ def test_main_rejects_old_protocol_non_fracture_type(monkeypatch: pytest.MonkeyP
         "clarity": None,
     }
 
-    monkeypatch.setattr(run_inference, "load_ground_truth", lambda path: {sample["video_name"]: sample})
-    monkeypatch.setattr(run_inference, "load_fold_samples", lambda fold, gt_map: [sample])
+    monkeypatch.setattr(
+        run_inference, "load_ground_truth", lambda path: {sample["video_name"]: sample}
+    )
+    monkeypatch.setattr(
+        run_inference, "load_fold_samples", lambda fold, gt_map: [sample]
+    )
     monkeypatch.setattr(run_inference, "load_model", lambda model_dir: (None, None))
     monkeypatch.setattr(
         run_inference,
         "run_single_inference",
-        lambda model, processor, video_path, prompt: '{"time": "10.0s", "type": "未断裂"}',
+        lambda model, processor, video_path, prompt: (
+            '{"time": "10.0s", "type": "未断裂"}'
+        ),
     )
 
     (tmp_path / "v003.mp4").write_text("fake", encoding="utf-8")
@@ -351,7 +417,11 @@ def test_main_rejects_old_protocol_non_fracture_type(monkeypatch: pytest.MonkeyP
 
     run_inference.main()
     assert output_path.exists()
-    lines = [line for line in output_path.read_text(encoding="utf-8").strip().split("\n") if line]
+    lines = [
+        line
+        for line in output_path.read_text(encoding="utf-8").strip().split("\n")
+        if line
+    ]
     assert len(lines) == 1
     record = json.loads(lines[0])
     assert record["json_valid"] is False
@@ -359,7 +429,9 @@ def test_main_rejects_old_protocol_non_fracture_type(monkeypatch: pytest.MonkeyP
     assert record["pred_location"] is None
 
 
-def test_negative_result_records_actual_preprocessing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_negative_result_records_actual_preprocessing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     sample = {
         "video_id": "v004",
         "video_name": "v004.mp4",
@@ -370,8 +442,12 @@ def test_negative_result_records_actual_preprocessing(monkeypatch: pytest.Monkey
         "clarity": None,
     }
 
-    monkeypatch.setattr(run_inference, "load_ground_truth", lambda path: {sample["video_name"]: sample})
-    monkeypatch.setattr(run_inference, "load_fold_samples", lambda fold, gt_map: [sample])
+    monkeypatch.setattr(
+        run_inference, "load_ground_truth", lambda path: {sample["video_name"]: sample}
+    )
+    monkeypatch.setattr(
+        run_inference, "load_fold_samples", lambda fold, gt_map: [sample]
+    )
     monkeypatch.setattr(run_inference, "load_model", lambda model_dir: (None, None))
     monkeypatch.setattr(
         run_inference,
@@ -404,7 +480,11 @@ def test_negative_result_records_actual_preprocessing(monkeypatch: pytest.Monkey
 
     run_inference.main()
     assert output_path.exists()
-    lines = [line for line in output_path.read_text(encoding="utf-8").strip().split("\n") if line]
+    lines = [
+        line
+        for line in output_path.read_text(encoding="utf-8").strip().split("\n")
+        if line
+    ]
     assert len(lines) == 1
     record = json.loads(lines[0])
     assert record["pred_has_fracture"] is False
@@ -414,18 +494,28 @@ def test_negative_result_records_actual_preprocessing(monkeypatch: pytest.Monkey
 
 def test_parse_location_normalization():
     """Legal locations pass through; illegal values become None; negatives become N/A."""
-    assert _parse_location({"has_fracture": True, "location": "inside_gauge"}) == "inside_gauge"
-    assert _parse_location({"has_fracture": True, "location": "outside_gauge"}) == "outside_gauge"
+    assert (
+        _parse_location({"has_fracture": True, "location": "inside_gauge"})
+        == "inside_gauge"
+    )
+    assert (
+        _parse_location({"has_fracture": True, "location": "outside_gauge"})
+        == "outside_gauge"
+    )
     assert _parse_location({"has_fracture": True, "location": "N/A"}) == "N/A"
     assert _parse_location({"has_fracture": True, "location": "invalid"}) is None
     assert _parse_location({"has_fracture": True, "location": None}) is None
     assert _parse_location({"has_fracture": True, "location": ""}) is None
-    assert _parse_location({"has_fracture": False, "location": "outside_gauge"}) == "N/A"
+    assert (
+        _parse_location({"has_fracture": False, "location": "outside_gauge"}) == "N/A"
+    )
     assert _parse_location({"has_fracture": False, "location": None}) == "N/A"
     assert _parse_location(None) is None
 
 
-def test_main_new_protocol_negative_records_na_location(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_main_new_protocol_negative_records_na_location(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     """New-protocol negative sample normalizes pred_location to 'N/A'."""
     sample = {
         "video_id": "v005",
@@ -437,8 +527,12 @@ def test_main_new_protocol_negative_records_na_location(monkeypatch: pytest.Monk
         "clarity": None,
     }
 
-    monkeypatch.setattr(run_inference, "load_ground_truth", lambda path: {sample["video_name"]: sample})
-    monkeypatch.setattr(run_inference, "load_fold_samples", lambda fold, gt_map: [sample])
+    monkeypatch.setattr(
+        run_inference, "load_ground_truth", lambda path: {sample["video_name"]: sample}
+    )
+    monkeypatch.setattr(
+        run_inference, "load_fold_samples", lambda fold, gt_map: [sample]
+    )
     monkeypatch.setattr(run_inference, "load_model", lambda model_dir: (None, None))
     monkeypatch.setattr(
         run_inference,
@@ -471,7 +565,11 @@ def test_main_new_protocol_negative_records_na_location(monkeypatch: pytest.Monk
 
     run_inference.main()
     assert output_path.exists()
-    lines = [line for line in output_path.read_text(encoding="utf-8").strip().split("\n") if line]
+    lines = [
+        line
+        for line in output_path.read_text(encoding="utf-8").strip().split("\n")
+        if line
+    ]
     assert len(lines) == 1
     record = json.loads(lines[0])
     assert record["pred_has_fracture"] is False

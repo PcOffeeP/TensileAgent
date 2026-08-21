@@ -150,7 +150,9 @@ class ResultParser:
 
     @classmethod
     def _error(cls, code: str, message: str, field: str | None = None) -> ParseResult:
-        return ParseResult(ok=False, error=ParseError(code=code, message=message, field=field))
+        return ParseResult(
+            ok=False, error=ParseError(code=code, message=message, field=field)
+        )
 
     @classmethod
     def _map_pydantic_error(cls, exc: Exception) -> ParseResult:
@@ -163,7 +165,9 @@ class ResultParser:
         first = exc.errors()[0]
         loc = first.get("loc", ())
         ctx_error = first.get("ctx", {}).get("error")
-        message = str(ctx_error) if ctx_error is not None else first.get("msg", str(exc))
+        message = (
+            str(ctx_error) if ctx_error is not None else first.get("msg", str(exc))
+        )
         field = str(loc[0]) if loc else None
         error_type = first.get("type", "")
 
@@ -178,15 +182,21 @@ class ResultParser:
 
         # Model-level value errors: recover the field from the message prefix.
         if message.startswith("fracture_between"):
-            return cls._error(cls.ERROR_INVALID_INDEX, message, field="fracture_between")
+            return cls._error(
+                cls.ERROR_INVALID_INDEX, message, field="fracture_between"
+            )
         if message.startswith("confidence"):
             return cls._error(cls.ERROR_INVALID_CONFIDENCE, message, field="confidence")
         if message.startswith("location"):
-            return cls._error(cls.ERROR_INVALID_LOCATION_VALUE, message, field="location")
+            return cls._error(
+                cls.ERROR_INVALID_LOCATION_VALUE, message, field="location"
+            )
         if message.startswith("type"):
             return cls._error(cls.ERROR_INVALID_TYPE_VALUE, message, field="type")
         if message.startswith("has_fracture"):
-            return cls._error(cls.ERROR_INVALID_FIELD_TYPE, message, field="has_fracture")
+            return cls._error(
+                cls.ERROR_INVALID_FIELD_TYPE, message, field="has_fracture"
+            )
 
         return cls._error(cls.ERROR_INVALID_COMBINATION, message)
 

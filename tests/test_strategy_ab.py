@@ -17,7 +17,11 @@ from agent.strategy_ab_protocol import (
     derive_protocol_sets,
     verify_manifest_inputs,
 )
-from agent.strategy_ab_scoring import paired_bootstrap_delta, presence_correct, score_method
+from agent.strategy_ab_scoring import (
+    paired_bootstrap_delta,
+    presence_correct,
+    score_method,
+)
 
 
 def _round(
@@ -57,14 +61,10 @@ def test_fixed_scan_schedule_is_frozen_and_covers_by_call_six() -> None:
 
 
 def test_single_call_mapping_is_raw_and_special_case_abstains() -> None:
-    positive = map_single_call(
-        _round([0.0, 10.0], "发生断裂", mechanism="韧性断裂")
-    )
+    positive = map_single_call(_round([0.0, 10.0], "发生断裂", mechanism="韧性断裂"))
     assert positive["status"] == "fracture"
     assert positive["fracture_type"] == "韧性断裂"
-    special = map_single_call(
-        _round([0.0, 10.0], "未断裂", special="视频异常")
-    )
+    special = map_single_call(_round([0.0, 10.0], "未断裂", special="视频异常"))
     assert special["status"] == "unrecognized"
     assert special["special_case"] == "视频异常"
 
@@ -107,7 +107,9 @@ def test_fixed_scan_conflict_keeps_fracture_but_withholds_time() -> None:
     assert result["event_bounds_conflicted"] is True
 
 
-def test_coverage_negatives_do_not_become_event_boundaries_after_late_positive() -> None:
+def test_coverage_negatives_do_not_become_event_boundaries_after_late_positive() -> (
+    None
+):
     ranges = fixed_scan_ranges(32.0)
     rounds = [
         _round(ranges[0], "未断裂"),

@@ -30,13 +30,16 @@ def load_object(path: Path) -> dict[str, Any]:
 
 
 def is_ancestor(root: Path, commit: str) -> bool:
-    return subprocess.run(
-        ["git", "merge-base", "--is-ancestor", commit, "HEAD"],
-        cwd=root,
-        check=False,
-        capture_output=True,
-        text=True,
-    ).returncode == 0
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit, "HEAD"],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        ).returncode
+        == 0
+    )
 
 
 def validate(root: Path = ROOT, mvllm_root: Path | None = None) -> dict[str, Any]:
@@ -138,7 +141,9 @@ def validate(root: Path = ROOT, mvllm_root: Path | None = None) -> dict[str, Any
     performance = loaded.get("performance", {})
     if performance.get("policy") != expected_performance_policy:
         errors.append("performance snapshot policy mismatch")
-    if not isinstance(performance.get("metrics"), dict) or not performance.get("metrics"):
+    if not isinstance(performance.get("metrics"), dict) or not performance.get(
+        "metrics"
+    ):
         errors.append("performance snapshot metrics are missing")
 
     validation_path = root / "delivery/current/validation.json"

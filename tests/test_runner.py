@@ -27,7 +27,9 @@ class TestLoadConfig:
 
 
 class TestBuildVideoMeta:
-    def test_ffprobe_success(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_ffprobe_success(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         video_path = tmp_path / "test_video.mp4"
         video_path.write_text("fake video content", encoding="utf-8")
 
@@ -61,7 +63,8 @@ class TestBuildVideoMeta:
 
         monkeypatch.setattr("agent.sampling._which_ffprobe", _raise)
         monkeypatch.setattr(
-            "agent.sampling._probe_video", lambda path: (_ for _ in ()).throw(RuntimeError("probe failed"))
+            "agent.sampling._probe_video",
+            lambda path: (_ for _ in ()).throw(RuntimeError("probe failed")),
         )
 
         fake_cv2 = types.ModuleType("cv2")
@@ -94,7 +97,8 @@ class TestBuildVideoMeta:
 
         monkeypatch.setattr("agent.sampling._which_ffprobe", _raise)
         monkeypatch.setattr(
-            "agent.sampling._probe_video", lambda path: (_ for _ in ()).throw(RuntimeError("probe failed"))
+            "agent.sampling._probe_video",
+            lambda path: (_ for _ in ()).throw(RuntimeError("probe failed")),
         )
 
         fake_cv2 = types.ModuleType("cv2")
@@ -430,7 +434,9 @@ class TestRunOne:
         video_path.write_text("fake video content", encoding="utf-8")
 
         callback = MagicMock()
-        with patch("agent.runner.load_config", side_effect=RuntimeError("config broken")):
+        with patch(
+            "agent.runner.load_config", side_effect=RuntimeError("config broken")
+        ):
             result = runner.run_one(
                 video_path,
                 config_path="agent/config.yaml",
@@ -465,12 +471,20 @@ class TestRunBatch:
         mock_run_one.side_effect = [
             {
                 "ok": True,
-                "result": {"video_id": "v1", "status": "no_fracture", "confidence": 0.9},
+                "result": {
+                    "video_id": "v1",
+                    "status": "no_fracture",
+                    "confidence": 0.9,
+                },
                 "error": None,
             },
             {
                 "ok": True,
-                "result": {"video_id": "v2", "status": "no_fracture", "confidence": 0.85},
+                "result": {
+                    "video_id": "v2",
+                    "status": "no_fracture",
+                    "confidence": 0.85,
+                },
                 "error": None,
             },
         ]
@@ -527,7 +541,11 @@ class TestRunBatch:
                 }
             return {
                 "ok": True,
-                "result": {"video_id": video_id, "status": "no_fracture", "confidence": 0.9},
+                "result": {
+                    "video_id": video_id,
+                    "status": "no_fracture",
+                    "confidence": 0.9,
+                },
                 "error": None,
             }
 
@@ -586,7 +604,11 @@ class TestRunBatch:
                 }
             return {
                 "ok": True,
-                "result": {"video_id": video_id, "status": "no_fracture", "confidence": 0.9},
+                "result": {
+                    "video_id": video_id,
+                    "status": "no_fracture",
+                    "confidence": 0.9,
+                },
                 "error": None,
             }
 
@@ -638,7 +660,9 @@ class TestEventsJsonSerializable:
             events.append(event)
 
         def _fake_run() -> dict:
-            callback({"event_type": "video_started", "video_id": "sample", "duration": 8.0})
+            callback(
+                {"event_type": "video_started", "video_id": "sample", "duration": 8.0}
+            )
             callback(
                 {
                     "event_type": "round_started",

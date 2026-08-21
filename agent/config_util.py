@@ -25,6 +25,7 @@ _SESSION_OVERRIDES: dict[str, Any] = {}
 
 # ── .env file helpers ──
 
+
 def _load_dotenv() -> dict[str, str]:
     """Load key=value pairs from agent/.env."""
     if not DOT_ENV_PATH.exists():
@@ -63,6 +64,7 @@ def _write_dotenv(key: str, value: str) -> None:
 
 
 # ── Public API ──
+
 
 def get_api_key() -> str | None:
     """Get API key from environment variable LLM_API_KEY or agent/.env.
@@ -123,12 +125,16 @@ def load_config() -> dict[str, Any]:
     return config
 
 
-def set_session_overrides(*, backend: str | None = None, model: str | None = None) -> None:
+def set_session_overrides(
+    *, backend: str | None = None, model: str | None = None
+) -> None:
     """Set process-local Web/CLI overrides without touching persistent files."""
     _SESSION_OVERRIDES.clear()
     if backend is None and model is None:
         return
-    effective_backend = backend or load_config().get("agent", {}).get("backend", "local")
+    effective_backend = backend or load_config().get("agent", {}).get(
+        "backend", "local"
+    )
     agent: dict[str, Any] = {"backend": effective_backend}
     if model is not None:
         agent[effective_backend] = {"model": model}
@@ -211,7 +217,9 @@ def save_model(model: str) -> None:
 def _write_local_config(config: dict[str, Any]) -> None:
     LOCAL_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(LOCAL_CONFIG_PATH, "w", encoding="utf-8") as f:
-        yaml.safe_dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        yaml.safe_dump(
+            config, f, default_flow_style=False, allow_unicode=True, sort_keys=False
+        )
 
 
 def save_remote_model(model: str, activate: bool = False) -> None:
@@ -280,22 +288,50 @@ def list_local_models(base_url: str = "http://localhost:11434/v1") -> dict[str, 
         for item in response.json().get("models", []):
             if not isinstance(item, dict) or not item.get("name"):
                 continue
-            models.append({
-                "id": item["name"],
-                "digest": item.get("digest"),
-                "size": item.get("size"),
-                "modified_at": item.get("modified_at"),
-            })
-        return {"ok": True, "models": sorted(models, key=lambda item: item["id"]), "error_kind": None}
+            models.append(
+                {
+                    "id": item["name"],
+                    "digest": item.get("digest"),
+                    "size": item.get("size"),
+                    "modified_at": item.get("modified_at"),
+                }
+            )
+        return {
+            "ok": True,
+            "models": sorted(models, key=lambda item: item["id"]),
+            "error_kind": None,
+        }
     except requests.exceptions.ConnectionError:
-        return {"ok": False, "models": [], "error_kind": "service_unavailable", "warning": "Ollama 未启动，请运行 ollama serve"}
+        return {
+            "ok": False,
+            "models": [],
+            "error_kind": "service_unavailable",
+            "warning": "Ollama 未启动，请运行 ollama serve",
+        }
     except requests.exceptions.Timeout:
-        return {"ok": False, "models": [], "error_kind": "timeout", "warning": "Ollama 响应超时"}
-    except (requests.exceptions.RequestException, AttributeError, ValueError, TypeError) as exc:
-        return {"ok": False, "models": [], "error_kind": "invalid_response", "warning": str(exc)}
+        return {
+            "ok": False,
+            "models": [],
+            "error_kind": "timeout",
+            "warning": "Ollama 响应超时",
+        }
+    except (
+        requests.exceptions.RequestException,
+        AttributeError,
+        ValueError,
+        TypeError,
+    ) as exc:
+        return {
+            "ok": False,
+            "models": [],
+            "error_kind": "invalid_response",
+            "warning": str(exc),
+        }
 
 
-def get_local_model_digest(model: str, base_url: str = "http://localhost:11434/v1") -> str | None:
+def get_local_model_digest(
+    model: str, base_url: str = "http://localhost:11434/v1"
+) -> str | None:
     result = list_local_models(base_url)
     for item in result.get("models", []):
         if item.get("id") == model:
@@ -334,7 +370,11 @@ def list_available_models(
         resp.raise_for_status()
         try:
             data = resp.json()
-            models = [m["id"] for m in data.get("data", []) if isinstance(m, dict) and "id" in m]
+            models = [
+                m["id"]
+                for m in data.get("data", [])
+                if isinstance(m, dict) and "id" in m
+            ]
         except (ValueError, KeyError, TypeError) as e:
             return {
                 "ok": False,
