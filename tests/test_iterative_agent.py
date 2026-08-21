@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import json
+import logging
 
 import pytest
 
@@ -2703,3 +2704,46 @@ def test_persist_summary_oserror_isolated(monkeypatch, tmp_path: Path):
     assert len(round_files) == 2
     # Summary must not exist because its write failed.
     assert not (diag_dir / "v921_diagnostics_summary.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# Event emission isolation
+# ---------------------------------------------------------------------------
+def test_emit_callback_error_is_isolated_and_logs_warning(tmp_path: Path, caplog):
+    """A failing event_callback must not propagate and should warn."""
+
+    def broken_callback(event: dict[str, Any]) -> None:
+        raise RuntimeError("ui sink broken")
+
+    agent = IterativeAgent(
+        llm_client=StaticLLM([]),
+        video_meta={"video_id": "v_emit_1", "duration": 10.0, "video_path": "v.mp4"},
+        config={},
+        event_callback=broken_callback,
+        work_dir=str(tmp_path),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="agent.iterative_agent"):
+        agent._emit("test_event", payload="value")
+
+    assert "Failed to emit event test_event" in caplog.text
+    assert "ui sink broken" in caplog.text
+
+
+def test_emit_callback_keyboard_interrupt_is_not_swallowed(tmp_path: Path):
+    """KeyboardInterrupt must not be captured by _emit isolation."""
+
+    def interrupting_callback(event: dict[str, Any]) -> None:
+        raise KeyboardInterrupt()
+
+    agent = IterativeAgent(
+        llm_client=StaticLLM([]),
+        video_meta={"video_id": "v_emit_2", "duration": 10.0, "video_path": "v.mp4"},
+        config={},
+        event_callback=interrupting_callback,
+        work_dir=str(tmp_path),
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        agent._emit("test_event")
+

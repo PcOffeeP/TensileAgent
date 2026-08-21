@@ -41,19 +41,27 @@ def _write_jsonl(
 
     ``RunnerResult`` objects are serialized via ``.model_dump()``.
     """
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        if isinstance(results, list):
-            for item in results:
-                if hasattr(item, "model_dump"):
-                    f.write(json.dumps(item.model_dump()) + "\n")
-                else:
-                    f.write(json.dumps(item) + "\n")
-        else:
-            if hasattr(results, "model_dump"):
-                f.write(json.dumps(results.model_dump()) + "\n")
+    output_path = Path(output_path)
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            if isinstance(results, list):
+                for item in results:
+                    if hasattr(item, "model_dump"):
+                        f.write(json.dumps(item.model_dump()) + "\n")
+                    else:
+                        f.write(json.dumps(item) + "\n")
             else:
-                f.write(json.dumps(results) + "\n")
+                if hasattr(results, "model_dump"):
+                    f.write(json.dumps(results.model_dump()) + "\n")
+                else:
+                    f.write(json.dumps(results) + "\n")
+    except (OSError, ValueError, TypeError) as exc:
+        print(
+            f"Failed to write results to {output_path}: {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def _parse_args() -> argparse.Namespace:

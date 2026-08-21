@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 
+from pathlib import Path
+
 import pytest
 
 from agent import run as run_cli
@@ -65,3 +67,35 @@ class TestRunCliArgs:
             run_cli._parse_args()
         assert cm.value.code == 2
         assert "--video" in capsys.readouterr().err
+
+
+def test_write_jsonl_exits_with_error_on_write_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def failing_mkdir(*args, **kwargs):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(Path, "mkdir", failing_mkdir)
+
+    output_path = tmp_path / "missing" / "results.jsonl"
+    with pytest.raises(SystemExit) as cm:
+        run_cli._write_jsonl({"ok": True}, output_path)
+
+    assert cm.value.code == 1
+    err = capsys.readouterr().err
+    assert "Failed to write results" in err
+    assert "permission denied" in err
+
+
+def test_write_jsonl_exits_with_error_on_serialization_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output_path = tmp_path / "results.jsonl"
+
+    with pytest.raises(SystemExit) as cm:
+        run_cli._write_jsonl({"value": set([1, 2, 3])}, output_path)
+
+    assert cm.value.code == 1
+    err = capsys.readouterr().err
+    assert "Failed to write results" in err
+

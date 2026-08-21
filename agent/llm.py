@@ -17,8 +17,9 @@ from types import SimpleNamespace
 
 from agent.config_util import get_api_key as _get_api_key
 from agent.config_util import get_local_model_digest, list_local_models
+from agent.inference import _is_retryable_error
 from agent.llm_trace import TransportTraceRecorder
-from typing import Any
+from typing import Any, Callable
 
 try:
     from openai import OpenAI
@@ -27,6 +28,36 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_MAX_RETRIES = 2
+DEFAULT_RETRY_BACKOFF = 2.0
+
+
+def _call_with_retry(
+    fn: Callable[[], Any],
+    *,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff: float = DEFAULT_RETRY_BACKOFF,
+) -> Any:
+    """Call ``fn`` with finite retries and exponential backoff."""
+    last_error: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except Exception as exc:
+            last_error = exc
+            if attempt >= max_retries or not _is_retryable_error(exc):
+                raise
+            sleep_seconds = backoff**attempt
+            logger.warning(
+                "Decision LLM transport retryable error on attempt %d: %s. "
+                "Retrying in %.1fs",
+                attempt + 1,
+                exc,
+                sleep_seconds,
+            )
+            time.sleep(sleep_seconds)
+    raise last_error  # type: ignore[misc]
 
 
 def _record_trace(recorder: TransportTraceRecorder | None, **kwargs: Any) -> None:
@@ -349,7 +380,11 @@ class RemoteAPIClient(BaseAgentLLM):
             kwargs["max_tokens"] = max_tokens
         started_at = time.monotonic()
         try:
-            response = self.client.chat.completions.create(**kwargs)
+            response = _call_with_retry(
+                lambda: self.client.chat.completions.create(**kwargs),
+                max_retries=DEFAULT_MAX_RETRIES,
+                backoff=DEFAULT_RETRY_BACKOFF,
+            )
         except Exception as exc:
             _record_trace(
                 self._trace_recorder,
@@ -417,7 +452,11 @@ class LocalClient(BaseAgentLLM):
         kwargs["reasoning_effort"] = self._reasoning_effort
         started_at = time.monotonic()
         try:
-            response = self.client.chat.completions.create(**kwargs)
+            response = _call_with_retry(
+                lambda: self.client.chat.completions.create(**kwargs),
+                max_retries=DEFAULT_MAX_RETRIES,
+                backoff=DEFAULT_RETRY_BACKOFF,
+            )
         except Exception as exc:
             _record_trace(
                 self._trace_recorder,

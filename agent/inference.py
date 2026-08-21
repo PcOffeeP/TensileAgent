@@ -697,11 +697,18 @@ class LlamaFactoryInferenceClient:
     ) -> EvidenceInferenceResult:
         """Describe visible changes without receiving the four-field prediction."""
         video_path, manifest = _resolve_video_input(video_input)
-        if not os.path.exists(video_path):
-            return EvidenceInferenceResult(ok=False, error="inference video not found")
-        if not _is_mp4_file(video_path):
-            return EvidenceInferenceResult(ok=False, error="invalid or non-MP4 video")
-        data_url = _encode_video_to_data_url(video_path)
+        try:
+            if not os.path.exists(video_path):
+                return EvidenceInferenceResult(
+                    ok=False, error="inference video not found"
+                )
+            if not _is_mp4_file(video_path):
+                return EvidenceInferenceResult(
+                    ok=False, error="invalid or non-MP4 video"
+                )
+            data_url = _encode_video_to_data_url(video_path)
+        except OSError as exc:
+            return EvidenceInferenceResult(ok=False, error=str(exc))
         kwargs: dict[str, Any] = {
             "model": self.model,
             "messages": [

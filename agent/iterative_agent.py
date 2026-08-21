@@ -150,7 +150,10 @@ class IterativeAgent:
             "video_id": self.video_meta.get("video_id", "unknown"),
             **payload,
         }
-        self.event_callback(event)
+        try:
+            self.event_callback(event)
+        except Exception as exc:
+            logger.warning("Failed to emit event %s: %s", event_type, exc)
 
     @staticmethod
     def _to_json_value(value: Any) -> Any:

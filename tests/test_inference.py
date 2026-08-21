@@ -304,6 +304,42 @@ def test_evidence_inference_requires_and_returns_actual_frame_metadata(tmp_path:
     assert len(result.preprocessing["frames"]) == 8
 
 
+def test_infer_evidence_isolates_video_encoding_errors(tmp_path: Path):
+    """A failing read/encode during evidence must degrade to ok=False."""
+    video = tmp_path / "clip.mp4"
+    _write_fake_mp4(video)
+
+    with patch(
+        "agent.inference._encode_video_to_data_url",
+        side_effect=OSError("disk read failed"),
+    ):
+        result = LlamaFactoryInferenceClient(model="minicpm-test").infer_evidence(
+            str(video)
+        )
+
+    assert result.ok is False
+    assert result.error is not None
+    assert "disk read failed" in result.error
+
+
+def test_infer_evidence_isolates_mp4_validation_errors(tmp_path: Path):
+    """A failing magic-check during evidence must degrade to ok=False."""
+    video = tmp_path / "clip.mp4"
+    _write_fake_mp4(video)
+
+    with patch(
+        "agent.inference._is_mp4_file",
+        side_effect=OSError("permission denied"),
+    ):
+        result = LlamaFactoryInferenceClient(model="minicpm-test").infer_evidence(
+            str(video)
+        )
+
+    assert result.ok is False
+    assert result.error is not None
+    assert "permission denied" in result.error
+
+
 def test_llama_factory_inference_client_clip_build_result_sends_manifest(
     tmp_path: Path,
 ):

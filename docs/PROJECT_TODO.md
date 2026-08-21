@@ -30,18 +30,6 @@
 - **待决定或后续动作**：补充典型场景、异常路径和回归用例的验证机制，明确完成标准。
 - **记录版本**：`c2144117`（工作区存在未提交变更）
 
-### 核心功能主链路失败兜底逻辑核查
-
-- **关联主题**：核心功能主链路 → 外部工具调用、视频读取、模型推理、LLM 调用、文件 I/O 等关键步骤的错误处理与 fallback 策略
-- **开发者期望**：核心功能主链路的关键步骤（如外部工具调用、视频读取、模型推理、LLM 调用、文件 I/O 等）在可能失败时具有明确的失败兜底逻辑，而不是直接崩溃或静默失败。
-- **当前实现**：仅在 runner 初始化视频源元数据时确认存在 FFprobe 失败回退 CV2 的兜底逻辑：`build_video_meta()` 先尝试 ffprobe，ffprobe 不可用或抛错时回退到 cv2，cv2 也失败时抛出 `RuntimeError` 并附带诊断信息；相关测试覆盖 ffprobe 成功、ffprobe 失败回退 cv2、两者均失败三种路径。项目其余核心链路步骤的兜底情况尚未系统核查。
-- **存在差异**：runner 视频元数据装配的兜底机制已确认，但其他核心主链路步骤是否均具备类似 fallback 或明确的错误处理策略尚不明确，可能存在缺少兜底导致直接崩溃或静默失败的风险。
-- **代码依据**：
-  - `agent/runner.py:63-133` `build_video_meta()` 中 ffprobe 失败回退 cv2、cv2 失败抛出 `RuntimeError` 的兜底实现
-  - `tests/test_runner.py:30-113` 视频元数据装配兜底路径的测试覆盖
-- **待决定或后续动作**：逐段审查核心主链路（外部工具调用、视频解码/读取、模型/LLM 推理、文件 I/O、网络请求等），识别可能出错且缺少兜底的步骤，逐一补齐合理的 fallback 或明确的错误处理策略，并补充对应测试。
-- **记录版本**：`2ba6151`（工作区存在未提交变更）
-
 ## 待确认
 
 无。
@@ -79,3 +67,29 @@
   - 相关测试已适配新签名并移除失效用例
 - **待决定或后续动作**：已完成。无需后续动作。
 - **记录版本**：`94174d5`（工作区存在未提交变更）
+
+### 核心功能主链路失败兜底逻辑核查
+
+- **关联主题**：核心功能主链路 → CLI/web → `run_one` → 意图识别 → 配置/视频元数据 → 客户端创建+preflight → 决策循环 → finalize → 结果输出
+- **开发者期望**：核心功能主链路的关键步骤（外部工具调用、视频读取、模型推理、LLM 调用、文件 I/O 等）在失败时应具有明确的兜底逻辑，而不是直接崩溃或静默失败。
+- **当前实现**：逐段审查后主链路整体兜底良好，无 ❌ 级直接崩溃或静默吞错问题；发现 4 个 ⚠️ 缺口，已全部修复并通过 reviewer 两轮审查，全量 548 测试通过。
+  1. `agent/inference.py` `infer_evidence`：将视频校验、读取、编码纳入异常捕获，失败时返回 `ok=False` 的降级信封，避免可选证据步骤异常拖垮整轮；
+  2. `agent/llm.py`：决策 LLM 的 `chat_with_tools` 引入 `_call_with_retry`（max_retries=2、指数退避 1s/2s、可重试错误分类复用 `agent.inference._is_retryable_error` 单一来源），对 5xx/429/连接类瞬断自动重试，4xx 鉴权类错误不重试；
+  3. `agent/iterative_agent.py` `_emit`：event_callback 异常被隔离降级为 warning，不吞掉 `KeyboardInterrupt`/`SystemExit`；
+  4. `agent/run.py` `_write_jsonl`：写失败时 stderr 明确报错并受控非零退出（仅 CLI 路径，`web_api` 不经过该逻辑）。
+  新增 13 个测试覆盖上述修复：evidence 异常隔离 2 个、LLM 重试分类 7 个、事件回调隔离 2 个、JSONL 写失败 2 个；全量 548 passed。
+- **存在差异**：无。已识别的 ⚠️ 缺口均已修复并回归验证。
+- **代码依据**：
+  - `agent/inference.py` `infer_evidence` 视频读取/编码异常捕获与降级信封
+  - `agent/llm.py` `chat_with_tools`、`_call_with_retry` 与重试错误分类
+  - `agent/iterative_agent.py` `_emit` 事件回调异常隔离
+  - `agent/run.py` `_write_jsonl` 写失败报错与受控退出
+  - `tests/test_inference.py` evidence 异常隔离测试
+  - `tests/test_llm.py` LLM 重试分类测试
+  - `tests/test_iterative_agent.py` 事件回调隔离测试
+  - `tests/test_run_cli.py` JSONL 写失败测试
+- **待决定或后续动作**：本次兜底核查已完成。审查中另发现 3 项非兜底缺口事项，本次未处理，记录供后续参考：
+  1. `parse_user_intent`（`agent/interaction.py:340` 附近）内部使用默认 `load_config()`，忽略 `--config` 传入的自定义配置路径；
+  2. 决策 LLM 响应无 `choices` 时 `response.choices[0]` 越界，错误被归类为 `stage=internal` 而非 `decision_backend` 语义；
+  3. runtime 目录创建失败（`agent/run.py:24-26` 附近）在 `run` 开始前直接抛异常，无受控信封。
+- **记录版本**：`9022b1e`（工作区存在未提交变更）

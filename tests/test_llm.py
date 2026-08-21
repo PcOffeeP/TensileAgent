@@ -225,6 +225,183 @@ def test_remote_client_passes_max_tokens():
         )
 
 
+def test_remote_client_retries_on_retryable_error_then_succeeds(monkeypatch):
+    monkeypatch.setattr("agent.llm.time.sleep", lambda _s: None)
+    with patch("agent.llm.OpenAI") as mock_openai:
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        class RetryableError(Exception):
+            status_code = 500
+
+        success = make_tool_response("sample_and_infer", {"sample_range": [0, 1]})
+        mock_client.chat.completions.create.side_effect = [
+            RetryableError("server boom"),
+            success,
+        ]
+        client = RemoteAPIClient(
+            model="qwen-test",
+            api_key="sk-test",
+            base_url="https://example.com/v1",
+            provider="test",
+        )
+        response = client.chat_with_tools(
+            messages=[{"role": "user", "content": "hi"}],
+            tools=[{"type": "function", "function": {"name": "noop"}}],
+        )
+        assert response is success
+        assert mock_client.chat.completions.create.call_count == 2
+
+
+def test_remote_client_retries_exhausted_raises_last_error(monkeypatch):
+    monkeypatch.setattr("agent.llm.time.sleep", lambda _s: None)
+    with patch("agent.llm.OpenAI") as mock_openai:
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        class RetryableError(Exception):
+            status_code = 503
+
+        mock_client.chat.completions.create.side_effect = [
+            RetryableError("first"),
+            RetryableError("second"),
+            RetryableError("third"),
+        ]
+        client = RemoteAPIClient(
+            model="qwen-test",
+            api_key="sk-test",
+            base_url="https://example.com/v1",
+            provider="test",
+        )
+        with pytest.raises(RetryableError, match="third"):
+            client.chat_with_tools(
+                messages=[{"role": "user", "content": "hi"}],
+                tools=[{"type": "function", "function": {"name": "noop"}}],
+            )
+        assert mock_client.chat.completions.create.call_count == 3
+
+
+def test_remote_client_does_not_retry_non_retryable_error(monkeypatch):
+    monkeypatch.setattr("agent.llm.time.sleep", lambda _s: None)
+    with patch("agent.llm.OpenAI") as mock_openai:
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        class AuthError(Exception):
+            status_code = 401
+
+        mock_client.chat.completions.create.side_effect = AuthError("no permission")
+        client = RemoteAPIClient(
+            model="qwen-test",
+            api_key="sk-test",
+            base_url="https://example.com/v1",
+            provider="test",
+        )
+        with pytest.raises(AuthError, match="no permission"):
+            client.chat_with_tools(
+                messages=[{"role": "user", "content": "hi"}],
+                tools=[{"type": "function", "function": {"name": "noop"}}],
+            )
+        assert mock_client.chat.completions.create.call_count == 1
+
+
+def test_local_client_retries_on_retryable_error_then_succeeds(monkeypatch):
+    monkeypatch.setattr("agent.llm.time.sleep", lambda _s: None)
+    with patch("agent.llm.OpenAI") as mock_openai:
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        class RetryableError(Exception):
+            status_code = 500
+
+        success = make_tool_response("sample_and_infer", {"sample_range": [0, 1]})
+        mock_client.chat.completions.create.side_effect = [
+            RetryableError("server boom"),
+            success,
+        ]
+        client = LocalClient(model="qwen-test")
+        response = client.chat_with_tools(
+            messages=[{"role": "user", "content": "hi"}],
+            tools=[{"type": "function", "function": {"name": "noop"}}],
+        )
+        assert response is success
+        assert mock_client.chat.completions.create.call_count == 2
+
+
+def test_remote_client_retries_on_429_then_succeeds(monkeypatch):
+    monkeypatch.setattr("agent.llm.time.sleep", lambda _s: None)
+    with patch("agent.llm.OpenAI") as mock_openai:
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        class RateLimitError(Exception):
+            status_code = 429
+
+        success = make_tool_response("sample_and_infer", {"sample_range": [0, 1]})
+        mock_client.chat.completions.create.side_effect = [
+            RateLimitError("rate limited"),
+            success,
+        ]
+        client = RemoteAPIClient(
+            model="qwen-test",
+            api_key="sk-test",
+            base_url="https://example.com/v1",
+            provider="test",
+        )
+        response = client.chat_with_tools(
+            messages=[{"role": "user", "content": "hi"}],
+            tools=[{"type": "function", "function": {"name": "noop"}}],
+        )
+        assert response is success
+        assert mock_client.chat.completions.create.call_count == 2
+
+
+def test_remote_client_retries_on_name_matched_network_error_then_succeeds(
+    monkeypatch,
+):
+    monkeypatch.setattr("agent.llm.time.sleep", lambda _s: None)
+    with patch("agent.llm.OpenAI") as mock_openai:
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        success = make_tool_response("sample_and_infer", {"sample_range": [0, 1]})
+        mock_client.chat.completions.create.side_effect = [
+            ConnectionError("connection reset"),
+            success,
+        ]
+        client = RemoteAPIClient(
+            model="qwen-test",
+            api_key="sk-test",
+            base_url="https://example.com/v1",
+            provider="test",
+        )
+        response = client.chat_with_tools(
+            messages=[{"role": "user", "content": "hi"}],
+            tools=[{"type": "function", "function": {"name": "noop"}}],
+        )
+        assert response is success
+        assert mock_client.chat.completions.create.call_count == 2
+
+
+def test_local_client_does_not_retry_non_retryable_4xx_error(monkeypatch):
+    monkeypatch.setattr("agent.llm.time.sleep", lambda _s: None)
+    with patch("agent.llm.OpenAI") as mock_openai:
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        class AuthError(Exception):
+            status_code = 401
+
+        mock_client.chat.completions.create.side_effect = AuthError("no permission")
+        client = LocalClient(model="qwen-test")
+        with pytest.raises(AuthError, match="no permission"):
+            client.chat_with_tools(
+                messages=[{"role": "user", "content": "hi"}],
+                tools=[{"type": "function", "function": {"name": "noop"}}],
+            )
+        assert mock_client.chat.completions.create.call_count == 1
+
+
 def _planner_tool(response: Any) -> tuple[str, dict[str, Any]]:
     call = response.choices[0].message.tool_calls[0]
     return call.function.name, json.loads(call.function.arguments)
