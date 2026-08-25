@@ -1,5 +1,6 @@
 agent:
   backend: local
+  llm_timeout_seconds: 300
   local:
     base_url: http://localhost:11434/v1
     model: tensile-qwen35:9b

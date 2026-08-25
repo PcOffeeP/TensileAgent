@@ -350,6 +350,7 @@ class RemoteAPIClient(BaseAgentLLM):
         api_key: str,
         base_url: str,
         provider: str = "custom",
+        timeout: float = 300.0,
         trace_recorder: TransportTraceRecorder | None = None,
     ) -> None:
         self._model = model
@@ -360,7 +361,9 @@ class RemoteAPIClient(BaseAgentLLM):
                 "RemoteAPIClient requires the 'openai' package. "
                 "Install it or set INFERENCE_MOCK=1 for testing."
             )
-        self.client = OpenAI(api_key=api_key, base_url=base_url, max_retries=0)
+        self.client = OpenAI(
+            api_key=api_key, base_url=base_url, max_retries=0, timeout=timeout
+        )
 
     def chat_with_tools(
         self,
@@ -420,6 +423,7 @@ class LocalClient(BaseAgentLLM):
         base_url: str = "http://localhost:11434/v1",
         provider: str = "ollama",
         reasoning_effort: str = "none",
+        timeout: float = 300.0,
         trace_recorder: TransportTraceRecorder | None = None,
     ) -> None:
         self._model = model
@@ -431,7 +435,9 @@ class LocalClient(BaseAgentLLM):
                 "LocalClient requires the 'openai' package. "
                 "Install it or set INFERENCE_MOCK=1 for testing."
             )
-        self.client = OpenAI(api_key="EMPTY", base_url=base_url, max_retries=0)
+        self.client = OpenAI(
+            api_key="EMPTY", base_url=base_url, max_retries=0, timeout=timeout
+        )
 
     def chat_with_tools(
         self,
@@ -534,6 +540,8 @@ class AgentLLMFactory:
                 },
             )
 
+        llm_timeout = float(agent_cfg.get("llm_timeout_seconds", 300.0))
+
         if backend == "remote":
             remote_cfg = agent_cfg.get("remote", {})
             api_key = remote_cfg.get("api_key") or _get_api_key()
@@ -550,6 +558,7 @@ class AgentLLMFactory:
                 api_key=api_key,
                 base_url=base_url,
                 provider=remote_cfg.get("provider", "custom"),
+                timeout=llm_timeout,
                 trace_recorder=trace_recorder,
             )
 
@@ -581,6 +590,7 @@ class AgentLLMFactory:
                 base_url=local_cfg.get("base_url", "http://localhost:11434/v1"),
                 provider=local_cfg.get("provider", "ollama"),
                 reasoning_effort=local_cfg.get("reasoning_effort", "none"),
+                timeout=llm_timeout,
                 trace_recorder=trace_recorder,
             )
 

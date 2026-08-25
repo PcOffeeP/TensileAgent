@@ -99,3 +99,20 @@ def test_write_jsonl_exits_with_error_on_serialization_failure(
     err = capsys.readouterr().err
     assert "Failed to write results" in err
 
+
+def test_make_event_writer_exits_on_mkdir_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def failing_mkdir(*args, **kwargs):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(Path, "mkdir", failing_mkdir)
+
+    events_dir = tmp_path / "data" / "08_runtime" / "events"
+    with pytest.raises(SystemExit) as cm:
+        run_cli._make_event_writer("20240101_000000", events_dir)
+
+    assert cm.value.code == 1
+    err = capsys.readouterr().err
+    assert "Failed to create events directory" in err
+    assert "permission denied" in err

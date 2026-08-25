@@ -8,12 +8,14 @@
 
 - **关联主题**：用户输入 → `parse_user_intent`（`agent/interaction.py:336-340`）→ `chat_with_tools` → LLM/工具后端
 - **开发者期望**：意图识别模型调用应具备可控的超时机制，避免后端 hang 住时长时间阻塞主链路；调用开销应尽量小，不应在每次请求中重复执行不必要的初始化与健康检查。
-- **当前实现**：`agent/interaction.py:336-340` 调用 `chat_with_tools` 时未传入 `timeout` 参数，端点 hang 住可能导致调用长时间阻塞。同时每次调用都会重复执行 `load_config` 以及 local 后端（Ollama）健康检查，实测增加约 3 秒开销。
-- **存在差异**：当前实现无超时保护且存在重复初始化/健康检查导致的性能损耗，不符合“可控、低延迟”的预期。
+- **当前实现**：`agent/llm.py` 的 `RemoteAPIClient`/`LocalClient` 构造 `OpenAI(...)` 时已通过 `timeout` 参数传入配置化的 `agent.llm_timeout_seconds`（默认 300 秒），意图识别与决策链路共享同一超时；端点 hang 住时由 OpenAI 客户端抛出 `APITimeoutError`，`_is_retryable_error` 将其归类为可重试错误，`_call_with_retry` 会进行有限重试。每次调用仍会重复执行 `load_config` 以及 local 后端（Ollama）健康检查，实测增加约 3 秒开销。
+- **存在差异**：超时保护已落地；但重复初始化/健康检查导致的性能损耗仍未解决，不符合“可控、低延迟”的预期。
 - **代码依据**：
-  - `agent/interaction.py:336-340` `chat_with_tools` 调用无 `timeout`
+  - `agent/llm.py` `RemoteAPIClient`/`LocalClient` 构造时传入 `timeout`
+  - `agent/config.yaml` 新增 `agent.llm_timeout_seconds`
+  - `agent/inference.py:_is_retryable_error` 已包含 `APITimeoutError`/`TimeoutError`
   - `agent/interaction.py` 每次调用重复 `load_config` 与 local 后端健康检查
-- **待决定或后续动作**：本次改造明确将超时机制列为开放问题，暂不实现。后续需立项跟踪：引入有限 timeout（如配置化 `intent_timeout_seconds`），并考虑缓存/复用配置加载与健康检查结果，避免每次意图识别调用重复开销。
+- **待决定或后续动作**：考虑缓存/复用配置加载与健康检查结果，避免每次意图识别调用重复开销。
 - **记录版本**：本次改造完成时的描述性状态（工作区存在未提交变更）
 
 ### 决策模型（心智模型）Prompt
@@ -35,6 +37,31 @@
 无。
 
 ## 已解决
+
+### 决策链路健壮性修复（超时、空 choices、目录创建）
+
+- **关联主题**：LLM 后端 → 决策循环 → CLI runtime 目录初始化
+- **开发者期望**：
+  1. LLM 调用应具备可控超时，避免端点 hang 住导致调用长时间阻塞；
+  2. 决策模型返回空 `choices` 时不应因 `IndexError` 中止整轮，而应作为可重试的决策后端错误受控返回；
+  3. runtime 事件目录创建失败时不应抛原始异常，而应受控非零退出。
+- **当前实现**：
+  1. `agent/llm.py` 的 `RemoteAPIClient`/`LocalClient` 构造 `OpenAI(..., max_retries=0)` 时新增 `timeout` 参数，默认值来自 `agent.config.yaml` 的 `agent.llm_timeout_seconds`（300 秒），`AgentLLMFactory.create` 从配置读取并传入；`APITimeoutError` 已被 `agent/inference.py:_is_retryable_error` 归类为可重试，触发 `_call_with_retry` 的指数退避重试。
+  2. `agent/iterative_agent.py` 在 `chat_with_tools` 成功后新增空 `choices` / 空 `message` 守卫，缺失时返回 `stage=decision_backend`、`code=decision_backend_error` 的信封，与意图路径 `_extract_response_text` 的兜底模式对称。
+  3. `agent/run.py` 的 `_make_event_writer` 将 `run_dir.mkdir()` 纳入 `try/except`，失败时 stderr 报错并 `sys.exit(1)`，与 `_write_jsonl` 的受控退出风格一致。
+- **存在差异**：无。三项健壮性问题均已修复并通过测试回归。
+- **代码依据**：
+  - `agent/llm.py` `RemoteAPIClient.__init__`/`LocalClient.__init__` 新增 `timeout`
+  - `agent/llm.py` `AgentLLMFactory.create` 读取 `agent.llm_timeout_seconds`
+  - `agent/config.yaml` 新增 `agent.llm_timeout_seconds: 300`
+  - `agent/iterative_agent.py` 空 `choices`/`message` 守卫与 `decision_backend_error` 信封
+  - `agent/run.py` `_make_event_writer` 目录创建失败受控退出
+  - `tests/test_llm.py` 超时配置传递与 retry 分类测试
+  - `tests/test_iterative_agent.py` 空 choices 决策后端错误测试
+  - `tests/test_run_cli.py` mkdir 失败受控退出测试
+- **待决定或后续动作**：已完成。无需后续动作。
+- **记录版本**：本次改造完成时的描述性状态（工作区存在未提交变更）
+
 
 ### 用户需求识别
 
@@ -90,6 +117,7 @@
   - `tests/test_run_cli.py` JSONL 写失败测试
 - **待决定或后续动作**：本次兜底核查已完成。审查中另发现 3 项非兜底缺口事项，本次未处理，记录供后续参考：
   1. `parse_user_intent`（`agent/interaction.py:340` 附近）内部使用默认 `load_config()`，忽略 `--config` 传入的自定义配置路径；
-  2. 决策 LLM 响应无 `choices` 时 `response.choices[0]` 越界，错误被归类为 `stage=internal` 而非 `decision_backend` 语义；
-  3. runtime 目录创建失败（`agent/run.py:24-26` 附近）在 `run` 开始前直接抛异常，无受控信封。
+  2. ~~决策 LLM 响应无 `choices` 时 `response.choices[0]` 越界，错误被归类为 `stage=internal` 而非 `decision_backend` 语义；~~
+  3. ~~runtime 目录创建失败（`agent/run.py:24-26` 附近）在 `run` 开始前直接抛异常，无受控信封。~~
 - **记录版本**：`9022b1e`（工作区存在未提交变更）
+

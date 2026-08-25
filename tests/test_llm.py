@@ -86,6 +86,7 @@ def test_factory_creates_remote_client_with_env_api_key():
                 api_key="sk-test",
                 base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
                 max_retries=0,
+                timeout=300.0,
             )
 
 
@@ -111,7 +112,10 @@ def test_factory_creates_local_client():
         assert isinstance(client, LocalClient)
         assert client.model_name == "ollama/qwen2.5:7b"
         mock_openai.assert_called_once_with(
-            api_key="EMPTY", base_url="http://localhost:11434/v1", max_retries=0
+            api_key="EMPTY",
+            base_url="http://localhost:11434/v1",
+            max_retries=0,
+            timeout=300.0,
         )
 
 
@@ -560,3 +564,73 @@ def test_v2_deterministic_planner_terminates_localized_fracture():
     assert arguments["status"] == "fracture"
     assert arguments["fracture_type"] == "脆性断裂"
     assert arguments["location"] == "inside_gauge"
+
+
+def test_factory_passes_configured_llm_timeout_to_clients():
+    """llm_timeout_seconds from config is forwarded to both client backends."""
+    remote_config = {
+        "agent": {
+            "backend": "remote",
+            "llm_timeout_seconds": 42.5,
+            "remote": {
+                "provider": "dashscope",
+                "model": "qwen-test",
+                "base_url": "https://example.com/v1",
+                "api_key": "sk-test",
+            },
+        }
+    }
+    with patch("agent.llm.OpenAI") as mock_openai:
+        AgentLLMFactory.create(remote_config)
+        assert mock_openai.call_args.kwargs["timeout"] == 42.5
+
+    local_config = {
+        "agent": {
+            "backend": "local",
+            "llm_timeout_seconds": 120.0,
+            "local": {
+                "provider": "ollama",
+                "model": "qwen-test",
+                "base_url": "http://localhost:11434/v1",
+            },
+        }
+    }
+    with (
+        patch(
+            "agent.llm.list_local_models",
+            return_value={"ok": True, "models": [{"id": "qwen-test"}]},
+        ),
+        patch("agent.llm.OpenAI") as mock_openai,
+    ):
+        AgentLLMFactory.create(local_config)
+        assert mock_openai.call_args.kwargs["timeout"] == 120.0
+
+
+def test_remote_client_timeout_is_retryable(monkeypatch):
+    """OpenAI read timeout is classified as retryable by _is_retryable_error."""
+    monkeypatch.setattr("agent.llm.time.sleep", lambda _s: None)
+    with patch("agent.llm.OpenAI") as mock_openai:
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        class FakeTimeoutError(Exception):
+            status_code = None
+
+        success = make_tool_response("sample_and_infer", {"sample_range": [0, 1]})
+        mock_client.chat.completions.create.side_effect = [
+            FakeTimeoutError("timed out"),
+            success,
+        ]
+        client = RemoteAPIClient(
+            model="qwen-test",
+            api_key="sk-test",
+            base_url="https://example.com/v1",
+            provider="test",
+            timeout=30.0,
+        )
+        response = client.chat_with_tools(
+            messages=[{"role": "user", "content": "hi"}],
+            tools=[{"type": "function", "function": {"name": "noop"}}],
+        )
+        assert response is success
+        assert mock_client.chat.completions.create.call_count == 2

@@ -23,7 +23,14 @@ from agent.contract import CONTRACT_VERSION, V4_1_CONTRACT_VERSION
 def _make_event_writer(run_id: str, events_dir: Path) -> Any:
     """Return a callback that writes agent events to ``events_dir/run_id/*.jsonl``."""
     run_dir = events_dir / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        run_dir.mkdir(parents=True, exist_ok=True)
+    except (OSError, ValueError, TypeError) as exc:
+        print(
+            f"Failed to create events directory {run_dir}: {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     def write_event(event: dict[str, Any]) -> None:
         video_id = event.get("video_id", "unknown")

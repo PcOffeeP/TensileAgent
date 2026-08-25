@@ -345,7 +345,30 @@ class IterativeAgent:
                         message=f"决策模型调用失败: {exc}",
                     ),
                 ).model_dump()
-            message = response.choices[0].message
+
+            # Guard against malformed completions (empty choices/missing message).
+            choices = getattr(response, "choices", None)
+            if not choices:
+                logger.error("Decision backend returned no choices")
+                return RunnerResult(
+                    ok=False,
+                    error=RunnerError(
+                        stage="decision_backend",
+                        code="decision_backend_error",
+                        message="决策模型返回为空 choices",
+                    ),
+                ).model_dump()
+            message = getattr(choices[0], "message", None)
+            if not message:
+                logger.error("Decision backend returned empty message")
+                return RunnerResult(
+                    ok=False,
+                    error=RunnerError(
+                        stage="decision_backend",
+                        code="decision_backend_error",
+                        message="决策模型返回空 message",
+                    ),
+                ).model_dump()
 
             # The LLM must output tool_calls; plain text is not acceptable.
             if not getattr(message, "tool_calls", None):

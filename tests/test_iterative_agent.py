@@ -2747,3 +2747,143 @@ def test_emit_callback_keyboard_interrupt_is_not_swallowed(tmp_path: Path):
     with pytest.raises(KeyboardInterrupt):
         agent._emit("test_event")
 
+
+class EmptyChoicesLLM(BaseAgentLLM):
+    """LLM that returns a completion with no choices."""
+
+    def __init__(self) -> None:
+        self.calls: list[Any] = []
+
+    def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> Any:
+        self.calls.append(((messages, tools), {"temperature": temperature, "max_tokens": max_tokens}))
+        response = MagicMock()
+        response.choices = []
+        return response
+
+    @property
+    def model_name(self) -> str:
+        return "empty/test"
+
+
+def test_empty_choices_returns_decision_backend_error():
+    """Empty choices from the decision model must not raise IndexError."""
+    video_meta = {"video_id": "v_empty", "duration": 60.0, "video_path": "v_empty.mp4"}
+    config = make_config()
+    config["agent"]["max_rounds"] = 3
+
+    llm = EmptyChoicesLLM()
+    agent = IterativeAgent(
+        llm_client=llm,
+        video_meta=video_meta,
+        config=config,
+        clip_builder=FakeClipBuilder(),
+        inference_client=FakeInferenceClient([
+            {"has_fracture": False, "type": "未断裂", "location": None, "confidence": 0.9}
+        ]),
+    )
+
+    result = agent.run()
+    assert not result["ok"]
+    assert result["error"]["stage"] == "decision_backend"
+    assert result["error"]["code"] == "decision_backend_error"
+    assert "choices" in result["error"]["message"].lower() or "为空" in result["error"]["message"]
+
+
+class NoneChoicesLLM(BaseAgentLLM):
+    """LLM that returns a completion with choices set to None."""
+
+    def __init__(self) -> None:
+        self.calls: list[Any] = []
+
+    def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> Any:
+        self.calls.append(((messages, tools), {"temperature": temperature, "max_tokens": max_tokens}))
+        response = MagicMock()
+        response.choices = None
+        return response
+
+    @property
+    def model_name(self) -> str:
+        return "none-choices/test"
+
+
+def test_none_choices_returns_decision_backend_error():
+    """choices=None from the decision model must not raise TypeError."""
+    video_meta = {"video_id": "v_none_choices", "duration": 60.0, "video_path": "v_none_choices.mp4"}
+    config = make_config()
+    config["agent"]["max_rounds"] = 3
+
+    llm = NoneChoicesLLM()
+    agent = IterativeAgent(
+        llm_client=llm,
+        video_meta=video_meta,
+        config=config,
+        clip_builder=FakeClipBuilder(),
+        inference_client=FakeInferenceClient([
+            {"has_fracture": False, "type": "未断裂", "location": None, "confidence": 0.9}
+        ]),
+    )
+
+    result = agent.run()
+    assert not result["ok"]
+    assert result["error"]["stage"] == "decision_backend"
+    assert result["error"]["code"] == "decision_backend_error"
+
+
+class NoneMessageLLM(BaseAgentLLM):
+    """LLM that returns a completion with a choice but no message."""
+
+    def __init__(self) -> None:
+        self.calls: list[Any] = []
+
+    def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> Any:
+        self.calls.append(((messages, tools), {"temperature": temperature, "max_tokens": max_tokens}))
+        choice = MagicMock()
+        choice.message = None
+        response = MagicMock()
+        response.choices = [choice]
+        return response
+
+    @property
+    def model_name(self) -> str:
+        return "none-message/test"
+
+
+def test_none_message_returns_decision_backend_error():
+    """A choice with message=None must not raise AttributeError on dict fallback."""
+    video_meta = {"video_id": "v_none_message", "duration": 60.0, "video_path": "v_none_message.mp4"}
+    config = make_config()
+    config["agent"]["max_rounds"] = 3
+
+    llm = NoneMessageLLM()
+    agent = IterativeAgent(
+        llm_client=llm,
+        video_meta=video_meta,
+        config=config,
+        clip_builder=FakeClipBuilder(),
+        inference_client=FakeInferenceClient([
+            {"has_fracture": False, "type": "未断裂", "location": None, "confidence": 0.9}
+        ]),
+    )
+
+    result = agent.run()
+    assert not result["ok"]
+    assert result["error"]["stage"] == "decision_backend"
+    assert result["error"]["code"] == "decision_backend_error"
