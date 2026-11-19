@@ -506,10 +506,11 @@ pytest tests/test_web_api.py -v
 
 | 仓库 | 说明 |
 |------|------|
-| **[mVllm_2](../mVllm_2)** | MiniCPM-V 4.5 数据、微调、评测与视觉服务仓库 |
+| **[mVllm_2](../mVllm_2)** | V4.1 历史冻结/中间视觉服务与交付上游（`tensile-vlm/v4.1` 及回滚 `v2`） |
+| **[TensileAgent-Finetune](../TensileAgent-Finetune)** | 新一代五类数据、微调与离线评测演进线（`mVllm_2` 的 `feat/tensileagent-finetune` worktree），尚未接入当前 V4.1 运行时 |
 
-`mVllm_2/main` 当前维护 `tensile-vlm/v4.1` 数据、训练、发布模型和推理服务；V2
-数据与模型已在 archive 中冻结。当前 V4.1 中间服务单轮返回
+`mVllm_2/main` 当前作为冻结上游维护 `tensile-vlm/v4.1` 数据、训练、发布模型和中间推理服务；V2
+数据与模型已在 archive 中冻结。新一代五类模型在 `TensileAgent-Finetune` 独立演进，待下一代运行时契约冻结后再接入本仓库。当前 V4.1 中间服务单轮返回
 `clip_state`、`fracture_mechanism`、`fracture_site`、`special_case`，Agent 形成
 `tensile-agent/result/v4.1`。V2 只作为历史回滚协议。
 
