@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
@@ -17,6 +18,14 @@ FRACTURE_MECHANISMS = {
     "半脆半韧断裂",
 }
 SPECIAL_CASES = {"未夹紧", "视频异常"}
+ANNOTATION_ID_COLUMNS = ("video_id", "video", "id")
+ANNOTATION_LABEL_COLUMNS = (
+    "has_fracture",
+    "source_type",
+    "type",
+    "fracture_type",
+    "断裂模式",
+)
 
 
 def normalize_ground_truth(row: dict[str, Any]) -> dict[str, Any]:
@@ -57,14 +66,30 @@ def normalize_ground_truth(row: dict[str, Any]) -> dict[str, Any]:
         site = None
 
     raw_has_fracture = row.get("has_fracture")
-    if isinstance(raw_has_fracture, str):
+    parsed_has_fracture: bool | None
+    if raw_has_fracture is None:
+        parsed_has_fracture = None
+    elif isinstance(raw_has_fracture, bool):
+        parsed_has_fracture = raw_has_fracture
+    elif isinstance(raw_has_fracture, str):
         lowered = raw_has_fracture.strip().lower()
-        if lowered in {"true", "1", "yes"}:
-            raw_has_fracture = True
+        if not lowered:
+            parsed_has_fracture = None
+        elif lowered in {"true", "1", "yes"}:
+            parsed_has_fracture = True
         elif lowered in {"false", "0", "no"}:
-            raw_has_fracture = False
-    if isinstance(raw_has_fracture, bool):
-        has_fracture = raw_has_fracture
+            parsed_has_fracture = False
+        else:
+            raise ValueError(f"invalid has_fracture value: {raw_has_fracture!r}")
+    else:
+        raise ValueError(f"invalid has_fracture value: {raw_has_fracture!r}")
+
+    if parsed_has_fracture is not None:
+        has_fracture: bool | None = parsed_has_fracture
+    elif not source_type:
+        raise ValueError(
+            "annotation row is missing ground-truth label (has_fracture/source_type)"
+        )
     else:
         has_fracture = source_type not in {"未断裂", *SPECIAL_CASES}
     if special_case is not None:
@@ -78,21 +103,38 @@ def normalize_ground_truth(row: dict[str, Any]) -> dict[str, Any]:
         "fracture_site": site,
         "special_case": special_case,
         "fracture_time": _optional_number(
-            row.get("fracture_time", row.get("break_time", row.get("断裂时间点")))
+            row.get("fracture_time", row.get("break_time", row.get("断裂时间点"))),
+            field_name="fracture_time",
         ),
         "duration": _optional_number(
-            row.get("duration", row.get("duration_seconds", row.get("视频时长")))
+            row.get("duration", row.get("duration_seconds", row.get("视频时长"))),
+            field_name="duration",
         ),
     }
 
 
-def _optional_number(value: Any) -> float | None:
-    if value is None or value == "":
+def _optional_number(value: Any, *, field_name: str = "number") -> float | None:
+    if value is None:
         return None
-    try:
-        return float(str(value).strip().removesuffix("s").strip())
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, bool):
+        raise ValueError(f"invalid numeric value for {field_name}: {value!r}")
+    if isinstance(value, (int, float)):
+        parsed = float(value)
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            parsed = float(text.removesuffix("s").strip())
+        except ValueError as exc:
+            raise ValueError(
+                f"invalid numeric value for {field_name}: {value!r}"
+            ) from exc
+    else:
+        raise ValueError(f"invalid numeric value for {field_name}: {value!r}")
+    if not math.isfinite(parsed):
+        raise ValueError(f"invalid numeric value for {field_name}: {value!r}")
+    return parsed
 
 
 def _macro_f1(pairs: Iterable[tuple[Any, Any]], labels: set[Any]) -> float | None:
@@ -220,6 +262,67 @@ def score_predictions(
     }
 
 
+def load_annotation_rows(
+    annotations_csv: str | Path,
+    *,
+    allowed_video_ids: set[str] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Load and validate an annotation CSV with fail-closed schema and set checks."""
+    annotations: dict[str, dict[str, Any]] = {}
+    seen_ids: set[str] = set()
+    with Path(annotations_csv).open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = reader.fieldnames
+        if not fieldnames:
+            raise ValueError("annotation CSV is missing header")
+        if any(not isinstance(name, str) or not name.strip() for name in fieldnames):
+            raise ValueError("annotation CSV contains blank column name")
+        if len(set(fieldnames)) != len(fieldnames):
+            duplicates = sorted(
+                name for name, count in Counter(fieldnames).items() if count > 1
+            )
+            raise ValueError(
+                f"annotation CSV contains duplicate column names: {duplicates}"
+            )
+        if not any(col in fieldnames for col in ANNOTATION_ID_COLUMNS):
+            raise ValueError(
+                "annotation CSV is missing required ID column "
+                f"(expected one of {ANNOTATION_ID_COLUMNS})"
+            )
+        if not any(col in fieldnames for col in ANNOTATION_LABEL_COLUMNS):
+            raise ValueError(
+                "annotation CSV is missing required ground-truth label column "
+                f"(expected one of {ANNOTATION_LABEL_COLUMNS})"
+            )
+
+        for line_no, row in enumerate(reader, start=2):
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError(
+                    f"annotation CSV row {line_no} column count does not match header"
+                )
+            video_id = str(
+                row.get("video_id") or row.get("video") or row.get("id") or ""
+            ).strip()
+            if not video_id:
+                raise ValueError(f"annotation row {line_no} is missing video_id")
+            if video_id in seen_ids:
+                raise ValueError(f"duplicate annotation video_id: {video_id}")
+            seen_ids.add(video_id)
+            if allowed_video_ids is not None and video_id not in allowed_video_ids:
+                continue
+            row["video_id"] = video_id
+            annotations[video_id] = row
+
+    if not seen_ids:
+        raise ValueError("annotation CSV contains no data rows")
+    if allowed_video_ids is not None and set(annotations) != allowed_video_ids:
+        missing = sorted(allowed_video_ids - set(annotations))
+        raise ValueError(
+            f"annotation/input identity mismatch: missing video_ids={missing}"
+        )
+    return annotations
+
+
 def load_scoring_records(
     annotations_csv: str | Path,
     results_root: str | Path,
@@ -227,20 +330,10 @@ def load_scoring_records(
     allowed_video_ids: set[str] | None = None,
 ) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     """Join source CSV rows to immutable batch results by exact video_id."""
-    annotations: dict[str, dict[str, Any]] = {}
-    with Path(annotations_csv).open(encoding="utf-8-sig", newline="") as handle:
-        for row in csv.DictReader(handle):
-            video_id = str(
-                row.get("video_id") or row.get("video") or row.get("id") or ""
-            ).strip()
-            if not video_id:
-                raise ValueError("annotation row is missing video_id")
-            if allowed_video_ids is not None and video_id not in allowed_video_ids:
-                continue
-            if video_id in annotations:
-                raise ValueError(f"duplicate annotation video_id: {video_id}")
-            row["video_id"] = video_id
-            annotations[video_id] = row
+    annotations = load_annotation_rows(
+        annotations_csv,
+        allowed_video_ids=allowed_video_ids,
+    )
 
     records: list[tuple[dict[str, Any], dict[str, Any]]] = []
     root = Path(results_root)

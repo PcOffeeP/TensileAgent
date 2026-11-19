@@ -16,6 +16,7 @@ from agent.acceptance_batch import (
 )
 from agent.scoring_v4_1 import (
     FRACTURE_MECHANISMS,
+    load_annotation_rows,
     normalize_ground_truth,
 )
 from agent.v2_comparison_batch import load_v2_comparison_manifest
@@ -223,22 +224,14 @@ def load_common_records(
     expected_manifest_hash: str | None = None,
 ) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     """Join a complete result root to annotations under one public schema."""
-    import csv
-
-    truth: dict[str, dict[str, Any]] = {}
-    with Path(annotations).open(encoding="utf-8-sig", newline="") as handle:
-        for row in csv.DictReader(handle):
-            video_id = str(
-                row.get("video_id") or row.get("video") or row.get("id") or ""
-            ).strip()
-            if video_id not in allowed_video_ids:
-                continue
-            if video_id in truth:
-                raise ValueError(f"duplicate annotation video_id: {video_id}")
-            row["video_id"] = video_id
-            truth[video_id] = normalize_ground_truth(row)
-    if set(truth) != allowed_video_ids:
-        raise ValueError("annotation/input identity mismatch")
+    raw_annotations = load_annotation_rows(
+        annotations,
+        allowed_video_ids=allowed_video_ids,
+    )
+    truth = {
+        video_id: normalize_ground_truth(row)
+        for video_id, row in raw_annotations.items()
+    }
     root = Path(results_root)
     failures = list(root.glob("*/failure.json"))
     if failures:

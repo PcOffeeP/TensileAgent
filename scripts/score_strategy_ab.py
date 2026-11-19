@@ -4,12 +4,11 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 from pathlib import Path
 from typing import Any
 
-from agent.scoring_v4_1 import normalize_ground_truth
+from agent.scoring_v4_1 import load_annotation_rows, normalize_ground_truth
 from agent.strategy_ab import STRATEGY_AB_SCHEMA
 from agent.strategy_ab_protocol import sha256_file, verify_manifest_inputs
 from agent.strategy_ab_scoring import (
@@ -21,17 +20,7 @@ from agent.strategy_ab_scoring import (
 
 
 def _load_annotations(path: Path) -> dict[str, dict[str, Any]]:
-    rows: dict[str, dict[str, Any]] = {}
-    with path.open(encoding="utf-8-sig", newline="") as handle:
-        for row in csv.DictReader(handle):
-            video_id = str(row.get("video_id") or row.get("id") or "").strip()
-            if not video_id:
-                raise ValueError("annotation row is missing video ID")
-            if video_id in rows:
-                raise ValueError(f"duplicate annotation: {video_id}")
-            row["video_id"] = video_id
-            rows[video_id] = row
-    return rows
+    return load_annotation_rows(path)
 
 
 def _validate_payload(
