@@ -51,7 +51,7 @@ TensileAgent/
 │   ├── v4_1_parser.py              ← V4.1 四字段解析器
 │   ├── v4_1_evidence.py            ← V4.1 事件边界单调收缩
 │   ├── contract.py                  ← 版本化视觉契约加载与 hash 校验
-│   ├── contracts/                   ← 冻结契约 artifact（v2 / v3 / v4 / v4.1）
+│   ├── contracts/                   ← 冻结契约 artifact（v2 / v4.1）
 │   ├── scoring/                     ← 评分规范（v4.1 验收、v2 对比）
 │   ├── web_api.py                  ← FastAPI Web 后端（SSE 事件流）
 │   ├── run.py                       ← CLI 入口

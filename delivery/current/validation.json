@@ -3,7 +3,7 @@
   "validated_at": "2026-07-29T10:38:00+08:00",
   "bundle": {
     "name": "v4.1-agent-pipeline-fold0-r1",
-    "sha256": "ff71970e5b292d0d3a2b70402c373673a41b0ee8c58de574ab390ff4e759d4d4",
+    "sha256": "8396bd5f949c0fa9bb053b2e91d9432b1e3f6e7fe4e727119d2a9581825ed17b",
     "cross_repository_validation_passed": true
   },
   "git_sync": {

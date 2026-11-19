@@ -4,7 +4,7 @@
     "model": {
       "path": "delivery/model_component.json",
       "repository": "mVllm_2",
-      "sha256": "8ffb53aa7f380e2a8afd2974f2752eec3882f037d3e05d0de95058678cb43b87"
+      "sha256": "131bb43ec72098eef05b165fb8e1ca51c8d473bfad9abfac12395d0aa1aa9dcc"
     },
     "service": {
       "path": "delivery/service_component.json",
@@ -23,7 +23,7 @@
     },
     "model": {
       "path": "delivery/components/model_component.json",
-      "sha256": "8ffb53aa7f380e2a8afd2974f2752eec3882f037d3e05d0de95058678cb43b87"
+      "sha256": "131bb43ec72098eef05b165fb8e1ca51c8d473bfad9abfac12395d0aa1aa9dcc"
     },
     "performance": {
       "path": "docs/results/v4_1_stage_g_intermediate/performance_snapshot.json",

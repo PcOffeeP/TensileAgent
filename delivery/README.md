@@ -3,6 +3,7 @@
 `delivery/current/bundle.json` 是当前中间交付的机器入口，仅对应 `mVllm_2` 的
 `v4.1` 冻结中间交付，不涵盖 `TensileAgent-Finetune` 的新一代五类模型。它绑定
 Agent、模型、视觉服务、链路验收和性能快照的轻量组件，并明确能力边界。
+该 `v4.1` 历史冻结 bundle 已对齐 `mVllm_2` 目录扁平化后的 `model_component.json` 路径清单（模型权重聚合哈希未变，未重新执行 GPU 验收）。
 
 `delivery_gate` 只检查模型/服务身份、产物完整性、测试、真实远程调用、fail-closed
 和双机同步。`performance_snapshot` 仅记录当前测量值，不比较阈值、不阻断交付、
