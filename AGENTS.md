@@ -27,3 +27,17 @@
 - Agent Runtime 修改应优先运行对应测试；涉及状态机、采样、解析或推理链路时，重点覆盖 `tests/test_iterative_agent.py`、`tests/test_sampling*.py`、`tests/test_parser.py` 和 `tests/test_inference.py`。
 - 项目级验证命令为 `python3 -m pytest tests -q`；前端修改运行 `cd web && npm run build`；交付 bundle 修改运行 `python3 scripts/validate_delivery_bundle.py --mvllm-root ../mVllm_2`。
 - 动态帧、临时 clip、LLM trace 和其他运行时产物写入 `data/08_runtime/`，不得提交。不要提交视频、模型权重、checkpoint、密钥、token 或大型生成结果。
+
+<!-- git-pr-workflow:start -->
+## Git 协作与 PR 审查流
+
+- **主线与远程**：本仓库长期主线分支为 `main`，PR 审查远程为 `github`（PR 流程基线 tag：`pr-workflow-baseline-20261120`）。
+- **开工前置动作**：每个独立任务开始前先运行 `bash scripts/sync_and_clean.sh`（自动拉取最新 `github/main`、同步主工作区并安全清理已合并的干净 `work/*` 残留），再显式从最新远端主线创建独立 worktree 与任务分支：
+  ```bash
+  git worktree add --no-track ../TensileAgent-<线名> -b work/<线名> github/main
+  ```
+  不要在主工作区切换分支，同一 worktree 内不得并行两个写入者。
+- **交付与 PR**：在任务分支完成开发并跑通本项目准入检查（`python3 -m pytest tests -q`；涉及前端运行 `cd web && npm run build`）后，推送 `work/<线名>` 到 `github` 并创建指向 `main` 的 PR（`gh pr create --base main`，严格按 `.github/PULL_REQUEST_TEMPLATE.md` 填写）。
+- **权限红线**：允许 Agent 推送自己的 `work/*` 任务分支并创建/更新 PR；**严禁** push `main`，**严禁**自行合并 PR，也不要本地直接合并回主线。
+- **合并与自动清理**：PR 统一由用户在远端审查并通过所有 Required Status Checks 后以 **Create a merge commit** 合并（保留“任务信封”合并节点）；远程 `work/*` 分支在 PR 合并后自动删除。对已通过 Merge Commit 合入 `github/main` 且工作树完全干净的本地 `work/*` 分支及对应 worktree，已永久预授权 Agent 通过 `bash scripts/sync_and_clean.sh` 自动清理，无需逐次请示；未合并、含未提交改动或用途不明的分支严禁删除。
+<!-- git-pr-workflow:end -->
