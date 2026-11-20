@@ -51,7 +51,7 @@
   git worktree add --no-track ../TensileAgent-<线名> -b work/<线名> github/main
   ```
   不要在主工作区切换分支，同一 worktree 内不得并行两个写入者。
-- **交付与 PR**：在任务分支完成开发、跑通准入检查（`python3 -m pytest tests -q`；涉及前端运行 `cd web && npm run build`）并通过独立 `reviewer` 盲审后，推送 `work/<线名>` 到 `github` 并创建指向 `main` 的 PR（`gh pr create --base main`，严格按 `.github/PULL_REQUEST_TEMPLATE.md` 填写）。
+- **交付与 PR**：在任务分支完成开发、跑通准入检查（`python3 -m pytest tests -q`；涉及前端运行 `cd web && npm run build`；涉及交付 bundle 运行 `python3 scripts/validate_delivery_bundle.py --mvllm-root ../mVllm_2`）并通过独立 `reviewer` 盲审后，推送 `work/<线名>` 到 `github` 并创建指向 `main` 的 PR（`gh pr create --base main`，严格按 `.github/PULL_REQUEST_TEMPLATE.md` 填写）。
 - **PR 审查不通过时的原地返工**：若用户对 PR 提出修改意见，严禁关闭重开或另建分支；应回到同一 worktree 与 `work/<线名>` 分支完成修改、重跑自测与复审后，**追加新提交**（不得强推改写历史）并推送至同一远程分支，同步更新 PR 步骤清单并确认云端 CI 全绿。
 - **合并与自动清理**：PR 统一由用户在远端审查并通过所有 Required Status Checks 后以 **Create a merge commit** 合并（保留“任务信封”合并节点）；远程 `work/*` 分支在 PR 合并后自动删除。对已通过 Merge Commit 合入 `github/main` 且工作树完全干净的本地 `work/*` 分支及对应 worktree，已永久预授权 Agent 通过 `bash scripts/sync_and_clean.sh` 自动清理，无需逐次请示；未合并、含未提交改动或用途不明的分支严禁删除。
 <!-- git-pr-workflow:end -->
