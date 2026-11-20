@@ -268,8 +268,40 @@ class FfmpegVideoClipBuilder(VideoClipBuilder):
     ``sample_range``.
     """
 
-    def __init__(self, output_dir: str | None = None) -> None:
+    def __init__(
+        self,
+        output_dir: str | None = None,
+        *,
+        run_id: str | None = None,
+    ) -> None:
         self.output_dir = output_dir
+        self.run_id = run_id
+        self._probe_cache: dict[tuple[str, int, int], dict[str, Any]] = {}
+        self._source_pts_cache: dict[tuple[str, int, int], list[float]] = {}
+        self._clip_counter = 0
+
+    @staticmethod
+    def _source_cache_key(source_video: str) -> tuple[str, int, int]:
+        st = os.stat(source_video)
+        return (os.path.abspath(source_video), st.st_mtime_ns, st.st_size)
+
+    def _cached_probe_video(self, source_video: str) -> dict[str, Any]:
+        key = self._source_cache_key(source_video)
+        cached = self._probe_cache.get(key)
+        if cached is not None:
+            return cached
+        probe = _probe_video(source_video)
+        self._probe_cache[key] = probe
+        return probe
+
+    def _cached_source_timestamps(self, source_video: str) -> list[float]:
+        key = self._source_cache_key(source_video)
+        cached = self._source_pts_cache.get(key)
+        if cached is not None:
+            return cached
+        timestamps = _probe_frame_timestamps(source_video)
+        self._source_pts_cache[key] = timestamps
+        return timestamps
 
     def build_with_manifest(
         self,
@@ -283,7 +315,7 @@ class FfmpegVideoClipBuilder(VideoClipBuilder):
         if not os.path.exists(source_video):
             raise FileNotFoundError(f"Source video not found: {source_video}")
 
-        probe = _probe_video(source_video)
+        probe = self._cached_probe_video(source_video)
         duration = probe["duration"]
 
         # Explicit validation to avoid cryptic ffmpeg failures on degenerate ranges.
@@ -307,10 +339,19 @@ class FfmpegVideoClipBuilder(VideoClipBuilder):
             if self.output_dir
             else Path("data/08_runtime/agent_clips")
         )
+        if self.run_id:
+            out_dir = out_dir / self.run_id
         out_dir.mkdir(parents=True, exist_ok=True)
 
+        self._clip_counter += 1
         video_stem = Path(source_video).stem
-        output_path = out_dir / f"{video_stem}_{start:.2f}_{end:.2f}.mp4"
+        source_hash = hashlib.sha256(
+            os.path.abspath(source_video).encode("utf-8")
+        ).hexdigest()[:8]
+        output_path = (
+            out_dir
+            / f"{video_stem}_{source_hash}_c{self._clip_counter:04d}_{start:.4f}_{end:.4f}.mp4"
+        )
 
         # Directly crop the continuous segment.  Do NOT pre-extract frames.
         _run_ffmpeg(
@@ -331,7 +372,7 @@ class FfmpegVideoClipBuilder(VideoClipBuilder):
             ]
         )
 
-        source_timestamps = _probe_frame_timestamps(source_video)
+        source_timestamps = self._cached_source_timestamps(source_video)
         temp_timestamps = _probe_frame_timestamps(str(output_path))
         temp_origin = temp_timestamps[0]
 
@@ -375,6 +416,3 @@ class FfmpegVideoClipBuilder(VideoClipBuilder):
             sample_range=sample_range,
         )
         return result.path
-
-
-VideoClipBuilder.register(FfmpegVideoClipBuilder)

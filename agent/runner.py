@@ -50,7 +50,12 @@ def create_inference_client(config: dict[str, Any]):
     return _create_inference_client(config)
 
 
-def create_clip_builder(config: dict[str, Any], output_dir: str | Path | None = None):
+def create_clip_builder(
+    config: dict[str, Any],
+    output_dir: str | Path | None = None,
+    *,
+    run_id: str | None = None,
+):
     """Create a ``FfmpegVideoClipBuilder``.
 
     Defaults ``output_dir`` to ``data/08_runtime/agent_clips`` if not provided.
@@ -59,7 +64,8 @@ def create_clip_builder(config: dict[str, Any], output_dir: str | Path | None = 
 
     if output_dir is None:
         output_dir = "data/08_runtime/agent_clips"
-    return FfmpegVideoClipBuilder(output_dir=str(output_dir))
+    effective_run_id = run_id or (config.get("_runtime") or {}).get("task_id")
+    return FfmpegVideoClipBuilder(output_dir=str(output_dir), run_id=effective_run_id)
 
 
 def build_video_meta(

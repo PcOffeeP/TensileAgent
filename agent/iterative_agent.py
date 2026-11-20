@@ -33,6 +33,16 @@ from agent.prompts import (
     TENSILE_AGENT_V4_1_SYSTEM_PROMPT,
     build_tensile_agent_user_context,
 )
+from agent.runtime_guards import (
+    coverage_ranges as _guard_coverage_ranges,
+    evaluate_unrecognized_reason as _guard_evaluate_unrecognized_reason,
+    has_complete_no_fracture_coverage as _guard_has_complete_no_fracture_coverage,
+    has_consistent_special_recheck as _guard_has_consistent_special_recheck,
+    is_full_video_range as _guard_is_full_video_range,
+    round_has_fracture as _guard_round_has_fracture,
+    sample_range_is_local as _guard_sample_range_is_local,
+    same_range as _guard_same_range,
+)
 from agent.sampling import ClipBuildResult, FfmpegVideoClipBuilder, VideoClipBuilder
 from agent.schema import (
     FinalOutput,
@@ -760,59 +770,26 @@ class IterativeAgent:
         # -- unrecognized: model explicitly reports it cannot form a conclusion --
         if status == "unrecognized":
             unrecognized_reason = args.get("unrecognized_reason")
-            valid_reasons = {
-                "video_anomaly",
-                "not_clamped",
-                "conflicting_results",
-                "invalid_model_output",
-                "insufficient_confidence",
-                "incomplete_coverage",
-                "max_rounds",
-                "visual_indeterminate",
-                "budget_exhausted",
-            }
-            if unrecognized_reason not in valid_reasons:
-                return False, (
-                    f"unrecognized_reason 无效: {unrecognized_reason}，"
-                    f"须为 {sorted(valid_reasons)}"
-                )
-            if unrecognized_reason in {
-                "video_anomaly",
-                "visual_indeterminate",
-                "not_clamped",
-            }:
-                if not self._has_consistent_special_recheck(unrecognized_reason):
-                    return False, "视觉不可判定或未夹紧必须在同一区间得到两次一致结果"
-            elif unrecognized_reason in {"max_rounds", "budget_exhausted"}:
-                if (
-                    round_idx + 1 < self.max_rounds
-                    and len(self.history) < self.max_rounds
-                ):
-                    return (
-                        False,
-                        "当前迭代预算尚未耗尽，不能以 max_rounds/budget_exhausted 提前终止",
-                    )
-            elif unrecognized_reason == "conflicting_results":
-                has_conflict = self.conflict_count > 0 or (
-                    self.visual_contract_version == "tensile-vlm/v4.1"
-                    and self._ensure_event_bounds().unresolved_conflict
-                )
-                if not has_conflict:
-                    return False, "当前尚未观察到不可调和的冲突证据，不能以 conflicting_results 终止"
-            elif unrecognized_reason == "invalid_model_output":
-                has_validation_error = any(
-                    entry.get("result", {}).get("validation_error") is not None
-                    for entry in self.history
-                )
-                if not has_validation_error:
-                    return False, "当前尚未观察到非法视觉输出，不能以 invalid_model_output 终止"
-            elif unrecognized_reason in {
-                "insufficient_confidence",
-                "incomplete_coverage",
-            }:
-                if not self.history:
-                    return False, "尚未执行任何视觉观察，不能以证据不足或覆盖不全终止"
-            return True, "模型明确报告无法识别"
+            special_ok = (
+                self._has_consistent_special_recheck(unrecognized_reason)
+                if unrecognized_reason
+                in {"video_anomaly", "visual_indeterminate", "not_clamped"}
+                else None
+            )
+            unresolved_conflict = (
+                self.visual_contract_version == "tensile-vlm/v4.1"
+                and self._ensure_event_bounds().unresolved_conflict
+            )
+            return _guard_evaluate_unrecognized_reason(
+                unrecognized_reason,
+                history=self.history,
+                round_idx=round_idx,
+                max_rounds=self.max_rounds,
+                conflict_count=self.conflict_count,
+                unresolved_conflict=unresolved_conflict,
+                special_recheck_ok=special_ok,
+                visual_contract_version=self.visual_contract_version,
+            )
 
         if status == "no_fracture":
             if self._has_complete_no_fracture_coverage():
@@ -1169,16 +1146,7 @@ class IterativeAgent:
     # ------------------------------------------------------------------
     def _round_has_fracture(self, entry: dict[str, Any]) -> bool:
         """Safely check whether a history entry has a positive fracture prediction."""
-        result = entry.get("result", {})
-        model_output = result.get("model_output")
-        return (
-            result.get("ok") is True
-            and isinstance(model_output, dict)
-            and (
-                model_output.get("has_fracture", False) is True
-                or model_output.get("clip_state") in {"发生断裂", "已断裂"}
-            )
-        )
+        return _guard_round_has_fracture(entry)
 
     def _round_is_local_fracture(self, entry: dict[str, Any]) -> bool:
         """Require fracture evidence to come from a genuine local inspection."""
@@ -1189,34 +1157,22 @@ class IterativeAgent:
         return self._sample_range_is_local(sample_range)
 
     def _sample_range_is_local(self, sample_range: Any) -> bool:
-        duration = float(self.video_meta.get("duration", 0.0))
-        return (
-            isinstance(sample_range, list)
-            and len(sample_range) == 2
-            and sample_range[1] - sample_range[0] < duration - 1e-9
+        return _guard_sample_range_is_local(
+            sample_range, float(self.video_meta.get("duration", 0.0))
         )
 
     def _coverage_ranges(self) -> list[list[float]]:
         """Return the five fixed D/4 windows required after a global negative."""
-        duration = float(self.video_meta.get("duration", 0.0))
-        return [
-            [duration * start / 16.0, duration * (start + 4) / 16.0]
-            for start in (0, 3, 6, 9, 12)
-        ]
+        return _guard_coverage_ranges(float(self.video_meta.get("duration", 0.0)))
 
     @staticmethod
     def _same_range(left: Any, right: Any, epsilon: float = 1e-6) -> bool:
-        return (
-            isinstance(left, list)
-            and isinstance(right, list)
-            and len(left) == len(right) == 2
-            and abs(float(left[0]) - float(right[0])) <= epsilon
-            and abs(float(left[1]) - float(right[1])) <= epsilon
-        )
+        return _guard_same_range(left, right, epsilon=epsilon)
 
     def _is_full_video_range(self, sample_range: Any) -> bool:
-        duration = float(self.video_meta.get("duration", 0.0))
-        return duration > 0.0 and self._same_range(sample_range, [0.0, duration])
+        return _guard_is_full_video_range(
+            sample_range, float(self.video_meta.get("duration", 0.0))
+        )
 
     def _has_positive_fracture_evidence(self) -> bool:
         return any(
@@ -1225,118 +1181,20 @@ class IterativeAgent:
 
     def _has_complete_no_fracture_coverage(self) -> bool:
         """Validate five fixed windows from recorded, legal model results."""
-        if getattr(self, "visual_contract_version", None) == "tensile-vlm/v4.1":
-            if self._has_positive_fracture_evidence():
-                return False
-            start_idx = getattr(self, "coverage_start_index", None)
-            if (
-                start_idx is None
-                or start_idx < 0
-                or start_idx >= len(self.history)
-            ):
-                return False
-            initiator = self.history[start_idx].get("result", {})
-            initiator_output = initiator.get("model_output") or {}
-            if not (
-                initiator.get("ok") is True
-                and initiator_output.get("clip_state") == "未断裂"
-                and self._is_full_video_range(initiator.get("sample_range"))
-            ):
-                return False
-            coverage_entries = self.history[start_idx + 1 :]
-            for expected in self._coverage_ranges():
-                matched = any(
-                    entry.get("result", {}).get("ok") is True
-                    and self._same_range(
-                        entry.get("result", {}).get("sample_range"), expected
-                    )
-                    and (entry.get("result", {}).get("model_output") or {}).get(
-                        "clip_state"
-                    )
-                    == "未断裂"
-                    for entry in coverage_entries
-                )
-                if not matched:
-                    return False
-            return True
-
-        for expected in self._coverage_ranges():
-            matched = False
-            for entry in self.history:
-                result = entry.get("result", {})
-                output = result.get("model_output") or {}
-                if (
-                    result.get("ok") is True
-                    and self._same_range(result.get("sample_range"), expected)
-                    and (
-                        (
-                            output.get("has_fracture") is False
-                            and output.get("type") == FractureType.NO_FRACTURE
-                        )
-                        or output.get("clip_state") == "未断裂"
-                    )
-                ):
-                    matched = True
-                    break
-            if not matched:
-                return False
-        return True
+        return _guard_has_complete_no_fracture_coverage(
+            self.history,
+            duration=float(self.video_meta.get("duration", 0.0)),
+            visual_contract_version=getattr(self, "visual_contract_version", None),
+            coverage_start_index=getattr(self, "coverage_start_index", None),
+        )
 
     def _has_consistent_special_recheck(self, reason: str) -> bool:
         """Require two matching anomaly/not-clamped results on the same range."""
-        matches: list[tuple[list[float], tuple[Any, Any]]] = []
-        is_v4_1 = getattr(self, "visual_contract_version", None) == "tensile-vlm/v4.1"
-        for entry in self.history:
-            result = entry.get("result", {})
-            if result.get("ok") is not True:
-                continue
-            output = result.get("model_output") or {}
-            if is_v4_1 or "clip_state" in output:
-                clip_state = output.get("clip_state")
-                special_case = output.get("special_case")
-                if clip_state != "无法判断":
-                    continue
-                if reason == "not_clamped":
-                    if special_case != "未夹紧":
-                        continue
-                elif reason == "video_anomaly":
-                    if special_case != "视频异常":
-                        continue
-                elif reason == "visual_indeterminate":
-                    if special_case in {"未夹紧", "视频异常"}:
-                        continue
-                else:
-                    continue
-                matches.append(
-                    (
-                        result.get("sample_range"),
-                        (clip_state, special_case),
-                    )
-                )
-            else:
-                is_match = (
-                    reason in {"video_anomaly", "visual_indeterminate"}
-                    and "has_fracture" in output
-                    and output.get("has_fracture") is None
-                ) or (
-                    reason == "not_clamped"
-                    and output.get("type") == FractureType.NOT_CLAMPED
-                )
-                if is_match:
-                    matches.append(
-                        (
-                            result.get("sample_range"),
-                            (output.get("has_fracture"), output.get("type")),
-                        )
-                    )
-        for index, (sample_range, signature) in enumerate(matches):
-            if any(
-                self._same_range(sample_range, other_range)
-                and signature == other_signature
-                for other_range, other_signature in matches[index + 1 :]
-            ):
-                return True
-        return False
+        return _guard_has_consistent_special_recheck(
+            self.history,
+            reason=reason,
+            visual_contract_version=getattr(self, "visual_contract_version", None),
+        )
 
     def _update_special_recheck(self, result: dict[str, Any]) -> None:
         """Schedule or complete the mandatory same-range special-result recheck."""
