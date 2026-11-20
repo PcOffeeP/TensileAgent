@@ -164,8 +164,12 @@ class TestRunOne:
         assert result["result"]["confidence"] is None
         mock_load_config.assert_called_once_with("agent/config.yaml")
         mock_build_video_meta.assert_called_once_with(video_path, video_id="sample")
-        mock_create_llm_client.assert_called_once_with(config)
-        mock_create_inference_client.assert_called_once_with(config)
+        mock_create_llm_client.assert_called_once()
+        mock_create_inference_client.assert_called_once()
+        passed_config = mock_create_llm_client.call_args.args[0]
+        assert passed_config["llm"] == {"model": "test"}
+        assert passed_config["agent"]["backend"] == "local"
+        assert mock_create_inference_client.call_args.args[0] == passed_config
         mock_create_clip_builder.assert_called_once()
         mock_iterative_agent.assert_called_once()
         mock_agent_instance.run.assert_called_once()

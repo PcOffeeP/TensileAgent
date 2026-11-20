@@ -164,6 +164,7 @@ def main() -> None:
             agent_backend=args.agent_backend,
             agent_model=args.agent_model,
             question=args.question,
+            contract_version=args.contract_version,
         )
         if not result["ok"]:
             print(
@@ -205,6 +206,7 @@ def main() -> None:
         agent_backend=args.agent_backend,
         agent_model=args.agent_model,
         question=args.question,
+        contract_version=args.contract_version,
     )
     _write_jsonl(results, output_path)
 

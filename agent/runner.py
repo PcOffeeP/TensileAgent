@@ -8,11 +8,13 @@ dependencies, and runs one or more videos.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable
 
 import yaml
 
+from agent.config_util import DEFAULT_TEMPERATURE, validate_tolerance_seconds
 from agent.interaction import parse_user_intent, project_result
 from agent.schema import FinalOutput, RunnerError, RunnerResult
 
@@ -150,6 +152,7 @@ def run_one(
     trace_task_id: str | None = None,
     agent_config_snapshot: dict[str, Any] | None = None,
     include_internal_trace: bool = False,
+    contract_version: str | None = None,
 ) -> dict[str, Any]:
     """Run the agent on a single video and return a ``RunnerResult`` dict.
 
@@ -169,23 +172,15 @@ def run_one(
 
     stage = "configuration"
     try:
-        intent = parse_user_intent(question)
-        if intent.action == "unsupported":
-            return {
-                "ok": False,
-                "result": None,
-                "error": {
-                    "stage": "input",
-                    "code": intent.rejection_code or "unsupported_intent",
-                    "message": intent.ambiguity or "未识别到视频分析需求",
-                },
-                "response": project_result({}, intent),
-            }
-        config = load_config(config_path)
+        config = deepcopy(load_config(config_path))
         config.setdefault("agent", {})
-        config["agent"].setdefault("backend", "remote")
+        config["agent"].setdefault("backend", "local")
+        config["agent"].setdefault("temperature", DEFAULT_TEMPERATURE)
         config["agent"].setdefault("remote", {})
         config["agent"].setdefault("local", {})
+        config["agent"]["tolerance_seconds"] = validate_tolerance_seconds(
+            config["agent"].get("tolerance_seconds", 1.0)
+        )
 
         # Web tasks pin the complete decision-backend selection at creation
         # time.  This prevents a later config file edit from changing an
@@ -218,18 +213,33 @@ def run_one(
                 field: agent_config_snapshot[field] for field in required_fields
             }
 
-        # 允许 CLI 参数覆盖 agent 后端和模型
+        # 允许 CLI 参数覆盖 agent 后端、模型和视觉契约版本
         if agent_backend is not None:
             config["agent"]["backend"] = agent_backend
         if agent_model is not None:
             backend = agent_backend or config["agent"]["backend"]
-            config["agent"][backend]["model"] = agent_model
+            config["agent"].setdefault(backend, {})["model"] = agent_model
+        if contract_version is not None:
+            config.setdefault("backend", {})["contract_version"] = contract_version
 
         config["_runtime"] = {
             "task_id": trace_task_id or resolved_id,
             "llm_trace_root": str(_runtime_dir(work_dir, "llm_traces")),
             "model_digest": (agent_config_snapshot or {}).get("digest"),
         }
+
+        intent = parse_user_intent(question, config=config)
+        if intent.action == "unsupported":
+            return {
+                "ok": False,
+                "result": None,
+                "error": {
+                    "stage": "input",
+                    "code": intent.rejection_code or "unsupported_intent",
+                    "message": intent.ambiguity or "未识别到视频分析需求",
+                },
+                "response": project_result({}, intent),
+            }
 
         stage = "input"
         video_meta = build_video_meta(path, video_id=resolved_id)
@@ -366,6 +376,7 @@ def run_batch(
     agent_backend: str | None = None,
     agent_model: str | None = None,
     question: str | None = None,
+    contract_version: str | None = None,
 ) -> list[dict[str, Any]]:
     """Run the agent sequentially on multiple videos.
 
@@ -388,6 +399,7 @@ def run_batch(
                 agent_backend=agent_backend,
                 agent_model=agent_model,
                 question=question,
+                contract_version=contract_version,
             )
         )
     return results

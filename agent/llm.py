@@ -15,6 +15,7 @@ import uuid
 from abc import ABC, abstractmethod
 from types import SimpleNamespace
 
+from agent.config_util import DEFAULT_TEMPERATURE, validate_tolerance_seconds
 from agent.config_util import get_api_key as _get_api_key
 from agent.config_util import get_local_model_digest, list_local_models
 from agent.inference import _is_retryable_error
@@ -77,7 +78,7 @@ class BaseAgentLLM(ABC):
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
-        temperature: float = 0.7,
+        temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: int | None = None,
     ) -> Any:
         """Call the model with Native Function Calling support.
@@ -122,8 +123,13 @@ class DeterministicPlanner(BaseAgentLLM):
     termination, projection, and all fail-closed checks.
     """
 
-    def __init__(self, model: str = "v4.1-interval-policy-v1") -> None:
+    def __init__(
+        self,
+        model: str = "v4.1-interval-policy-v1",
+        tolerance_seconds: float = 1.0,
+    ) -> None:
         self._model = model
+        self._tolerance = validate_tolerance_seconds(tolerance_seconds)
 
     @property
     def model_name(self) -> str:
@@ -186,7 +192,7 @@ class DeterministicPlanner(BaseAgentLLM):
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
-        temperature: float = 0.7,
+        temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: int | None = None,
     ) -> Any:
         del tools, temperature, max_tokens
@@ -277,7 +283,7 @@ class DeterministicPlanner(BaseAgentLLM):
             ranges = [history[index]["inferred_time_range"] for index in localized]
             start = max(float(item[0]) for item in ranges)
             end = min(float(item[1]) for item in ranges)
-            if start < end and end - start <= 1.0 + 1e-9:
+            if start < end and end - start <= self._tolerance + 1e-9:
                 outputs = [
                     history[index].get("model_output") or {}
                     for index in positive_indices
@@ -326,7 +332,7 @@ class DeterministicPlanner(BaseAgentLLM):
 
         start, end = self._candidate(messages)
         width = end - start
-        if width > 1.0:
+        if width > self._tolerance:
             margin = width * 0.25
             sample_range = [start + margin, end - margin]
         else:
@@ -369,7 +375,7 @@ class RemoteAPIClient(BaseAgentLLM):
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
-        temperature: float = 0.7,
+        temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: int | None = None,
     ) -> Any:
         kwargs: dict[str, Any] = {
@@ -443,7 +449,7 @@ class LocalClient(BaseAgentLLM):
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
-        temperature: float = 0.7,
+        temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: int | None = None,
     ) -> Any:
         kwargs: dict[str, Any] = {
@@ -510,7 +516,7 @@ class AgentLLMFactory:
                 base_url: "http://localhost:11434/v1"
         """
         agent_cfg = config.get("agent", {})
-        backend = agent_cfg.get("backend", "remote")
+        backend = agent_cfg.get("backend", "local")
         selected_cfg = (
             agent_cfg.get(backend, {})
             if backend in {"local", "remote", "deterministic"}
@@ -596,8 +602,12 @@ class AgentLLMFactory:
 
         if backend == "deterministic":
             deterministic_cfg = agent_cfg.get("deterministic", {})
+            tolerance_seconds = validate_tolerance_seconds(
+                agent_cfg.get("tolerance_seconds", 1.0)
+            )
             return DeterministicPlanner(
-                model=deterministic_cfg.get("model", "v4.1-interval-policy-v1")
+                model=deterministic_cfg.get("model", "v4.1-interval-policy-v1"),
+                tolerance_seconds=tolerance_seconds,
             )
 
         raise ValueError(

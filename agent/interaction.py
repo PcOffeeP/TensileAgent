@@ -7,7 +7,7 @@ import logging
 import re
 from typing import Any
 
-from agent.config_util import load_config
+from agent.config_util import DEFAULT_TEMPERATURE, load_config
 from agent.llm import AgentLLMFactory
 from agent.prompts import (
     INTENT_RECOGNITION_SYSTEM_PROMPT,
@@ -313,16 +313,20 @@ def _apply_code_review(intent: UserIntent, question: str) -> UserIntent:
     return intent
 
 
-def parse_user_intent(question: str | None) -> UserIntent:
+def parse_user_intent(
+    question: str | None,
+    *,
+    config: dict[str, Any] | None = None,
+) -> UserIntent:
     """Parse user intent via model + code review, with deterministic fallback."""
     text = (question or "请完整分析这段拉伸试验视频").strip()
-    config = load_config()
-    backend = config.get("agent", {}).get("backend", "remote")
+    effective_config = config if config is not None else load_config()
+    backend = effective_config.get("agent", {}).get("backend", "local")
     if backend == "deterministic":
         return _regex_parse_user_intent(question)
 
     try:
-        client = AgentLLMFactory.create(config)
+        client = AgentLLMFactory.create(effective_config)
         messages: list[dict[str, Any]] = [
             {
                 "role": "system",
@@ -336,7 +340,11 @@ def parse_user_intent(question: str | None) -> UserIntent:
         response = client.chat_with_tools(
             messages=messages,
             tools=[],
-            temperature=float(config.get("agent", {}).get("temperature", 0.2)),
+            temperature=float(
+                effective_config.get("agent", {}).get(
+                    "temperature", DEFAULT_TEMPERATURE
+                )
+            ),
             max_tokens=_INTENT_MAX_TOKENS,
         )
         content = _extract_response_text(response)

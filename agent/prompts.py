@@ -12,6 +12,8 @@ See ``docs/PROJECT_PLAN.md`` for the authoritative Agent-side contract.
 
 from __future__ import annotations
 
+import math
+
 from agent.contract import load_visual_contract, visual_contract_hash
 
 # ---------------------------------------------------------------------------
@@ -133,7 +135,20 @@ def build_tensile_agent_user_context(
 ) -> str:
     """Build the per-round user prompt for the TensileAgent."""
     duration = video_meta.get("duration", 0.0)
-    fps = video_meta.get("fps", 0.0)
+    raw_fps = (
+        video_meta.get("original_fps")
+        if video_meta.get("original_fps") is not None
+        else video_meta.get("fps")
+    )
+    if (
+        isinstance(raw_fps, (int, float))
+        and not isinstance(raw_fps, bool)
+        and math.isfinite(float(raw_fps))
+        and float(raw_fps) > 0.0
+    ):
+        fps_display: int | float | str = raw_fps
+    else:
+        fps_display = "未知"
     total_frames = video_meta.get("total_frames", 0)
     video_id = video_meta.get("video_id", "unknown")
 
@@ -145,7 +160,7 @@ def build_tensile_agent_user_context(
         f"[视频元信息]",
         f"视频ID: {video_id}",
         f"总时长: {duration}s",
-        f"FPS: {fps}",
+        f"FPS: {fps_display}",
         f"总帧数: {total_frames}",
         "",
         "[配置参数]",

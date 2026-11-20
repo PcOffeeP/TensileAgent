@@ -153,6 +153,33 @@ class FakeInferenceClient:
         if isinstance(resp, InferenceResult):
             return resp
 
+        def _default_pp() -> dict[str, Any]:
+            manifest = getattr(video_input, "manifest", None) or []
+            if len(manifest) <= 8:
+                selected = manifest
+            else:
+                selected_indices = [
+                    round(i * (len(manifest) - 1) / 7) for i in range(8)
+                ]
+                selected = [manifest[i] for i in selected_indices]
+            return {
+                "request_id": "fake-uuid",
+                "processor_version": "minicpmv4.5/0.1",
+                "deployment_manifest": TEST_DEPLOYMENT_MANIFEST,
+                "max_frames": 8,
+                "frames": [
+                    {
+                        # ``index`` is the model-input position; the
+                        # timestamp carries the mapping to the clip.
+                        "index": i,
+                        "timestamp": float(
+                            frame.get("clip_timestamp", frame["timestamp"])
+                        ),
+                    }
+                    for i, frame in enumerate(selected)
+                ],
+            }
+
         if isinstance(resp, dict):
             # Older state-machine tests were authored against the retired
             # 36-frame protocol.  Normalize only those in-range legacy fixture
@@ -175,31 +202,7 @@ class FakeInferenceClient:
             # Explicit _preprocessing=None means "test missing-preprocessing path".
             pp = resp.get("_preprocessing")
             if "_preprocessing" not in resp:
-                manifest = getattr(video_input, "manifest", None) or []
-                if len(manifest) <= 8:
-                    selected = manifest
-                else:
-                    selected_indices = [
-                        round(i * (len(manifest) - 1) / 7) for i in range(8)
-                    ]
-                    selected = [manifest[i] for i in selected_indices]
-                pp = {
-                    "request_id": "fake-uuid",
-                    "processor_version": "minicpmv4.5/0.1",
-                    "deployment_manifest": TEST_DEPLOYMENT_MANIFEST,
-                    "max_frames": 8,
-                    "frames": [
-                        {
-                            # ``index`` is the model-input position; the
-                            # timestamp carries the mapping to the clip.
-                            "index": i,
-                            "timestamp": float(
-                                frame.get("clip_timestamp", frame["timestamp"])
-                            ),
-                        }
-                        for i, frame in enumerate(selected)
-                    ],
-                }
+                pp = _default_pp()
             return InferenceResult(
                 ok=True,
                 model_output=resp,
@@ -215,6 +218,7 @@ class FakeInferenceClient:
                     code="inference_failed", message="模型输出解析失败", field=None
                 ),
                 attempts=1,
+                preprocessing=_default_pp(),
             )
 
         # String: parse via ResultParser to produce ok/error.
@@ -222,8 +226,18 @@ class FakeInferenceClient:
 
         parsed = ResultParser.parse(resp)
         if parsed.ok:
-            return InferenceResult(ok=True, model_output=parsed.data, attempts=1)
-        return InferenceResult(ok=False, error=parsed.error, attempts=1)
+            return InferenceResult(
+                ok=True,
+                model_output=parsed.data,
+                attempts=1,
+                preprocessing=_default_pp(),
+            )
+        return InferenceResult(
+            ok=False,
+            error=parsed.error,
+            attempts=1,
+            preprocessing=_default_pp(),
+        )
 
 
 def make_config():
@@ -459,7 +473,7 @@ def test_initial_round_forces_complete_video_against_decision_model_subrange():
 def test_iterative_agent_handles_parse_error():
     video_meta = {"video_id": "v005", "duration": 100.0, "video_path": "v005.mp4"}
     config = make_config()
-    config["agent"]["tolerance_seconds"] = 5.0
+    config["agent"]["tolerance_seconds"] = 1.0
     config["agent"]["max_rounds"] = 3
 
     # First response is a parse failure as a string.
@@ -511,7 +525,7 @@ def test_iterative_agent_rejects_boundary_sentinel_as_parse_error():
     video_meta = {"video_id": "v004", "duration": 100.0, "video_path": "v004.mp4"}
     config = make_config()
     config["agent"]["max_rounds"] = 4
-    config["agent"]["tolerance_seconds"] = 5.0
+    config["agent"]["tolerance_seconds"] = 1.0
 
     responses = [
         # Round 0: full range, valid fracture in the middle.
@@ -806,7 +820,7 @@ def test_iterative_agent_out_of_bounds_fracture_between():
     """An out-of-range fracture_between must become a validation_error, not an IndexError."""
     video_meta = {"video_id": "v009", "duration": 100.0, "video_path": "v009.mp4"}
     config = make_config()
-    config["agent"]["tolerance_seconds"] = 5.0
+    config["agent"]["tolerance_seconds"] = 1.0
     config["agent"]["max_rounds"] = 5
 
     # Use explicit preprocessing with 8 frames to ensure [100,101] is out-of-range.
@@ -885,7 +899,7 @@ def test_iterative_agent_inference_returns_none_is_parse_error():
     """If InferenceClient.infer returns ok=False, the agent records a validation error."""
     video_meta = {"video_id": "v010", "duration": 100.0, "video_path": "v010.mp4"}
     config = make_config()
-    config["agent"]["tolerance_seconds"] = 5.0
+    config["agent"]["tolerance_seconds"] = 1.0
     config["agent"]["max_rounds"] = 3
 
     responses = [

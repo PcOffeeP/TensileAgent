@@ -478,6 +478,15 @@ class TestUnrecognizedReasonsEndToEnd:
                 "location": None,
                 "confidence": 0.70,
             }
+            responses = [output, deepcopy(output)]
+            sequence = [
+                ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+                ("sample_and_infer", {"sample_range": [10.0, 20.0], "prompt": "recheck"}),
+                (
+                    "terminate",
+                    {"status": "unrecognized", "unrecognized_reason": reason},
+                ),
+            ]
         elif reason == "not_clamped":
             output = {
                 "has_fracture": False,
@@ -486,6 +495,66 @@ class TestUnrecognizedReasonsEndToEnd:
                 "location": None,
                 "confidence": 0.70,
             }
+            responses = [output, deepcopy(output)]
+            sequence = [
+                ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+                ("sample_and_infer", {"sample_range": [10.0, 20.0], "prompt": "recheck"}),
+                (
+                    "terminate",
+                    {"status": "unrecognized", "unrecognized_reason": reason},
+                ),
+            ]
+        elif reason == "conflicting_results":
+            responses = [
+                {
+                    "has_fracture": True,
+                    "fracture_between": [0, 1],
+                    "type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.80,
+                },
+                {
+                    "has_fracture": True,
+                    "fracture_between": [6, 7],
+                    "type": "韧性断裂",
+                    "location": "inside_gauge",
+                    "confidence": 0.80,
+                },
+            ]
+            sequence = [
+                ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+                ("sample_and_infer", {"sample_range": [50.0, 100.0], "prompt": "analyze"}),
+                (
+                    "terminate",
+                    {"status": "unrecognized", "unrecognized_reason": reason},
+                ),
+            ]
+        elif reason == "invalid_model_output":
+            responses = [None]
+            sequence = [
+                ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+                (
+                    "terminate",
+                    {"status": "unrecognized", "unrecognized_reason": reason},
+                ),
+            ]
+        elif reason == "max_rounds":
+            config["agent"]["max_rounds"] = 2
+            output = {
+                "has_fracture": False,
+                "fracture_between": None,
+                "type": "未断裂",
+                "location": None,
+                "confidence": 0.50,
+            }
+            responses = [output]
+            sequence = [
+                ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
+                (
+                    "terminate",
+                    {"status": "unrecognized", "unrecognized_reason": reason},
+                ),
+            ]
         else:
             output = {
                 "has_fracture": False,
@@ -494,27 +563,14 @@ class TestUnrecognizedReasonsEndToEnd:
                 "location": None,
                 "confidence": 0.50,
             }
-        responses = [output, deepcopy(output)]
-
-        sequence = [
-            ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"})
-        ]
-        if reason in {"video_anomaly", "not_clamped"}:
-            sequence.append(
+            responses = [output]
+            sequence = [
+                ("sample_and_infer", {"sample_range": [0.0, 100.0], "prompt": "analyze"}),
                 (
-                    "sample_and_infer",
-                    {"sample_range": [10.0, 20.0], "prompt": "recheck"},
-                )
-            )
-        sequence.append(
-            (
-                "terminate",
-                {
-                    "status": "unrecognized",
-                    "unrecognized_reason": reason,
-                },
-            )
-        )
+                    "terminate",
+                    {"status": "unrecognized", "unrecognized_reason": reason},
+                ),
+            ]
         llm = StaticLLM(sequence)
 
         agent = IterativeAgent(
@@ -816,7 +872,7 @@ class TestRunnerOkFalseInput:
             "video_path": "v_inp_001.mp4",
         }
         config = make_config()
-        config["agent"]["tolerance_seconds"] = 5.0
+        config["agent"]["tolerance_seconds"] = 1.0
         config["agent"]["max_rounds"] = 3
 
         responses = [

@@ -17,6 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from agent.config_util import DEFAULT_TEMPERATURE, validate_tolerance_seconds
 from agent.inference import (
     InferenceClient,
     InferenceResult,
@@ -105,9 +106,11 @@ class IterativeAgent:
 
         agent_cfg = config.get("agent", {})
         self.max_rounds = agent_cfg.get("max_rounds", 10)
-        self.tolerance = agent_cfg.get("tolerance_seconds", 1.0)
+        self.tolerance = validate_tolerance_seconds(
+            agent_cfg.get("tolerance_seconds", 1.0)
+        )
         self.max_low_conf_rounds = agent_cfg.get("max_low_conf_rounds", 2)
-        self.temperature = agent_cfg.get("temperature", 0.7)
+        self.temperature = agent_cfg.get("temperature", DEFAULT_TEMPERATURE)
 
         self.state = "INITIAL"
         duration = video_meta.get("duration", 0.0)
@@ -116,14 +119,13 @@ class IterativeAgent:
         self.no_fracture_count = 0
         self.low_conf_count = 0
         self.conflict_count = 0
-        self.focus_miss_count = 0
         self.infra_fail_count = 0
         self.infra_terminated = False
         self.last_infra_error: dict[str, Any] | None = None
         self.fatal_infra_error: dict[str, Any] | None = None
-        self.last_round_confidence_level = "不可信"
-        self.best_positive_round: dict[str, Any] | None = None
         self.coverage_index = 0
+        self.coverage_start_index: int | None = None
+        self._initial_full_scan_done = False
         self.localization_index = 0
         self.pending_recheck_range: list[float] | None = None
 
@@ -466,7 +468,9 @@ class IterativeAgent:
                 # overridden through tool arguments.
                 if self.pending_recheck_range is not None:
                     tool_args["sample_range"] = list(self.pending_recheck_range)
-                elif self.state == "INITIAL":
+                elif self.state == "INITIAL" and not getattr(
+                    self, "_initial_full_scan_done", False
+                ):
                     # The first semantic inspection is program-owned and must
                     # cover the complete video. Invalid retries remain in
                     # INITIAL and are forced to the same full range.
@@ -772,6 +776,35 @@ class IterativeAgent:
             }:
                 if not self._has_consistent_special_recheck(unrecognized_reason):
                     return False, "视觉不可判定或未夹紧必须在同一区间得到两次一致结果"
+            elif unrecognized_reason in {"max_rounds", "budget_exhausted"}:
+                if (
+                    round_idx + 1 < self.max_rounds
+                    and len(self.history) < self.max_rounds
+                ):
+                    return (
+                        False,
+                        "当前迭代预算尚未耗尽，不能以 max_rounds/budget_exhausted 提前终止",
+                    )
+            elif unrecognized_reason == "conflicting_results":
+                has_conflict = self.conflict_count > 0 or (
+                    self.visual_contract_version == "tensile-vlm/v4.1"
+                    and self._ensure_event_bounds().unresolved_conflict
+                )
+                if not has_conflict:
+                    return False, "当前尚未观察到不可调和的冲突证据，不能以 conflicting_results 终止"
+            elif unrecognized_reason == "invalid_model_output":
+                has_validation_error = any(
+                    entry.get("result", {}).get("validation_error") is not None
+                    for entry in self.history
+                )
+                if not has_validation_error:
+                    return False, "当前尚未观察到非法视觉输出，不能以 invalid_model_output 终止"
+            elif unrecognized_reason in {
+                "insufficient_confidence",
+                "incomplete_coverage",
+            }:
+                if not self.history:
+                    return False, "尚未执行任何视觉观察，不能以证据不足或覆盖不全终止"
             return True, "模型明确报告无法识别"
 
         if status == "no_fracture":
@@ -876,7 +909,6 @@ class IterativeAgent:
         if validation_error:
             # Validation failures must not drive state transitions.  Record low
             # confidence and optionally fall back to avoid getting stuck.
-            self.last_round_confidence_level = "不可信"
             self.low_conf_count += 1
             if self.low_conf_count >= self.max_low_conf_rounds:
                 self.candidate = self._expand_candidate(self.candidate)
@@ -890,14 +922,12 @@ class IterativeAgent:
             return
         has_fracture = model_output.get("has_fracture", False)
         new_range = result.get("inferred_time_range")
-        confidence_level = result.get("round_confidence_level", "不可信")
 
         # ------------------------------------------------------------------
         # has_fracture is None: video anomaly / cannot determine
         # Do not enter NO_FRACTURE state, do not increment counters.
         # ------------------------------------------------------------------
         if has_fracture is None:
-            self.last_round_confidence_level = confidence_level
             if self.state == "LOCALIZING":
                 self.localization_index += 1
             self._update_special_recheck(result)
@@ -907,8 +937,6 @@ class IterativeAgent:
         # No-fracture path (has_fracture is False)
         # ------------------------------------------------------------------
         if has_fracture is False:
-            self.last_round_confidence_level = confidence_level
-
             if self.state == "LOCALIZING":
                 self.localization_index += 1
                 return
@@ -916,6 +944,13 @@ class IterativeAgent:
             if model_output.get("type") == FractureType.NOT_CLAMPED:
                 self._update_special_recheck(result)
                 return
+
+            if self.pending_recheck_range is not None and self._same_range(
+                result.get("sample_range"), self.pending_recheck_range
+            ):
+                self.pending_recheck_range = None
+            if self._is_full_video_range(result.get("sample_range")):
+                self._initial_full_scan_done = True
 
             if self.state == "COVERAGE":
                 expected = self._coverage_ranges()[self.coverage_index]
@@ -943,7 +978,6 @@ class IterativeAgent:
                 return
 
             # Focused sub-interval returned false: expand and fall back.
-            self.focus_miss_count += 1
             self.candidate = self._expand_candidate(self.candidate)
             result["fallback"] = "focus_false_expanded_to_parent_range"
             return
@@ -951,6 +985,8 @@ class IterativeAgent:
         # ------------------------------------------------------------------
         # Fracture path
         # ------------------------------------------------------------------
+        if self._is_full_video_range(result.get("sample_range")):
+            self._initial_full_scan_done = True
         self.no_fracture_count = 0
         self.pending_recheck_range = None
         if self.state in ("INITIAL", "NO_FRACTURE", "COVERAGE"):
@@ -974,12 +1010,10 @@ class IterativeAgent:
                 self.candidate = new_range
                 self.conflict_count = 0
                 self.low_conf_count = 0
-                self.focus_miss_count = 0
             elif not (n1 < c0 or n0 > c1):
                 self.candidate = [max(c0, n0), min(c1, n1)]
                 self.conflict_count = 0
                 self.low_conf_count = 0
-                self.focus_miss_count = 0
             else:
                 self.candidate = [min(c0, n0), max(c1, n1)]
                 self.conflict_count += 1
@@ -1001,8 +1035,6 @@ class IterativeAgent:
         if self.conflict_count >= 3:
             self.state = "TERMINATED"
 
-        self.last_round_confidence_level = confidence_level
-
     def _transition_v4_1(
         self,
         result: dict[str, Any],
@@ -1011,8 +1043,6 @@ class IterativeAgent:
         """Apply V4.1 directional clip-state semantics without model-owned time."""
         state = model_output.get("clip_state")
         sample_range = result.get("sample_range")
-        confidence_level = result.get("round_confidence_level", "不可信")
-        self.last_round_confidence_level = confidence_level
         if (
             state not in {"未断裂", "临界未断裂", "发生断裂", "已断裂", "无法判断"}
             or not isinstance(sample_range, list)
@@ -1030,23 +1060,30 @@ class IterativeAgent:
             self._update_special_recheck(result)
             return
 
+        if self.pending_recheck_range is not None and self._same_range(
+            sample_range, self.pending_recheck_range
+        ):
+            self.pending_recheck_range = None
+
+        is_full_video = self._is_full_video_range(sample_range)
+        if is_full_video:
+            self._initial_full_scan_done = True
+
         if state == "未断裂":
             if self.state == "COVERAGE":
-                expected = self._coverage_ranges()[self.coverage_index]
-                if self._same_range(sample_range, expected):
-                    self.coverage_index += 1
-                    self.no_fracture_count = self.coverage_index
-                    if self.coverage_index >= 5:
-                        self.state = "NO_FRACTURE"
+                if self.coverage_index < 5:
+                    expected = self._coverage_ranges()[self.coverage_index]
+                    if self._same_range(sample_range, expected):
+                        self.coverage_index += 1
+                        self.no_fracture_count = self.coverage_index
+                        if self.coverage_index >= 5:
+                            self.state = "NO_FRACTURE"
                 return
-            is_global_scope = self.state == "INITIAL" or (
-                self.candidate[0] <= 0.0
-                and self.candidate[1] >= self.video_meta.get("duration", 0.0)
-            )
-            if is_global_scope:
+            if is_full_video and not self._has_positive_fracture_evidence():
                 self.state = "COVERAGE"
                 self.coverage_index = 0
                 self.no_fracture_count = 0
+                self.coverage_start_index = len(getattr(self, "history", []))
                 return
 
         event_bounds = self._ensure_event_bounds()
@@ -1056,6 +1093,10 @@ class IterativeAgent:
         if update.conflict:
             self.conflict_count = event_bounds.conflict_count
             result["conflict_handled"] = "event_bounds_update_rejected"
+            if self.state == "INITIAL" and getattr(
+                self, "_initial_full_scan_done", False
+            ):
+                self.state = "NARROWING"
             return
         if update.conflict_resolved:
             self.conflict_count = event_bounds.conflict_count
@@ -1068,12 +1109,12 @@ class IterativeAgent:
                 self.candidate = event_bounds.interval
                 self.state = "NARROWING"
             else:
-                self.focus_miss_count += 1
                 self.candidate = self._expand_candidate(self.candidate)
                 result["fallback"] = "v4_1_later_no_op_expanded_sampling_range"
             return
 
         self.no_fracture_count = 0
+        self.coverage_start_index = None
         self.pending_recheck_range = None
         if state == "已断裂":
             result["v4_1_search_direction"] = "earlier"
@@ -1166,8 +1207,52 @@ class IterativeAgent:
             and abs(float(left[1]) - float(right[1])) <= epsilon
         )
 
+    def _is_full_video_range(self, sample_range: Any) -> bool:
+        duration = float(self.video_meta.get("duration", 0.0))
+        return duration > 0.0 and self._same_range(sample_range, [0.0, duration])
+
+    def _has_positive_fracture_evidence(self) -> bool:
+        return any(
+            self._round_has_fracture(entry) for entry in getattr(self, "history", [])
+        )
+
     def _has_complete_no_fracture_coverage(self) -> bool:
         """Validate five fixed windows from recorded, legal model results."""
+        if getattr(self, "visual_contract_version", None) == "tensile-vlm/v4.1":
+            if self._has_positive_fracture_evidence():
+                return False
+            start_idx = getattr(self, "coverage_start_index", None)
+            if (
+                start_idx is None
+                or start_idx < 0
+                or start_idx >= len(self.history)
+            ):
+                return False
+            initiator = self.history[start_idx].get("result", {})
+            initiator_output = initiator.get("model_output") or {}
+            if not (
+                initiator.get("ok") is True
+                and initiator_output.get("clip_state") == "未断裂"
+                and self._is_full_video_range(initiator.get("sample_range"))
+            ):
+                return False
+            coverage_entries = self.history[start_idx + 1 :]
+            for expected in self._coverage_ranges():
+                matched = any(
+                    entry.get("result", {}).get("ok") is True
+                    and self._same_range(
+                        entry.get("result", {}).get("sample_range"), expected
+                    )
+                    and (entry.get("result", {}).get("model_output") or {}).get(
+                        "clip_state"
+                    )
+                    == "未断裂"
+                    for entry in coverage_entries
+                )
+                if not matched:
+                    return False
+            return True
+
         for expected in self._coverage_ranges():
             matched = False
             for entry in self.history:
@@ -1193,32 +1278,50 @@ class IterativeAgent:
     def _has_consistent_special_recheck(self, reason: str) -> bool:
         """Require two matching anomaly/not-clamped results on the same range."""
         matches: list[tuple[list[float], tuple[Any, Any]]] = []
+        is_v4_1 = getattr(self, "visual_contract_version", None) == "tensile-vlm/v4.1"
         for entry in self.history:
             result = entry.get("result", {})
+            if result.get("ok") is not True:
+                continue
             output = result.get("model_output") or {}
-            is_match = (
-                reason in {"video_anomaly", "visual_indeterminate"}
-                and (
-                    output.get("has_fracture") is None
-                    or output.get("clip_state") == "无法判断"
-                )
-            ) or (
-                reason == "not_clamped"
-                and (
-                    output.get("type") == FractureType.NOT_CLAMPED
-                    or output.get("special_case") == "未夹紧"
-                )
-            )
-            if result.get("ok") is True and is_match:
+            if is_v4_1 or "clip_state" in output:
+                clip_state = output.get("clip_state")
+                special_case = output.get("special_case")
+                if clip_state != "无法判断":
+                    continue
+                if reason == "not_clamped":
+                    if special_case != "未夹紧":
+                        continue
+                elif reason == "video_anomaly":
+                    if special_case != "视频异常":
+                        continue
+                elif reason == "visual_indeterminate":
+                    if special_case in {"未夹紧", "视频异常"}:
+                        continue
+                else:
+                    continue
                 matches.append(
                     (
                         result.get("sample_range"),
-                        (
-                            output.get("has_fracture", output.get("clip_state")),
-                            output.get("type", output.get("special_case")),
-                        ),
+                        (clip_state, special_case),
                     )
                 )
+            else:
+                is_match = (
+                    reason in {"video_anomaly", "visual_indeterminate"}
+                    and "has_fracture" in output
+                    and output.get("has_fracture") is None
+                ) or (
+                    reason == "not_clamped"
+                    and output.get("type") == FractureType.NOT_CLAMPED
+                )
+                if is_match:
+                    matches.append(
+                        (
+                            result.get("sample_range"),
+                            (output.get("has_fracture"), output.get("type")),
+                        )
+                    )
         for index, (sample_range, signature) in enumerate(matches):
             if any(
                 self._same_range(sample_range, other_range)
@@ -1442,22 +1545,35 @@ class IterativeAgent:
 
         positive_rounds = [r for r in self.history if self._round_has_fracture(r)]
         if self.state == "NO_FRACTURE":
-            if positive_rounds:
-                logger.info(
-                    "NO_FRACTURE state machine priority takes precedence over "
-                    "%d stale positive round(s)",
-                    len(positive_rounds),
+            if self.visual_contract_version == "tensile-vlm/v4.1":
+                if self._has_complete_no_fracture_coverage():
+                    return self._finalize(
+                        self._build_non_fracture_args(
+                            {
+                                "status": "no_fracture",
+                                "confidence": self._build_confidence_breakdown(
+                                    "no_fracture", []
+                                ),
+                            }
+                        )
+                    )
+            else:
+                if positive_rounds:
+                    logger.info(
+                        "NO_FRACTURE state machine priority takes precedence over "
+                        "%d stale positive round(s)",
+                        len(positive_rounds),
+                    )
+                return self._finalize(
+                    self._build_non_fracture_args(
+                        {
+                            "status": "no_fracture",
+                            "confidence": self._build_confidence_breakdown(
+                                "no_fracture", []
+                            ),
+                        }
+                    )
                 )
-            return self._finalize(
-                self._build_non_fracture_args(
-                    {
-                        "status": "no_fracture",
-                        "confidence": self._build_confidence_breakdown(
-                            "no_fracture", []
-                        ),
-                    }
-                )
-            )
 
         if len(positive_rounds) >= 2 and any(
             self._round_is_local_fracture(r) for r in positive_rounds
@@ -1509,21 +1625,21 @@ class IterativeAgent:
             else None,
             "unrecognized_reason": args.get("unrecognized_reason"),
         }
-        # Validate against the contract schema; on failure, downgrade to unrecognized.
+        # Validate against the contract schema; a program-assembled output that
+        # violates the contract is an internal error, never a business rejection.
         try:
             output.update(FinalOutput(**output).model_dump(mode="json"))
         except Exception as exc:
             reason = f"Final output schema validation failed: {exc}"
-            logger.warning(reason)
-            output["status"] = "unrecognized"
-            output["time_range"] = None
-            output["fracture_type"] = None
-            output["location"] = None
-            output["confidence"] = None
-            output["visual_evidence"] = self._build_visual_evidence()
-            output["special_case"] = None
-            output["unrecognized_reason"] = "invalid_model_output"
-            output["downgrade_reason"] = reason
+            logger.error(reason)
+            return RunnerResult(
+                ok=False,
+                error=RunnerError(
+                    stage="internal",
+                    code="final_output_contract_violation",
+                    message=reason,
+                ),
+            ).model_dump()
 
         # Append metadata.
         output["rounds"] = len(self.history)
@@ -1819,22 +1935,9 @@ class IterativeAgent:
             "round_confidence_level": "不可信",
         }
 
-        # Handle inference failure.
-        if not inference_result.ok:
-            result["ok"] = False
-            result["model_output"] = None
-            err = inference_result.error
-            result["validation_error"] = {
-                "code": err.code if err else "inference_failed",
-                "message": err.message if err else "模型输出解析失败",
-                "field": err.field if err else None,
-            }
-            return _finalize(result)
-
-        # Server-side preprocessing metadata is mandatory for every semantic
-        # result. Negative/anomaly predictions are not exempt: accepting them
-        # without proving which frames the model saw would make coverage and
-        # repeat-check evidence unverifiable.
+        # Server-side preprocessing metadata and deployment identity take
+        # precedence over visual response parse failures so infrastructure or
+        # contract drift cannot be disguised as a business rejection.
         preprocessing = inference_result.preprocessing
         pp_error_code = _validate_preprocessing_meta(
             preprocessing,
@@ -1851,14 +1954,33 @@ class IterativeAgent:
                 }
                 else "missing_or_invalid_preprocessing_metadata"
             )
-            return _finalize(
-                self._infra_error_result(
-                    sample_range,
-                    stage="inference_transport",
-                    code=failure_code,
-                    message=f"服务端 preprocessing 元数据无效: {pp_error_code}",
-                )
+            infra_res = self._infra_error_result(
+                sample_range,
+                stage="inference_transport",
+                code=failure_code,
+                message=f"服务端 preprocessing 元数据无效: {pp_error_code}",
             )
+            if not inference_result.ok:
+                err = inference_result.error
+                infra_res["validation_error"] = {
+                    "code": err.code if err else "inference_failed",
+                    "message": err.message if err else "模型输出解析失败",
+                    "field": err.field if err else None,
+                }
+            return _finalize(infra_res)
+
+        # Handle inference failure (with valid server preprocessing metadata).
+        if not inference_result.ok:
+            result["ok"] = False
+            result["model_output"] = None
+            err = inference_result.error
+            result["validation_error"] = {
+                "code": err.code if err else "inference_failed",
+                "message": err.message if err else "模型输出解析失败",
+                "field": err.field if err else None,
+            }
+            return _finalize(result)
+
         server_frames: list[dict[str, Any]] = preprocessing["frames"]
 
         # Structurally valid output with authoritative frame metadata is usable
@@ -1902,25 +2024,19 @@ class IterativeAgent:
                 return _finalize(result)
 
             if len(fracture_between) != 2:
-                return _finalize(
-                    _reject_indices(
-                        f"fracture_between 长度必须为 2，got {fracture_between}"
-                    )
+                return _reject_indices(
+                    f"fracture_between 长度必须为 2，got {fracture_between}"
                 )
             i, j = fracture_between
             if not (0 <= i < n and 0 <= j < n):
-                return _finalize(
-                    _reject_indices(
-                        f"fracture_between {fracture_between} "
-                        f"超出采样帧索引范围 [0, {n - 1}]"
-                    )
+                return _reject_indices(
+                    f"fracture_between {fracture_between} "
+                    f"超出采样帧索引范围 [0, {n - 1}]"
                 )
             if i == j:
-                return _finalize(
-                    _reject_indices(
-                        f"fracture_between {fracture_between} "
-                        f"必须是严格相邻的两帧 [i, i+1]"
-                    )
+                return _reject_indices(
+                    f"fracture_between {fracture_between} "
+                    f"必须是严格相邻的两帧 [i, i+1]"
                 )
 
             # Map through server frames (authoritative frame table).

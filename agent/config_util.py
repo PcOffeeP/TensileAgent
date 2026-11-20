@@ -6,12 +6,30 @@ and listing available models from OpenAI-compatible endpoints.
 
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 from typing import Any
 
 import yaml
 import requests
+
+MAX_TOLERANCE_SECONDS = 1.0
+DEFAULT_TEMPERATURE = 0.2
+
+
+def validate_tolerance_seconds(value: Any) -> float:
+    """Validate that ``tolerance_seconds`` is a finite number in ``(0, 1.0]``."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(
+            f"agent.tolerance_seconds must be a finite number in (0, {MAX_TOLERANCE_SECONDS}], got {value!r}"
+        )
+    tol = float(value)
+    if not math.isfinite(tol) or tol <= 0.0 or tol > MAX_TOLERANCE_SECONDS:
+        raise ValueError(
+            f"agent.tolerance_seconds must be a finite number in (0, {MAX_TOLERANCE_SECONDS}], got {value!r}"
+        )
+    return tol
 
 # ── Paths ──
 

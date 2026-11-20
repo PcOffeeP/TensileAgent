@@ -10,7 +10,11 @@ from typing import Any
 
 import requests
 
-from agent.config_util import get_inference_api_key, get_local_model_digest
+from agent.config_util import (
+    get_api_key,
+    get_inference_api_key,
+    get_local_model_digest,
+)
 from agent.contract import CONTRACT_VERSION, visual_contract_hash
 from agent.runner import load_config
 
@@ -33,6 +37,18 @@ def run_doctor(config_path: str | Path = "agent/config.yaml") -> dict[str, Any]:
             in {"v4.1-interval-policy-v1", "v2-interval-policy-v1"},
             "backend": decision_backend,
             "model": planner.get("model"),
+        }
+    elif decision_backend == "remote":
+        remote = config.get("agent", {}).get("remote", {})
+        model = str(remote.get("model") or "")
+        base_url = str(remote.get("base_url") or "")
+        api_key = remote.get("api_key") or get_api_key()
+        checks["decision_backend"] = {
+            "ok": bool(model and base_url and api_key),
+            "backend": decision_backend,
+            "model": model or None,
+            "base_url": base_url or None,
+            "auth_configured": bool(api_key),
         }
     else:
         model = str(local.get("model", ""))
