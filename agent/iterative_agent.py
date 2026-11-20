@@ -332,11 +332,18 @@ class IterativeAgent:
                 continue
 
             try:
-                response = self.llm.chat_with_tools(
-                    messages=messages,
-                    tools=TOOLS_SCHEMA,
-                    temperature=self.temperature,
-                )
+                if hasattr(self.llm, "plan_from_state"):
+                    response = self.llm.plan_from_state(
+                        history=self.history,
+                        candidate=list(self.candidate),
+                        event_bounds=self._ensure_event_bounds().interval,
+                    )
+                else:
+                    response = self.llm.chat_with_tools(
+                        messages=messages,
+                        tools=TOOLS_SCHEMA,
+                        temperature=self.temperature,
+                    )
             except Exception as exc:
                 logger.exception("Decision backend failed")
                 return RunnerResult(

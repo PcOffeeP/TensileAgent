@@ -34,20 +34,21 @@ DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BACKOFF = 2.0
 
 
-def _call_with_retry(
+def _call_with_retry_counted(
     fn: Callable[[], Any],
     *,
     max_retries: int = DEFAULT_MAX_RETRIES,
     backoff: float = DEFAULT_RETRY_BACKOFF,
-) -> Any:
-    """Call ``fn`` with finite retries and exponential backoff."""
+) -> tuple[Any, int]:
+    """Call ``fn`` with finite retries and return ``(result, retry_count)``."""
     last_error: Exception | None = None
     for attempt in range(max_retries + 1):
         try:
-            return fn()
+            return fn(), attempt
         except Exception as exc:
             last_error = exc
             if attempt >= max_retries or not _is_retryable_error(exc):
+                setattr(exc, "_retry_count", attempt)
                 raise
             sleep_seconds = backoff**attempt
             logger.warning(
@@ -59,6 +60,19 @@ def _call_with_retry(
             )
             time.sleep(sleep_seconds)
     raise last_error  # type: ignore[misc]
+
+
+def _call_with_retry(
+    fn: Callable[[], Any],
+    *,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff: float = DEFAULT_RETRY_BACKOFF,
+) -> Any:
+    """Call ``fn`` with finite retries and exponential backoff."""
+    result, _ = _call_with_retry_counted(
+        fn, max_retries=max_retries, backoff=backoff
+    )
+    return result
 
 
 def _record_trace(recorder: TransportTraceRecorder | None, **kwargs: Any) -> None:
@@ -188,6 +202,25 @@ class DeterministicPlanner(BaseAgentLLM):
             and abs(float(left[1]) - float(right[1])) <= 1e-6
         )
 
+    def plan_from_state(
+        self,
+        *,
+        history: list[dict[str, Any]],
+        candidate: list[float],
+        event_bounds: list[float] | None = None,
+    ) -> Any:
+        """Plan directly from structured runtime history and stable evidence indices."""
+        observations = [
+            (index, entry.get("result") or {})
+            for index, entry in enumerate(history)
+            if isinstance(entry, dict) and isinstance(entry.get("result"), dict)
+        ]
+        return self._plan(
+            observations=observations,
+            candidate=list(candidate),
+            event_bounds=list(event_bounds) if event_bounds is not None else None,
+        )
+
     def chat_with_tools(
         self,
         messages: list[dict[str, Any]],
@@ -197,7 +230,21 @@ class DeterministicPlanner(BaseAgentLLM):
     ) -> Any:
         del tools, temperature, max_tokens
         history = self._history(messages)
-        valid = [item for item in history if item.get("ok") is True]
+        observations = [(index, item) for index, item in enumerate(history)]
+        return self._plan(
+            observations=observations,
+            candidate=self._candidate(messages),
+            event_bounds=None,
+        )
+
+    def _plan(
+        self,
+        *,
+        observations: list[tuple[int, dict[str, Any]]],
+        candidate: list[float],
+        event_bounds: list[float] | None,
+    ) -> Any:
+        valid = [item for _, item in observations if item.get("ok") is True]
         is_v2 = self._model == "v2-interval-policy-v1"
 
         if len(valid) >= 2:
@@ -264,73 +311,81 @@ class DeterministicPlanner(BaseAgentLLM):
         ):
             return self._tool_call("terminate", {"status": "no_fracture"})
 
-        positive_indices = [
-            index
-            for index, item in enumerate(history)
-            if (
+        positive_entries = [
+            (evidence_index, item)
+            for evidence_index, item in observations
+            if item.get("ok") is True
+            and (
                 (item.get("model_output") or {}).get("has_fracture") is True
                 if is_v2
                 else (item.get("model_output") or {}).get("clip_state")
                 in {"发生断裂", "已断裂"}
             )
         ]
+        positive_indices = [evidence_index for evidence_index, _ in positive_entries]
         localized = [
-            index
-            for index in positive_indices
-            if isinstance(history[index].get("inferred_time_range"), list)
+            item["inferred_time_range"]
+            for _, item in positive_entries
+            if isinstance(item.get("inferred_time_range"), list)
+            and len(item["inferred_time_range"]) == 2
         ]
-        if len(positive_indices) >= 2 and len(localized) >= 2:
-            ranges = [history[index]["inferred_time_range"] for index in localized]
-            start = max(float(item[0]) for item in ranges)
-            end = min(float(item[1]) for item in ranges)
-            if start < end and end - start <= self._tolerance + 1e-9:
-                outputs = [
-                    history[index].get("model_output") or {}
-                    for index in positive_indices
-                ]
-                mechanism = next(
+        bounds_publishable = False
+        if not is_v2 and event_bounds is not None and len(event_bounds) == 2:
+            b_start, b_end = float(event_bounds[0]), float(event_bounds[1])
+            bounds_publishable = (
+                len(positive_indices) >= 2
+                and b_start < b_end
+                and b_end - b_start <= self._tolerance + 1e-9
+            )
+        if not bounds_publishable and len(positive_indices) >= 2 and len(localized) >= 2:
+            start = max(float(item[0]) for item in localized)
+            end = min(float(item[1]) for item in localized)
+            bounds_publishable = start < end and end - start <= self._tolerance + 1e-9
+        if bounds_publishable:
+            outputs = [item.get("model_output") or {} for _, item in positive_entries]
+            mechanism = next(
+                (
                     (
-                        (
-                            output.get("type")
-                            if is_v2
-                            else output.get("fracture_mechanism")
-                        )
-                        for output in reversed(outputs)
-                        if (
-                            output.get("type")
-                            if is_v2
-                            else output.get("fracture_mechanism")
-                        )
-                    ),
-                    None,
-                )
-                site = next(
+                        output.get("type")
+                        if is_v2
+                        else output.get("fracture_mechanism")
+                    )
+                    for output in reversed(outputs)
+                    if (
+                        output.get("type")
+                        if is_v2
+                        else output.get("fracture_mechanism")
+                    )
+                ),
+                None,
+            )
+            site = next(
+                (
                     (
-                        (
-                            output.get("location")
-                            if is_v2
-                            else output.get("fracture_site")
-                        )
-                        for output in reversed(outputs)
-                        if (
-                            output.get("location")
-                            if is_v2
-                            else output.get("fracture_site")
-                        )
-                    ),
-                    None,
-                )
-                return self._tool_call(
-                    "terminate",
-                    {
-                        "status": "fracture",
-                        "fracture_type": mechanism,
-                        "location": site,
-                        "evidence_rounds": positive_indices,
-                    },
-                )
+                        output.get("location")
+                        if is_v2
+                        else output.get("fracture_site")
+                    )
+                    for output in reversed(outputs)
+                    if (
+                        output.get("location")
+                        if is_v2
+                        else output.get("fracture_site")
+                    )
+                ),
+                None,
+            )
+            return self._tool_call(
+                "terminate",
+                {
+                    "status": "fracture",
+                    "fracture_type": mechanism,
+                    "location": site,
+                    "evidence_rounds": positive_indices,
+                },
+            )
 
-        start, end = self._candidate(messages)
+        start, end = float(candidate[0]), float(candidate[1])
         width = end - start
         if width > self._tolerance:
             margin = width * 0.25
@@ -389,7 +444,7 @@ class RemoteAPIClient(BaseAgentLLM):
             kwargs["max_tokens"] = max_tokens
         started_at = time.monotonic()
         try:
-            response = _call_with_retry(
+            response, retry_count = _call_with_retry_counted(
                 lambda: self.client.chat.completions.create(**kwargs),
                 max_retries=DEFAULT_MAX_RETRIES,
                 backoff=DEFAULT_RETRY_BACKOFF,
@@ -401,6 +456,7 @@ class RemoteAPIClient(BaseAgentLLM):
                 response=None,
                 started_at=started_at,
                 error=exc,
+                retry_count=int(getattr(exc, "_retry_count", 0)),
             )
             raise
         _record_trace(
@@ -408,6 +464,7 @@ class RemoteAPIClient(BaseAgentLLM):
             request=kwargs,
             response=response,
             started_at=started_at,
+            retry_count=retry_count,
         )
         return response
 
@@ -464,7 +521,7 @@ class LocalClient(BaseAgentLLM):
         kwargs["reasoning_effort"] = self._reasoning_effort
         started_at = time.monotonic()
         try:
-            response = _call_with_retry(
+            response, retry_count = _call_with_retry_counted(
                 lambda: self.client.chat.completions.create(**kwargs),
                 max_retries=DEFAULT_MAX_RETRIES,
                 backoff=DEFAULT_RETRY_BACKOFF,
@@ -476,6 +533,7 @@ class LocalClient(BaseAgentLLM):
                 response=None,
                 started_at=started_at,
                 error=exc,
+                retry_count=int(getattr(exc, "_retry_count", 0)),
             )
             raise
         _record_trace(
@@ -484,6 +542,7 @@ class LocalClient(BaseAgentLLM):
             response=response,
             started_at=started_at,
             include_reasoning=self._reasoning_effort != "none",
+            retry_count=retry_count,
         )
         return response
 

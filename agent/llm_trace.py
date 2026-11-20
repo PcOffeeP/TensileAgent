@@ -102,6 +102,7 @@ class TransportTraceRecorder:
         started_at: float,
         error: Exception | None = None,
         include_reasoning: bool = False,
+        retry_count: int = 0,
     ) -> Path:
         with self._lock:
             self._counter += 1
@@ -119,9 +120,8 @@ class TransportTraceRecorder:
             if response is not None
             else None,
             "elapsed_seconds": round(time.monotonic() - started_at, 6),
-            # The decision clients disable SDK-level retries so this value is
-            # exact rather than an estimate hidden inside the SDK.
-            "retry_count": 0,
+            # Exact transport retry count performed by the client (SDK retries disabled).
+            "retry_count": int(retry_count),
             "error": None
             if error is None
             else {"type": type(error).__name__, "message": sanitize_trace(str(error))},

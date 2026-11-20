@@ -37,7 +37,52 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     )
 
 
-def generate(root: Path, mvllm_root: Path) -> dict[str, Any]:
+REQUIRED_DELIVERY_CHECKS = (
+    "component_manifests_validated",
+    "cross_repository_identity_verified",
+    "model_full_hash_verified",
+    "service_contract_verified",
+    "agent_tests_passed",
+    "web_build_passed",
+    "real_video_remote_gpu_call_passed",
+    "transport_fail_closed_verified",
+    "git_sync_verified",
+)
+
+
+def _load_delivery_gate(
+    verification_record: Path | None,
+) -> dict[str, Any]:
+    """Build delivery_gate strictly from recorded verification evidence.
+
+    Any check not explicitly attested as ``True`` in ``verification_record`` is
+    recorded as ``"unverified"`` so running the generator alone can never forge
+    test, GPU, or git-sync passes.
+    """
+    recorded_checks: dict[str, Any] = {}
+    if verification_record is not None and verification_record.is_file():
+        payload = load_object(verification_record)
+        candidate = payload.get("checks")
+        if not isinstance(candidate, dict):
+            candidate = (payload.get("delivery_gate") or {}).get("checks")
+        if isinstance(candidate, dict):
+            recorded_checks = candidate
+    checks = {
+        name: (True if recorded_checks.get(name) is True else "unverified")
+        for name in REQUIRED_DELIVERY_CHECKS
+    }
+    return {
+        "overall_passed": all(value is True for value in checks.values()),
+        "checks": checks,
+    }
+
+
+def generate(
+    root: Path,
+    mvllm_root: Path,
+    *,
+    verification_record: Path | None = None,
+) -> dict[str, Any]:
     components = root / "delivery/components"
     sources = {
         "model": mvllm_root / "delivery/model_component.json",
@@ -86,20 +131,7 @@ def generate(root: Path, mvllm_root: Path) -> dict[str, Any]:
                 "sha256": sha256(root / "delivery/rollback/V2_ROLLBACK.md"),
             },
         },
-        "delivery_gate": {
-            "overall_passed": True,
-            "checks": {
-                "component_manifests_validated": True,
-                "cross_repository_identity_verified": True,
-                "model_full_hash_verified": True,
-                "service_contract_verified": True,
-                "agent_tests_passed": True,
-                "web_build_passed": True,
-                "real_video_remote_gpu_call_passed": True,
-                "transport_fail_closed_verified": True,
-                "git_sync_verified": True,
-            },
-        },
+        "delivery_gate": _load_delivery_gate(verification_record),
         "performance_policy": {
             "mode": "record_only_non_blocking",
             "thresholds_evaluated_for_delivery": False,
@@ -129,8 +161,22 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--mvllm-root", type=Path, required=True)
+    parser.add_argument(
+        "--verification-record",
+        type=Path,
+        default=None,
+        help="Optional JSON file attesting completed verification checks; unattested checks stay unverified.",
+    )
     args = parser.parse_args()
-    bundle = generate(args.root.resolve(), args.mvllm_root.resolve())
+    bundle = generate(
+        args.root.resolve(),
+        args.mvllm_root.resolve(),
+        verification_record=(
+            args.verification_record.resolve()
+            if args.verification_record is not None
+            else None
+        ),
+    )
     print(json.dumps(bundle, ensure_ascii=False, indent=2))
 
 

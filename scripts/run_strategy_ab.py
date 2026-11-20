@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from agent.config_util import get_active_model_config, get_local_model_digest
+from agent.inference import _validate_preprocessing_meta
 from agent.runner import (
     build_video_meta,
     create_clip_builder,
@@ -49,9 +50,38 @@ def _visual_round(
             sample_range=sample_range,
         )
         result = inference_client.infer(clip)
+        record["attempts"] = result.attempts
+        pp_error_code = _validate_preprocessing_meta(
+            result.preprocessing,
+            getattr(inference_client, "deployment_snapshot", None),
+        )
+        if pp_error_code is not None:
+            failure_code = (
+                "deployment_drift"
+                if pp_error_code
+                in {
+                    "deployment_drift",
+                    "contract_version_mismatch",
+                    "contract_hash_mismatch",
+                }
+                else "missing_or_invalid_preprocessing_metadata"
+            )
+            record["ok"] = False
+            record["model_output"] = None
+            record["infra_error"] = {
+                "stage": "inference_transport",
+                "code": failure_code,
+                "message": f"服务端 preprocessing 元数据无效: {pp_error_code}",
+            }
+            if result.error is not None:
+                record["validation_error"] = {
+                    "code": result.error.code,
+                    "message": result.error.message,
+                    "field": result.error.field,
+                }
+            return record
         record["ok"] = result.ok
         record["model_output"] = result.model_output
-        record["attempts"] = result.attempts
         if result.error is not None:
             record["validation_error"] = {
                 "code": result.error.code,
