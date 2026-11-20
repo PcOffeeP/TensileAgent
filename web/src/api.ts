@@ -89,6 +89,7 @@ export interface LlmTrace {
 
 export interface AgentEvent {
   task_id?: string;
+  seq?: number;
   event: string;
   timestamp?: string;
   data?: Record<string, any>;

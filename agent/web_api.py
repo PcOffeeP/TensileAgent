@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import re
+import threading
 import uuid
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone
@@ -165,10 +166,23 @@ def _load_runtime_index() -> dict[str, dict]:
     return {}
 
 
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Atomically write UTF-8 text via a same-directory temp file + os.replace."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
+    try:
+        tmp_path.write_text(text, encoding="utf-8")
+        os.replace(tmp_path, path)
+    finally:
+        if tmp_path.exists():
+            with suppress(OSError):
+                tmp_path.unlink()
+
+
 def _save_runtime_index(index: dict):
-    RUNTIME_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
-    RUNTIME_INDEX_PATH.write_text(
-        json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8"
+    _atomic_write_text(
+        RUNTIME_INDEX_PATH,
+        json.dumps(index, ensure_ascii=False, indent=2),
     )
 
 
@@ -187,25 +201,11 @@ def _remove_runtime_index_entry(task_id: str):
 
 def _save_task(task: TaskModel):
     """持久化公开任务视图到历史 JSON，并把内部路径保存到私有 runtime index。"""
-    public = PublicTask(
-        id=task.id,
-        status=task.status,
-        video_id=task.video_id,
-        video_name=task.video_name,
-        question=task.question,
-        created_at=task.created_at,
-        started_at=task.started_at,
-        finished_at=task.finished_at,
-        result=_sanitize_event_data(task.result),
-        response=_sanitize_event_data(task.response),
-        error=_sanitize_event_data(task.error),
-        event_summary=_sanitize_event_data(task.event_summary),
-        decision_model=_sanitize_event_data(task.decision_model),
-    )
-    d = public.model_dump()
+    d = _to_public_task(task)
     d["_schema_version"] = 2
-    _task_path(task.id).write_text(
-        json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8"
+    _atomic_write_text(
+        _task_path(task.id),
+        json.dumps(d, ensure_ascii=False, indent=2),
     )
     _update_runtime_index(task)
 
@@ -362,22 +362,79 @@ def _sanitize_event_data(data: Any, key: str | None = None) -> Any:
     return data
 
 
+_event_seq: dict[str, int] = {}
+_event_lock = threading.Lock()
+_event_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _deliver_to_sse(task_id: str, safe_event: dict) -> None:
+    if task_id not in sse_connections:
+        return
+    dead = []
+    for q in sse_connections[task_id]:
+        try:
+            q.put_nowait(safe_event)
+        except asyncio.QueueFull:
+            dead.append(q)
+    for q in dead:
+        with suppress(ValueError):
+            sse_connections[task_id].remove(q)
+
+
+def _read_persisted_events(
+    task_id: str, *, after_seq: int | None = None
+) -> list[dict]:
+    path = _events_path(task_id)
+    if not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8").strip().split("\n")
+    events: list[dict] = []
+    for index, line in enumerate(lines, start=1):
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        ev = _sanitize_event_data(ev)
+        if not isinstance(ev, dict):
+            continue
+        if "event" not in ev and isinstance(ev.get("data"), dict):
+            ev["event"] = (
+                ev["data"].get("event_type") or ev["data"].get("event") or "unknown"
+            )
+        seq = ev.get("seq")
+        effective_seq = seq if isinstance(seq, int) else index
+        if after_seq is not None and effective_seq <= after_seq:
+            continue
+        events.append(ev)
+    return events
+
+
 def _append_event(task_id: str, event: dict):
-    """追加事件到 JSONL 文件并推送 SSE（持久化前会先脱敏）"""
+    """追加带单调序号的事件到 JSONL 文件并经事件循环线程安全推送 SSE。"""
     path = _events_path(task_id)
     safe_event = _sanitize_event_data(event)
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(safe_event, ensure_ascii=False) + "\n")
-    # 推送 SSE
-    if task_id in sse_connections:
-        dead = []
-        for q in sse_connections[task_id]:
-            try:
-                q.put_nowait(safe_event)
-            except asyncio.QueueFull:
-                dead.append(q)
-        for q in dead:
-            sse_connections[task_id].remove(q)
+    with _event_lock:
+        seq = _event_seq.get(task_id, 0) + 1
+        _event_seq[task_id] = seq
+        if isinstance(safe_event, dict):
+            safe_event["seq"] = seq
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(safe_event, ensure_ascii=False) + "\n")
+    loop = _event_loop
+    if loop is not None and loop.is_running():
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if running is loop:
+            _deliver_to_sse(task_id, safe_event)
+        else:
+            loop.call_soon_threadsafe(_deliver_to_sse, task_id, safe_event)
+    else:
+        _deliver_to_sse(task_id, safe_event)
 
 
 def _event_callback_factory(task_id: str):
@@ -400,10 +457,12 @@ def _event_callback_factory(task_id: str):
 
 # ── SSE 事件流端点 ───────────────────────────────────────
 @app.get("/api/tasks/{task_id}/events")
-async def task_events(task_id: str):
-    """SSE 实时事件流，只推送实时事件和 ping，不回放历史事件。"""
+async def task_events(task_id: str, after_seq: Optional[int] = None):
+    """SSE 事件流；可选 after_seq 支持断线游标补读，避免漏事件窗口。"""
+    global _event_loop
     if task_id not in tasks:
         raise HTTPException(404, "task not found")
+    _event_loop = asyncio.get_running_loop()
 
     queue: asyncio.Queue = asyncio.Queue(maxsize=500)
     if task_id not in sse_connections:
@@ -411,11 +470,29 @@ async def task_events(task_id: str):
     sse_connections[task_id].append(queue)
 
     async def event_generator():
+        last_sent_seq = after_seq or 0
         try:
+            if after_seq is not None:
+                for missed in _read_persisted_events(task_id, after_seq=after_seq):
+                    seq = missed.get("seq")
+                    if isinstance(seq, int):
+                        last_sent_seq = max(last_sent_seq, seq)
+                    payload: dict[str, Any] = {"data": json.dumps(missed)}
+                    if isinstance(seq, int):
+                        payload["id"] = str(seq)
+                    yield payload
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=30.0)
-                    yield {"data": json.dumps(event)}
+                    seq = event.get("seq")
+                    if isinstance(seq, int) and seq <= last_sent_seq:
+                        continue
+                    if isinstance(seq, int):
+                        last_sent_seq = seq
+                    payload = {"data": json.dumps(event)}
+                    if isinstance(seq, int):
+                        payload["id"] = str(seq)
+                    yield payload
                 except asyncio.TimeoutError:
                     yield {"data": json.dumps({"event": "ping", "timestamp": _now()})}
         except asyncio.CancelledError:
@@ -453,9 +530,11 @@ async def _queue_worker():
         )
 
         try:
+            global _event_loop
             config_path = task.config_path or str(CONFIG_PATH)
             # run_one 是同步的，在线程中运行
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
+            _event_loop = loop
             runner_result = await loop.run_in_executor(
                 None,
                 lambda: run_one(
@@ -805,31 +884,14 @@ async def delete_task(task_id: str):
 
 
 @app.get("/api/tasks/{task_id}/events/replay")
-async def replay_events(task_id: str):
-    """回放历史事件，结构与 SSE 输出一致并脱敏"""
+async def replay_events(
+    task_id: str,
+    after_seq: Optional[int] = None,
+):
+    """回放历史事件，支持按 after_seq 游标增量补读，结构与 SSE 一致并脱敏。"""
     if task_id not in tasks:
         raise HTTPException(404, "task not found")
-    path = _events_path(task_id)
-    if not path.exists():
-        return []
-    lines = path.read_text(encoding="utf-8").strip().split("\n")
-    events = []
-    for line in lines:
-        if not line:
-            continue
-        try:
-            ev = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        ev = _sanitize_event_data(ev)
-        if not isinstance(ev, dict):
-            continue
-        if "event" not in ev and isinstance(ev.get("data"), dict):
-            ev["event"] = (
-                ev["data"].get("event_type") or ev["data"].get("event") or "unknown"
-            )
-        events.append(ev)
-    return events
+    return _read_persisted_events(task_id, after_seq=after_seq)
 
 
 def _load_llm_traces(task_id: str) -> list[dict[str, Any]]:

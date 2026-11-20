@@ -1,18 +1,27 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { subscribeEvents, replayEvents, type AgentEvent, type AnalysisTrace, type AnalysisRound, type FinalResult } from "../api";
 
 
 
 export function reduceAgentEvent(prev: AnalysisTrace, normalizedEvent: AgentEvent, eventName: string, eventData: any): AnalysisTrace {
-  const draft = { ...prev };
-  
-  // Deduplicate raw events based on timestamp + event + data
-  const evKey = `${normalizedEvent.timestamp ?? ""}|${normalizedEvent.event}|${JSON.stringify(normalizedEvent.data ?? {})}`;
-  if (draft.rawEvents.some(e => `${e.timestamp ?? ""}|${e.event}|${JSON.stringify(e.data ?? {})}` === evKey)) {
-    return prev;
+  // Deduplicate by monotonic seq when available, falling back to timestamp+event+data.
+  if (normalizedEvent.seq != null) {
+    if (prev.rawEvents.some(e => e.seq === normalizedEvent.seq)) {
+      return prev;
+    }
+  } else {
+    const evKey = `${normalizedEvent.timestamp ?? ""}|${normalizedEvent.event}|${JSON.stringify(normalizedEvent.data ?? {})}`;
+    if (prev.rawEvents.some(e => `${e.timestamp ?? ""}|${e.event}|${JSON.stringify(e.data ?? {})}` === evKey)) {
+      return prev;
+    }
   }
-  
-  draft.rawEvents = [...draft.rawEvents, normalizedEvent];
+
+  const rounds = [...prev.rounds];
+  const draft: AnalysisTrace = {
+    ...prev,
+    rounds,
+    rawEvents: [...prev.rawEvents, normalizedEvent],
+  };
 
   switch (eventName) {
     case "task_started":
@@ -22,7 +31,7 @@ export function reduceAgentEvent(prev: AnalysisTrace, normalizedEvent: AgentEven
       if (eventData.initial_candidate) draft.initialCandidate = eventData.initial_candidate;
       break;
     case "round_started": {
-      const roundId = eventData.round ?? (draft.rounds.length + 1);
+      const roundId = eventData.round ?? (rounds.length + 1);
       const displayRound = eventData.display_round ?? roundId;
       const newRound: AnalysisRound = {
         round: roundId,
@@ -30,73 +39,85 @@ export function reduceAgentEvent(prev: AnalysisTrace, normalizedEvent: AgentEven
         stateAtStart: eventData.state,
         candidateAtStart: eventData.candidate
       };
-      const existingIdx = draft.rounds.findIndex(r => r.round === roundId);
+      const existingIdx = rounds.findIndex(r => r.round === roundId);
       if (existingIdx >= 0) {
-        draft.rounds[existingIdx] = { ...draft.rounds[existingIdx], ...newRound };
+        rounds[existingIdx] = { ...rounds[existingIdx], ...newRound };
       } else {
-        draft.rounds.push(newRound);
+        rounds.push(newRound);
       }
       break;
     }
     case "llm_tool_call": {
-      const roundId = eventData.round ?? draft.rounds[draft.rounds.length - 1]?.round;
+      const roundId = eventData.round ?? rounds[rounds.length - 1]?.round;
       if (roundId != null) {
-        const idx = draft.rounds.findIndex(r => r.round === roundId);
+        const idx = rounds.findIndex(r => r.round === roundId);
         if (idx >= 0) {
-          draft.rounds[idx].toolCall = {
-            name: eventData.tool_name,
-            args: eventData.tool_args || {},
-            reasoning: eventData.reasoning
+          rounds[idx] = {
+            ...rounds[idx],
+            toolCall: {
+              name: eventData.tool_name,
+              args: eventData.tool_args || {},
+              reasoning: eventData.reasoning
+            }
           };
         }
       }
       break;
     }
     case "sample_and_infer_started": {
-      const roundId = eventData.round ?? draft.rounds[draft.rounds.length - 1]?.round;
+      const roundId = eventData.round ?? rounds[rounds.length - 1]?.round;
       if (roundId != null) {
-        const idx = draft.rounds.findIndex(r => r.round === roundId);
+        const idx = rounds.findIndex(r => r.round === roundId);
         if (idx >= 0) {
-          draft.rounds[idx].sampleRange = eventData.sample_range;
+          rounds[idx] = { ...rounds[idx], sampleRange: eventData.sample_range };
         }
       }
       break;
     }
     case "sample_and_infer_finished": {
-      const roundId = eventData.round ?? draft.rounds[draft.rounds.length - 1]?.round;
+      const roundId = eventData.round ?? rounds[rounds.length - 1]?.round;
       if (roundId != null) {
-        const idx = draft.rounds.findIndex(r => r.round === roundId);
+        const idx = rounds.findIndex(r => r.round === roundId);
         if (idx >= 0) {
-          draft.rounds[idx].modelOutput = eventData.model_output;
-          draft.rounds[idx].inferredTimeRange = eventData.inferred_time_range;
-          draft.rounds[idx].validationError = eventData.validation_error;
-          draft.rounds[idx].confidenceLevel = eventData.round_confidence_level;
+          rounds[idx] = {
+            ...rounds[idx],
+            modelOutput: eventData.model_output,
+            inferredTimeRange: eventData.inferred_time_range,
+            validationError: eventData.validation_error,
+            confidenceLevel: eventData.round_confidence_level,
+          };
         }
       }
       break;
     }
     case "state_updated": {
-      const roundId = eventData.round ?? draft.rounds[draft.rounds.length - 1]?.round;
+      const roundId = eventData.round ?? rounds[rounds.length - 1]?.round;
       if (roundId != null) {
-        const idx = draft.rounds.findIndex(r => r.round === roundId);
+        const idx = rounds.findIndex(r => r.round === roundId);
         if (idx >= 0) {
-          draft.rounds[idx].previousState = eventData.previous_state;
-          draft.rounds[idx].nextState = eventData.state;
-          draft.rounds[idx].previousCandidate = eventData.previous_candidate;
-          draft.rounds[idx].nextCandidate = eventData.candidate;
+          rounds[idx] = {
+            ...rounds[idx],
+            previousState: eventData.previous_state,
+            nextState: eventData.state,
+            previousCandidate: eventData.previous_candidate,
+            nextCandidate: eventData.candidate,
+          };
         }
       }
       break;
     }
     case "termination_requested": {
-      const roundId = eventData.round ?? draft.rounds[draft.rounds.length - 1]?.round;
+      const roundId = eventData.round ?? rounds[rounds.length - 1]?.round;
       if (roundId != null) {
-        const idx = draft.rounds.findIndex(r => r.round === roundId);
+        const idx = rounds.findIndex(r => r.round === roundId);
         if (idx >= 0) {
-          draft.rounds[idx].terminationRequest = {
-            allowed: eventData.allowed,
-            reason: eventData.reason,
-            args: eventData.tool_args || {}
+          rounds[idx] = {
+            ...rounds[idx],
+            terminationRequest: {
+              allowed: eventData.allowed,
+              reason: eventData.reason,
+              args: eventData.tool_args || {}
+            }
           };
         }
       }
@@ -108,10 +129,10 @@ export function reduceAgentEvent(prev: AnalysisTrace, normalizedEvent: AgentEven
       }
       break;
     case "video_failed":
-      draft.taskError = { 
-        stage: eventData.stage, 
-        code: eventData.code ?? eventData.error, 
-        message: eventData.message ?? String(eventData.error) 
+      draft.taskError = {
+        stage: eventData.stage,
+        code: eventData.code ?? eventData.error,
+        message: eventData.message ?? String(eventData.error)
       };
       break;
     case "task_completed":
@@ -120,10 +141,10 @@ export function reduceAgentEvent(prev: AnalysisTrace, normalizedEvent: AgentEven
       }
       break;
     case "task_failed":
-      draft.taskError = { 
-        stage: eventData.stage, 
-        code: eventData.code, 
-        message: eventData.message ?? "Unknown error" 
+      draft.taskError = {
+        stage: eventData.stage,
+        code: eventData.code,
+        message: eventData.message ?? "Unknown error"
       };
       break;
     case "ping":
@@ -146,11 +167,8 @@ export function useAgentTaskEvents(taskId: string | null) {
     rawEvents: []
   });
 
-  const stateRef = useRef<AnalysisTrace>(trace);
-  const reconnectTimeout = useRef<number | undefined>(undefined);
-
   const resetState = useCallback((id: string) => {
-    const newState: AnalysisTrace = {
+    setTrace({
       taskId: id,
       videoDurationSec: null,
       initialCandidate: null,
@@ -159,27 +177,22 @@ export function useAgentTaskEvents(taskId: string | null) {
       taskError: null,
       connectionState: "connecting",
       rawEvents: []
-    };
-    setTrace(newState);
-    stateRef.current = newState;
+    });
   }, []);
 
   const processEvent = useCallback((rawEvent: AgentEvent | any) => {
     const eventName = rawEvent.data?.event_type ?? rawEvent.event;
     const eventData = rawEvent.data ?? {};
-    
+
     // Normalize raw event payload format
     const normalizedEvent: AgentEvent = {
+      seq: rawEvent.seq,
       event: eventName,
       timestamp: rawEvent.timestamp,
       data: eventData
     };
 
-    setTrace(prev => {
-      const draft = reduceAgentEvent(prev, normalizedEvent, eventName, eventData);
-      stateRef.current = draft;
-      return draft;
-    });
+    setTrace(prev => reduceAgentEvent(prev, normalizedEvent, eventName, eventData));
   }, []);
 
 
@@ -207,7 +220,7 @@ export function useAgentTaskEvents(taskId: string | null) {
       try {
         const events = await replayEvents(taskId);
         if (!isSubscribed) return;
-        
+
         events.forEach(ev => processEvent(ev));
 
         // Subscribing to new events
@@ -229,7 +242,6 @@ export function useAgentTaskEvents(taskId: string | null) {
     return () => {
       isSubscribed = false;
       if (cleanupSse) cleanupSse();
-      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
     };
   }, [taskId, processEvent, resetState]);
 
