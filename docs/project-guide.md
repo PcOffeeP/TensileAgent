@@ -103,7 +103,7 @@ TensileAgent 是材料拉伸断裂视频分析系统：接收用户的一段自�
 - **契约版本**：显式 CLI `--contract-version` 写入任务有效配置并优先于 YAML，单视频与批量入口均生效；**不允许运行时自动从 V4.1 降级到 V2**。
 - **Mock 模式**：`INFERENCE_MOCK=1` 在进程级启用 `MockInferenceClient`，无需真实视觉服务即可验证链路。
 - **请求大小限制**：`max_request_size` 默认 `32 MiB`，必须为大于 0 的整数。
-- **预检契约**：`LlamaFactoryInferenceClient` 初始化期发起 `GET /tensile/contract`，校验 version、hash、capabilities、deployment_manifest；失败视为推理传输层错误。
+- **预检契约**：Runner 装配视觉客户端后显式调用 `inference_client.preflight()` 发起 `GET /tensile/contract`，校验 version、hash、capabilities、deployment_manifest；失败视为推理传输层错误。
 - 视觉契约 JSON 通过 SHA256 校验；任务预检时冻结 deployment manifest，漂移则拒绝。
 
 代码入口：

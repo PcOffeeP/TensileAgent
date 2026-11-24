@@ -57,7 +57,11 @@ def _extract_arm_metrics(
             sampling_rounds - program_scheduled_rounds - deterministic_planner_calls,
         )
 
+    visual_deployment = (runner_result.get("runtime_identity") or {}).get(
+        "visual_deployment"
+    )
     base = {
+        "visual_deployment": visual_deployment,
         "visual_analysis_calls": visual_analysis_calls,
         "visual_evidence_calls": visual_evidence_calls,
         "visual_calls": visual_analysis_calls + visual_evidence_calls,
@@ -159,13 +163,24 @@ def run_paired_video(
     )
     llm_elapsed = time.monotonic() - t1
 
+    det_metrics = _extract_arm_metrics(det_raw, elapsed_seconds=det_elapsed)
+    llm_metrics = _extract_arm_metrics(llm_raw, elapsed_seconds=llm_elapsed)
+    det_dep = det_metrics.get("visual_deployment")
+    llm_dep = llm_metrics.get("visual_deployment")
+    deployment_matched = (
+        True
+        if det_dep is None and llm_dep is None
+        else det_dep == llm_dep
+    )
+
     return {
         "schema_version": PLANNER_PAIRED_EVAL_SCHEMA,
         "video_id": video_id,
         "question": question,
         "shared_intent": shared_intent.model_dump(mode="json"),
-        "deterministic": _extract_arm_metrics(det_raw, elapsed_seconds=det_elapsed),
-        "llm": _extract_arm_metrics(llm_raw, elapsed_seconds=llm_elapsed),
+        "deployment_matched": deployment_matched,
+        "deterministic": det_metrics,
+        "llm": llm_metrics,
     }
 
 
@@ -229,14 +244,24 @@ def decide_default_planner(
     llm_cost: dict[str, Any],
     *,
     valid_paired_positives: int | None = None,
-    valid_paired_negatives: int | None = None,
+    common_decided_negatives: int | None = None,
+    paired_det_fp: Fraction | None = None,
+    paired_llm_fp: Fraction | None = None,
+    deployment_mismatch_count: int = 0,
     min_evaluable_positives: int = 10,
     min_evaluable_negatives: int = 1,
     recall_tolerance: float = 0.05,
     fp_rate_tolerance: float = 0.05,
     max_failure_rate: float = 0.1,
 ) -> dict[str, Any]:
-    """Apply exact Fraction quality thresholds and failure/cost guardrails."""
+    """Apply exact Fraction quality thresholds and failure/deployment/cost guardrails."""
+    if deployment_mismatch_count > 0:
+        return {
+            "recommendation": "keep_current_default",
+            "reason": "visual_deployment_mismatch",
+            "deployment_mismatch_count": deployment_mismatch_count,
+        }
+
     det_n = int(det_cost.get("videos", 0))
     llm_n = int(llm_cost.get("videos", 0))
     det_fail = int(det_cost.get("execution_failures", 0))
@@ -262,12 +287,14 @@ def decide_default_planner(
         valid_paired_positives if valid_paired_positives is not None else total_positives
     )
     effective_negatives = (
-        valid_paired_negatives if valid_paired_negatives is not None else total_negatives
+        common_decided_negatives
+        if common_decided_negatives is not None
+        else total_negatives
     )
     det_recall = _recall_fraction(det_score)
     llm_recall = _recall_fraction(llm_score)
-    det_fp = _negative_fp_fraction(det_score)
-    llm_fp = _negative_fp_fraction(llm_score)
+    det_fp = paired_det_fp if paired_det_fp is not None else _negative_fp_fraction(det_score)
+    llm_fp = paired_llm_fp if paired_llm_fp is not None else _negative_fp_fraction(llm_score)
 
     if (
         effective_positives < min_evaluable_positives
@@ -289,7 +316,7 @@ def decide_default_planner(
         return {
             "recommendation": "keep_current_default",
             "reason": "insufficient_negative_samples",
-            "valid_paired_negatives": effective_negatives,
+            "common_decided_negatives": effective_negatives,
             "min_evaluable_negatives": min_evaluable_negatives,
         }
 
@@ -312,7 +339,7 @@ def decide_default_planner(
             "reason": "within_quality_tolerance_and_lower_cost",
             "recall_diff_det_minus_llm": round(float(recall_diff), 6),
             "valid_paired_positives": effective_positives,
-            "valid_paired_negatives": effective_negatives,
+            "common_decided_negatives": effective_negatives,
         }
 
     if llm_recall - det_recall > recall_tol:
@@ -321,7 +348,7 @@ def decide_default_planner(
             "reason": "llm_exceeds_recall_tolerance",
             "recall_diff_det_minus_llm": round(float(recall_diff), 6),
             "valid_paired_positives": effective_positives,
-            "valid_paired_negatives": effective_negatives,
+            "common_decided_negatives": effective_negatives,
         }
 
     return {
@@ -329,7 +356,7 @@ def decide_default_planner(
         "reason": "no_clear_advantage",
         "recall_diff_det_minus_llm": round(float(recall_diff), 6),
         "valid_paired_positives": effective_positives,
-        "valid_paired_negatives": effective_negatives,
+        "common_decided_negatives": effective_negatives,
     }
 
 
@@ -371,22 +398,45 @@ def summarize_paired_eval(
     llm_records: list[tuple[dict[str, Any], dict[str, Any], int]] = []
     valid_paired_positives = 0
     valid_paired_negatives = 0
+    common_decided_negatives = 0
+    common_det_fp = 0
+    common_llm_fp = 0
+    deployment_mismatch_count = 0
 
     for row in paired_rows:
         vid = str(row["video_id"])
         gt = ground_truth_by_id[vid]
-        det_records.append(
-            (gt, row["deterministic"]["prediction"], int(row["deterministic"]["visual_calls"]))
-        )
-        llm_records.append(
-            (gt, row["llm"]["prediction"], int(row["llm"]["visual_calls"]))
-        )
+        det_pred = row["deterministic"]["prediction"]
+        llm_pred = row["llm"]["prediction"]
+        det_records.append((gt, det_pred, int(row["deterministic"]["visual_calls"])))
+        llm_records.append((gt, llm_pred, int(row["llm"]["visual_calls"])))
+
+        det_dep = row["deterministic"].get("visual_deployment")
+        llm_dep = row["llm"].get("visual_deployment")
+        dep_ok = row.get("deployment_matched")
+        if dep_ok is None:
+            dep_ok = True if det_dep is None and llm_dep is None else det_dep == llm_dep
+        if not dep_ok:
+            deployment_mismatch_count += 1
+            continue
+
         both_ok = bool(row["deterministic"].get("ok")) and bool(row["llm"].get("ok"))
         if both_ok and gt.get("special_case") is None:
             if gt.get("has_fracture") is True:
                 valid_paired_positives += 1
             elif gt.get("has_fracture") is False:
                 valid_paired_negatives += 1
+                det_hf = det_pred.get("has_fracture")
+                llm_hf = llm_pred.get("has_fracture")
+                if det_hf is not None and llm_hf is not None:
+                    common_decided_negatives += 1
+                    if det_hf is True:
+                        common_det_fp += 1
+                    if llm_hf is True:
+                        common_llm_fp += 1
+
+    paired_det_fp = _exact_fraction(common_det_fp, common_decided_negatives)
+    paired_llm_fp = _exact_fraction(common_llm_fp, common_decided_negatives)
 
     det_score = score_method(det_records)
     llm_score = score_method(llm_records)
@@ -398,7 +448,10 @@ def summarize_paired_eval(
         det_cost,
         llm_cost,
         valid_paired_positives=valid_paired_positives,
-        valid_paired_negatives=valid_paired_negatives,
+        common_decided_negatives=common_decided_negatives,
+        paired_det_fp=paired_det_fp,
+        paired_llm_fp=paired_llm_fp,
+        deployment_mismatch_count=deployment_mismatch_count,
         min_evaluable_positives=min_evaluable_positives,
         min_evaluable_negatives=min_evaluable_negatives,
         recall_tolerance=recall_tolerance,
@@ -413,6 +466,8 @@ def summarize_paired_eval(
         "scored_videos": len(det_records),
         "valid_paired_positives": valid_paired_positives,
         "valid_paired_negatives": valid_paired_negatives,
+        "common_decided_negatives": common_decided_negatives,
+        "deployment_mismatch_count": deployment_mismatch_count,
         "thresholds": {
             "min_evaluable_positives": min_evaluable_positives,
             "min_evaluable_negatives": min_evaluable_negatives,
@@ -423,11 +478,17 @@ def summarize_paired_eval(
         "deterministic": {
             "quality": det_score,
             "negative_fp_rate": _negative_fp_rate(det_score),
+            "common_negative_fp_rate": (
+                float(paired_det_fp) if paired_det_fp is not None else None
+            ),
             "cost": det_cost,
         },
         "llm": {
             "quality": llm_score,
             "negative_fp_rate": _negative_fp_rate(llm_score),
+            "common_negative_fp_rate": (
+                float(paired_llm_fp) if paired_llm_fp is not None else None
+            ),
             "cost": llm_cost,
         },
         "decision": decision,

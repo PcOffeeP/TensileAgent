@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from collections import Counter
 from pathlib import Path
@@ -47,8 +48,37 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--recall-tolerance", type=float, default=0.05)
     parser.add_argument("--fp-rate-tolerance", type=float, default=0.05)
     parser.add_argument("--max-failure-rate", type=float, default=0.1)
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow overwriting existing paired_ledger.jsonl / summary.json / REPORT.md in --output-dir.",
+    )
     parser.add_argument("--mock", action="store_true", help="Enable INFERENCE_MOCK=1 for offline smoke runs.")
     return parser.parse_args(argv)
+
+
+def _validate_thresholds(args: argparse.Namespace) -> None:
+    if args.min_evaluable_positives < 1:
+        raise ValueError("--min-evaluable-positives must be >= 1")
+    if args.min_evaluable_negatives < 0:
+        raise ValueError("--min-evaluable-negatives must be >= 0")
+    for flag, value in (
+        ("--recall-tolerance", args.recall_tolerance),
+        ("--fp-rate-tolerance", args.fp_rate_tolerance),
+        ("--max-failure-rate", args.max_failure_rate),
+    ):
+        if not math.isfinite(value) or value < 0.0 or value > 1.0:
+            raise ValueError(f"{flag} must be a finite float in [0.0, 1.0], got {value!r}")
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
 
 
 def _resolve_target_ids(
@@ -85,6 +115,7 @@ def main(
     runner_fn: Callable[..., dict[str, Any]] = run_one,
 ) -> dict[str, Any]:
     args = _parse_args(argv)
+    _validate_thresholds(args)
     if args.mock:
         os.environ["INFERENCE_MOCK"] = "1"
 
@@ -104,26 +135,34 @@ def main(
     target_ids = _resolve_target_ids(args.video_ids, annotations)
     shared_intent = resolve_shared_intent(args.question)
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
     ledger_path = args.output_dir / "paired_ledger.jsonl"
-    rows: list[dict[str, Any]] = []
+    summary_path = args.output_dir / "summary.json"
+    report_path = args.output_dir / "REPORT.md"
+    existing = [p for p in (ledger_path, summary_path, report_path) if p.exists()]
+    if existing and not args.overwrite:
+        raise FileExistsError(
+            f"refusing to overwrite existing output(s) without --overwrite: {[str(p) for p in existing]}"
+        )
 
-    with ledger_path.open("w", encoding="utf-8") as handle:
-        for video_id in target_ids:
-            video_path = args.videos_root / f"{video_id}.mp4"
-            row = run_paired_video(
-                video_id=video_id,
-                video_path=video_path,
-                config_path=args.config,
-                work_dir=args.output_dir / "_work",
-                question=args.question,
-                resolved_intent=shared_intent,
-                llm_backend=args.llm_backend,
-                llm_model=args.llm_model,
-                runner_fn=runner_fn,
-            )
-            rows.append(row)
-            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    rows: list[dict[str, Any]] = []
+    ledger_lines: list[str] = []
+
+    for video_id in target_ids:
+        video_path = args.videos_root / f"{video_id}.mp4"
+        row = run_paired_video(
+            video_id=video_id,
+            video_path=video_path,
+            config_path=args.config,
+            work_dir=args.output_dir / "_work",
+            question=args.question,
+            resolved_intent=shared_intent,
+            llm_backend=args.llm_backend,
+            llm_model=args.llm_model,
+            runner_fn=runner_fn,
+        )
+        rows.append(row)
+        ledger_lines.append(json.dumps(row, ensure_ascii=False))
 
     summary = summarize_paired_eval(
         rows,
@@ -135,13 +174,12 @@ def main(
         max_failure_rate=args.max_failure_rate,
         contract_version=contract_version,
     )
-    summary_path = args.output_dir / "summary.json"
-    summary_path.write_text(
+    _atomic_write_text(ledger_path, "\n".join(ledger_lines) + "\n")
+    _atomic_write_text(
+        summary_path,
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
     )
-    report_path = args.output_dir / "REPORT.md"
-    report_path.write_text(render_markdown_report(summary), encoding="utf-8")
+    _atomic_write_text(report_path, render_markdown_report(summary))
     print(json.dumps(summary["decision"], ensure_ascii=False, indent=2))
     return summary
 

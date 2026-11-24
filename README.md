@@ -288,8 +288,7 @@ ollama create tensile-qwen35:9b -f deployment/ollama/Modelfile.qwen35
 ollama create tensile-qwen3:8b -f deployment/ollama/Modelfile.qwen3
 ```
 
-Web 默认使用 `tensile-qwen35:9b`。配置页可以手动切换到 `tensile-qwen3:8b` 或远程
-`qwen3.7-max`；本地失败时不会自动调用远程服务。
+当前 `agent/config.yaml` 中 `agent.local.model` 默认留空，首次使用前需先拉取本地 Ollama 模型，并在 `agent/config.yaml`、Web 配置页或 CLI `--agent-model` 中显式指定（例如 `tensile-qwen35:9b`、`tensile-qwen3:8b` 或远程 `qwen3.7-max`）；本地模型未配置或不可用时直接 fail-closed，不会自动调用远程服务。
 
 运行固定 Agent-only A/B（每个模型 20 个场景，5 个关键场景各 3 次）：
 

@@ -477,3 +477,167 @@ def test_summarize_prefers_llm_when_recall_advantage_exceeds_tolerance() -> None
     )
     assert summary["decision"]["recommendation"] == "prefer_llm"
     assert summary["decision"]["reason"] == "llm_exceeds_recall_tolerance"
+
+
+def test_common_negative_fp_rate_prevents_single_arm_failure_reversing_verdict() -> None:
+    """Exact Codex scenario: 10 pos both TP, 9 common neg (det 1 FP, llm 0 FP), 10th neg det fails & llm FP."""
+    gt = {
+        **{f"p{i}": _gt(f"p{i}", True, 12.0) for i in range(10)},
+        **{f"n{i}": _gt(f"n{i}", False) for i in range(10)},
+    }
+    rows = [
+        *[
+            _paired_row(
+                f"p{i}",
+                det_status="fracture",
+                llm_status="fracture",
+                det_time=[11.5, 12.5],
+                llm_time=[11.5, 12.5],
+            )
+            for i in range(10)
+        ],
+        _paired_row("n0", det_status="fracture", llm_status="no_fracture"),
+        *[
+            _paired_row(f"n{i}", det_status="no_fracture", llm_status="no_fracture")
+            for i in range(1, 9)
+        ],
+        _paired_row(
+            "n9",
+            det_status="unrecognized",
+            llm_status="fracture",
+            det_ok=False,
+            llm_ok=True,
+        ),
+    ]
+
+    summary = summarize_paired_eval(
+        rows,
+        gt,
+        min_evaluable_positives=10,
+        min_evaluable_negatives=1,
+        fp_rate_tolerance=0.05,
+        max_failure_rate=0.1,
+    )
+    assert summary["common_decided_negatives"] == 9
+    assert summary["deterministic"]["common_negative_fp_rate"] == pytest.approx(1 / 9)
+    assert summary["llm"]["common_negative_fp_rate"] == 0.0
+    # On the 9 common negatives, det FP diff is 1/9 (> 0.05), so it must NOT prefer deterministic.
+    assert summary["decision"]["recommendation"] == "keep_current_default"
+
+
+def test_visual_deployment_mismatch_blocks_preference_recommendation() -> None:
+    gt = {
+        **{f"p{i}": _gt(f"p{i}", True, 12.0) for i in range(10)},
+        "n0": _gt("n0", False),
+    }
+    rows = [
+        *[
+            _paired_row(f"p{i}", det_status="fracture", llm_status="fracture")
+            for i in range(10)
+        ],
+        _paired_row("n0", det_status="no_fracture", llm_status="no_fracture"),
+    ]
+    rows[0]["deployment_matched"] = False
+    rows[0]["deterministic"]["visual_deployment"] = {"adapter_version": "a1"}
+    rows[0]["llm"]["visual_deployment"] = {"adapter_version": "a2"}
+
+    summary = summarize_paired_eval(rows, gt)
+    assert summary["deployment_mismatch_count"] == 1
+    assert summary["decision"]["recommendation"] == "keep_current_default"
+    assert summary["decision"]["reason"] == "visual_deployment_mismatch"
+
+
+def test_runner_outer_exception_preserves_agent_call_stats(tmp_path: Path) -> None:
+    """Real run_one outer exception (e.g. TypeError on JSON array tool args) keeps decision_llm_calls."""
+    from unittest.mock import MagicMock, patch
+    from agent import runner
+    from agent.llm import BaseAgentLLM
+
+    class ArrayArgsLLM(BaseAgentLLM):
+        def chat_with_tools(self, messages, tools, temperature=0.2, max_tokens=None):
+            del messages, tools, temperature, max_tokens
+            tc = MagicMock()
+            tc.id = "bad-1"
+            tc.type = "function"
+            tc.function.name = "sample_and_infer"
+            tc.function.arguments = "[]"
+            msg = MagicMock(content="", tool_calls=[tc])
+            return MagicMock(choices=[MagicMock(message=msg)])
+
+        @property
+        def model_name(self) -> str:
+            return "test/array-args"
+
+    video = tmp_path / "demo.mp4"
+    video.write_bytes(b"fake")
+    cfg = tmp_path / "v41.yaml"
+    cfg.write_text(
+        "agent:\n  backend: local\n  tolerance_seconds: 1.0\nbackend:\n  contract_version: tensile-vlm/v4.1\n",
+        encoding="utf-8",
+    )
+
+    with (
+        patch("agent.runner.build_video_meta", return_value={"video_id": "demo", "duration": 40.0, "video_path": str(video)}),
+        patch("agent.runner.create_llm_client", return_value=ArrayArgsLLM()),
+        patch("agent.runner.create_inference_client") as mock_inf,
+        patch("agent.runner.create_clip_builder", return_value=RecordingClipBuilder()),
+    ):
+        mock_inf.return_value = V41InferenceClient([_output("未断裂")])
+        mock_inf.return_value.preflight = lambda: V41InferenceClient.deployment_snapshot
+        env = runner.run_one(
+            video,
+            config_path=cfg,
+            resolved_intent=UserIntent(requested_fields=["has_fracture"]),
+            include_internal_trace=True,
+        )
+
+    assert env["ok"] is False
+    assert env["evaluation_trace"]["call_stats"]["decision_llm_calls"] == 1
+
+
+def test_cli_rejects_nan_threshold_and_refuses_overwrite_without_flag(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "ann.csv"
+    csv_path.write_text("video_id,has_fracture,source_type\nv1,true,韧性断裂\n", encoding="utf-8")
+    v41_cfg = tmp_path / "v41.yaml"
+    v41_cfg.write_text(
+        "agent:\n  backend: local\nbackend:\n  contract_version: tensile-vlm/v4.1\n",
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    existing_ledger = out_dir / "paired_ledger.jsonl"
+    existing_ledger.write_text("old-run\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="--max-failure-rate"):
+        cli_main(
+            [
+                "--videos-root",
+                str(tmp_path),
+                "--annotations",
+                str(csv_path),
+                "--config",
+                str(v41_cfg),
+                "--output-dir",
+                str(out_dir),
+                "--max-failure-rate",
+                "nan",
+            ]
+        )
+    assert existing_ledger.read_text(encoding="utf-8") == "old-run\n"
+
+    with pytest.raises(FileExistsError, match="--overwrite"):
+        cli_main(
+            [
+                "--videos-root",
+                str(tmp_path),
+                "--annotations",
+                str(csv_path),
+                "--config",
+                str(v41_cfg),
+                "--output-dir",
+                str(out_dir),
+            ]
+        )
+    assert existing_ledger.read_text(encoding="utf-8") == "old-run\n"

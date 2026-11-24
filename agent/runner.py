@@ -178,6 +178,7 @@ def run_one(
     resolved_id = video_id if video_id is not None else path.stem
 
     stage = "configuration"
+    agent: Any | None = None
     try:
         config = deepcopy(load_config(config_path))
         config.setdefault("agent", {})
@@ -377,6 +378,12 @@ def run_one(
                 message=str(exc),
             ),
         ).model_dump()
+        if include_internal_trace and agent is not None:
+            failure["evaluation_trace"] = {
+                "rounds": len(getattr(agent, "history", [])),
+                "history": list(getattr(agent, "history", [])),
+                "call_stats": dict(getattr(agent, "call_stats", {})),
+            }
         failure["response"] = {
             "status": "failed",
             "answer": None,
