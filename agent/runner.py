@@ -159,6 +159,7 @@ def run_one(
     agent_config_snapshot: dict[str, Any] | None = None,
     include_internal_trace: bool = False,
     contract_version: str | None = None,
+    resolved_intent: Any | None = None,
 ) -> dict[str, Any]:
     """Run the agent on a single video and return a ``RunnerResult`` dict.
 
@@ -234,7 +235,11 @@ def run_one(
             "model_digest": (agent_config_snapshot or {}).get("digest"),
         }
 
-        intent = parse_user_intent(question, config=config)
+        intent = (
+            resolved_intent
+            if resolved_intent is not None
+            else parse_user_intent(question, config=config)
+        )
         if intent.action == "unsupported":
             return {
                 "ok": False,
@@ -291,6 +296,12 @@ def run_one(
                         "stage": error.get("stage", "internal"),
                     }
                 )
+            if include_internal_trace:
+                raw_result["evaluation_trace"] = {
+                    "rounds": len(getattr(agent, "history", [])),
+                    "history": list(getattr(agent, "history", [])),
+                    "call_stats": dict(getattr(agent, "call_stats", {})),
+                }
             raw_result["response"] = {
                 "status": "failed",
                 "answer": None,
@@ -343,6 +354,7 @@ def run_one(
                     raw_result.get("rounds", len(raw_result.get("history", [])))
                 ),
                 "history": raw_result.get("history", []),
+                "call_stats": dict(getattr(agent, "call_stats", {})),
             }
         envelope["response"] = project_result(envelope["result"], intent)
         return envelope
