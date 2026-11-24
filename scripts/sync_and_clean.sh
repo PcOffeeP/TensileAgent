@@ -5,7 +5,7 @@
 #   1. 仅处理 work/* 分支（绝不触碰主线或其他分支）
 #   2. 该分支尖端 SHA 必须确已作为某个合并提交的第 2 父提交（^2）进入
 #      github/main 的一阶历史（杜绝误删刚从主线切出的新分支！）
-#   3. 对应 worktree 必须完全干净（无未提交修改、无未跟踪文件）且未被 lock
+#   3. 对应 worktree 必须完全干净（无未提交修改、无未跟踪文件、无非缓存类被忽略本地文件）且未被 lock
 #   4. 绝不删除当前命令运行所在的 worktree
 #
 # 注意：本脚本按 Create a merge commit 合并策略判定“已合并”。
@@ -13,7 +13,7 @@
 #
 # 用法：
 #   bash scripts/sync_and_clean.sh            # 执行同步与安全清理
-#   bash scripts/sync_and_clean.sh --dry-run  # 仅预演并打印将要执行的动作
+#   bash scripts/sync_and_clean.sh --dry-run  # 仅预演（不修改远程引用、不改工作区）
 
 set -euo pipefail
 
@@ -32,8 +32,12 @@ fi
 CURRENT_TOPLEVEL="$(git rev-parse --show-toplevel)"
 CURRENT_REALPATH="$(cd "$CURRENT_TOPLEVEL" && pwd -P)"
 
-echo "==> 1/4 拉取远程最新状态并清理已删远程引用 (${REMOTE})..."
-git fetch --prune "$REMOTE"
+if $DRY_RUN; then
+  echo "==> 1/4 [dry-run] 跳过 git fetch --prune，使用本地已有远程跟踪引用 (${MAIN_REF})..."
+else
+  echo "==> 1/4 拉取远程最新状态并清理已删远程引用 (${REMOTE})..."
+  git fetch --prune "$REMOTE"
+fi
 
 if ! git rev-parse --verify --quiet "$MAIN_REF" >/dev/null; then
   echo "❌ 找不到远端主线引用 ${MAIN_REF}，已中止。" >&2
@@ -93,16 +97,67 @@ echo "==> 2/4 同步主工作区 (${MAIN_BRANCH})..."
 if [ -n "$MAIN_WT" ] && [ -d "$MAIN_WT" ]; then
   if [ -z "$(git -C "$MAIN_WT" status --porcelain)" ]; then
     if $DRY_RUN; then
-      echo "  [dry-run] 将同步主工作区: git -C \"$MAIN_WT\" pull --ff-only ${REMOTE} ${MAIN_BRANCH}"
+      echo "  [dry-run] 将同步主工作区: git -C \"$MAIN_WT\" merge --ff-only --no-overwrite-ignore ${MAIN_REF}"
     else
-      git -C "$MAIN_WT" pull --ff-only "$REMOTE" "$MAIN_BRANCH"
+      if ! git -C "$MAIN_WT" merge --ff-only --no-overwrite-ignore "$MAIN_REF"; then
+        echo "❌ 同步主工作区失败（可能存在会覆盖本地被忽略文件或非快进分叉的情况），已中止: $MAIN_WT" >&2
+        exit 1
+      fi
     fi
   else
     echo "  ⚠️ 跳过主工作区同步（存在未提交改动）: $MAIN_WT"
   fi
 else
-  echo "  ℹ️ 未检测到检出 ${MAIN_BRANCH} 的工作区，跳过 pull。"
+  echo "  ℹ️ 未检测到检出 ${MAIN_BRANCH} 的工作区，跳过主线同步。"
 fi
+
+is_rebuildable_cache_path() {
+  local rel="$1"
+  rel="${rel%/}"
+  case "$rel" in
+    .pytest_cache|*/.pytest_cache|.pytest_cache/*|*/.pytest_cache/*|\
+    __pycache__|*/__pycache__|__pycache__/*|*/__pycache__/*|\
+    .mypy_cache|*/.mypy_cache|.mypy_cache/*|*/.mypy_cache/*|\
+    .ruff_cache|*/.ruff_cache|.ruff_cache/*|*/.ruff_cache/*|\
+    *.pyc|*.pyo|.DS_Store|*/.DS_Store)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+PRESERVED_IGNORED_SAMPLE=""
+has_preserved_ignored_files() {
+  local wt="$1"
+  PRESERVED_IGNORED_SAMPLE=""
+  local tmpfile
+  tmpfile="$(mktemp)"
+  if ! git -C "$wt" status --porcelain=v1 --ignored=matching -z >"$tmpfile" 2>/dev/null; then
+    rm -f "$tmpfile"
+    PRESERVED_IGNORED_SAMPLE="<git status --ignored 检查失败>"
+    return 0
+  fi
+  local entry path count=0
+  while IFS= read -r -d '' entry; do
+    if [[ "$entry" == "!! "* ]]; then
+      path="${entry#!! }"
+      if ! is_rebuildable_cache_path "$path"; then
+        if [ "$count" -lt 3 ]; then
+          [ -n "$PRESERVED_IGNORED_SAMPLE" ] && PRESERVED_IGNORED_SAMPLE+=", "
+          PRESERVED_IGNORED_SAMPLE+="$path"
+        fi
+        count=$((count + 1))
+      fi
+    fi
+  done < "$tmpfile"
+  rm -f "$tmpfile"
+  if [ "$count" -gt 3 ]; then
+    PRESERVED_IGNORED_SAMPLE+=" 等共 ${count} 项"
+  fi
+  [ "$count" -gt 0 ]
+}
 
 echo "==> 3/4 扫描并安全清理已合并的 work/* worktree..."
 removed_wt_count=0
@@ -143,6 +198,12 @@ for i in "${!WORK_WT_PATHS[@]}"; do
 
   if [ -n "$(git -C "$p" status --porcelain)" ]; then
     echo "  ⏭️ 跳过含未提交改动的工作区: $b ($p)"
+    skipped_wt_count=$((skipped_wt_count + 1))
+    continue
+  fi
+
+  if has_preserved_ignored_files "$p"; then
+    echo "  ⏭️ 跳过含被忽略本地文件的工作区（请先备份或手动清理）: $b ($p) -> ${PRESERVED_IGNORED_SAMPLE}"
     skipped_wt_count=$((skipped_wt_count + 1))
     continue
   fi
