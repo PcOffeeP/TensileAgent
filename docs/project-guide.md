@@ -1,5 +1,5 @@
 <!-- explain-project
-verified_commit: 066dd5a77a6f6f344ac107453702dafabb4b371e
+verified_commit: 3e632355f17605dab995c46ba33d2a98bcaf1ea1
 verified_worktree: clean
 -->
 
@@ -39,8 +39,8 @@ TensileAgent 是材料拉伸断裂视频分析系统：接收用户的一段自�
 
 ### Runner 初始化
 
-- **装配顺序**：意图解析（`agent/runner.py:145`）→ 配置加载（`:157`）→ `_runtime` 元数据（`:195`）→ 视频元数据（`:207`，先 `ffprobe`、失败后 `cv2` 回退）→ LLM 后端（`:210` → `agent/llm.py:281`）→ 推理客户端（`:212` → `agent/inference.py:684`）+ 预检（`:213` → `agent/inference.py:472`）→ `ClipBuilder`（`:216`）→ `IterativeAgent`（`:220-229`）。
-- **失败信封**：任一 stage 失败即停止，返回带 stage 标签的失败信封，顺序为 `configuration` → `input` → `decision_backend` → `inference_transport` → `sampling` → `internal`。
+- **装配顺序**：配置加载与容差校验（`configuration`，含 `agent_config_snapshot`、CLI `--agent-backend` / `--agent-model` / `--contract-version` 覆盖与 `0 < tolerance_seconds <= 1.0` 前置校验）→ 意图解析（将已解析的有效配置显式传入 `parse_user_intent`）→ 视频元数据（先 `ffprobe`、失败后 `cv2` 回退）→ LLM 后端（`AgentLLMFactory.create`）→ 推理客户端 + 预检（`preflight`）→ `ClipBuilder`（按 `run_id` 隔离临时目录并缓存同次运行的源视频 PTS）→ `IterativeAgent`。
+- **失败信封**：任一 stage 失败即停止，返回带 stage 标签的失败信封，顺序为 `configuration` → `input` → `decision_backend` → `inference_transport` → `sampling` → `internal`。程序组装的最终结果若违反 `FinalOutput` 契约，同样返回 `ok=False` 内部错误信封，不再降级伪装为业务拒判。
 - **产物语义**：装配成功后，运行时身份（`agent_config_snapshot`、local 模型 digest、`deployment_snapshot`）和依赖实例在后续迭代中保持冻结。
 
 代码入口：
@@ -83,12 +83,12 @@ TensileAgent 是材料拉伸断裂视频分析系统：接收用户的一段自�
 
 代码入口：
 - `agent/iterative_agent.py` — `_can_terminate`、`_force_terminate`、`_build_fracture_args`
+- `agent/runtime_guards.py` — 纯逻辑覆盖、特殊复查与拒判事实守卫
 
 ### 视觉 Prompt 与契约隔离
 
-- **选择**：视觉 Prompt 完全来自冻结契约 `agent/contracts/tensile_vlm_v4_1.json`；`IterativeAgent` 仍构造并传递 `prompt` 参数，但 `LlamaFactoryInferenceClient.infer` 立即丢弃它，改用契约中的 `analysis.system_prompt` / `analysis.user_prompt`。
+- **选择**：视觉 Prompt 完全来自冻结契约 `agent/contracts/tensile_vlm_v4_1.json`（或显式回滚的 `tensile_vlm_v2.json`）；上游不再构造或透传视觉 `prompt` 参数，`ToolSampleAndInfer._discard_legacy_prompt` 仅用于兼容历史工具记录中的冗余字段。
 - **原因**：确保用户原话、决策模型历史、提示注入都不会进入视觉模型请求。
-- **现状缺口**：上游仍保留冗余 `prompt` 构造与导出，属于 TODO 已记录的清理项（见 `docs/PROJECT_TODO.md` “简化视觉 Prompt 传输链路”）。
 
 代码入口：
 - `agent/inference.py` — `LlamaFactoryInferenceClient.infer`
@@ -99,8 +99,8 @@ TensileAgent 是材料拉伸断裂视频分析系统：接收用户的一段自�
 
 ### 配置与契约版本
 
-- **配置合并**：默认路径下，`_SESSION_OVERRIDES` > `config.local.yaml` > `config.yaml` 逐层 `deep-merge`；自定义 `--config <path>` 为裸读，不参与 local 合并。
-- **契约版本**：优先级为 `config` > 环境变量 `INFERENCE_CONTRACT_VERSION` > 默认 `V2`；**不允许运行时自动从 V4.1 降级到 V2**。
+- **配置合并**：默认路径下，`_SESSION_OVERRIDES` > `config.local.yaml` > `config.yaml` 逐层 `deep-merge`；自定义 `--config <path>` 为裸读，不参与 local 合并。缺省决策后端统一 `local`，缺省温度统一 `0.2`，`tolerance_seconds` 在加载期校验为有限数且位于 `(0, 1.0]`。
+- **契约版本**：显式 CLI `--contract-version` 写入任务有效配置并优先于 YAML，单视频与批量入口均生效；**不允许运行时自动从 V4.1 降级到 V2**。
 - **Mock 模式**：`INFERENCE_MOCK=1` 在进程级启用 `MockInferenceClient`，无需真实视觉服务即可验证链路。
 - **请求大小限制**：`max_request_size` 默认 `32 MiB`，必须为大于 0 的整数。
 - **预检契约**：`LlamaFactoryInferenceClient` 初始化期发起 `GET /tensile/contract`，校验 version、hash、capabilities、deployment_manifest；失败视为推理传输层错误。
@@ -152,21 +152,23 @@ TensileAgent 是材料拉伸断裂视频分析系统：接收用户的一段自�
 
 ### Web 工作台
 
-- FastAPI 后端 + React/Vite 前端，提供文件上传、任务队列、SSE 实时事件流、历史与模型传输回放。
+- FastAPI 后端 + React/Vite 前端，提供文件上传、任务队列、带单调序号 `seq` 与 `after_seq` 游标补读的 SSE 事件流、原子落盘的任务历史与模型传输回放。
 - 与 CLI 共享同一个 `run_one` 执行内核。
 
 代码入口：
 - `agent/web_api.py`
 - `web/src/App.tsx`
 
-### 批量验收与评分
+### 批量验收、双规划器配对与评分
 
-- `scripts/run_v4_1_acceptance_batch.py` + `scripts/score_v4_1_acceptance.py` 用于冻结 V4.1 批量验收与 Stage G 评分。
-- V2 对比通过显式 `config.v2.comparison.yaml` 运行，不会自动降级。
+- `scripts/run_v4_1_acceptance_batch.py` + `scripts/score_v4_1_acceptance.py` 用于冻结 V4.1 批量验收与 Stage G 评分（CSV 标注表加载强制 fail-closed Schema 与集合不变量校验）。
+- `scripts/run_planner_paired_eval.py` + `agent/planner_paired_eval.py` 用于在相同修复后 V4.1 Runtime 上逐视频配对评估 `DeterministicPlanner` 与 LLM 规划器。
+- V2 对比通过显式 `config.v2.comparison.yaml` 或 `--contract-version tensile-vlm/v2` 运行，不会自动降级。
 
 代码入口：
 - `agent/acceptance_batch.py`
 - `agent/scoring_v4_1.py`
+- `agent/planner_paired_eval.py`
 
 ### Mock 模式
 
@@ -178,12 +180,10 @@ TensileAgent 是材料拉伸断裂视频分析系统：接收用户的一段自�
 
 ## 当前限制与未知
 
-- **默认值不一致**：决策模型 `temperature` 的代码兜底默认值为 `0.7`，而 `config.yaml` 中默认写为 `0.2`；两者当前独立生效。
-- **local 回退 remote**：`config.yaml` 将决策后端默认写为 `local`，但当 Ollama 本地配置缺失/探测失败时，代码会兜底使用 `remote`。
 - 当前交付为 `tensile-vlm/v4.1` 中间模型集成，README 明确说明**不能宣称为 final / full-data / production-passed**；Stage G 全量 110 条性能是中间结果，历史质量门仍失败。
-- 决策模型与视觉模型质量仍在独立优化；本仓库只负责 Agent 端。
+- 决策模型与视觉模型质量仍在独立优化；本仓库只负责 Agent 端，上游新一代五类标注与训练在相邻工作区 `TensileAgent-Finetune` 演进。
+- `agent/config.yaml` 中 `agent.local.model` 当前留空，待本机拉取 Ollama 决策模型后填写（或通过 Web / `--agent-model` 指定）；未安装模型或 Ollama 离线时 `local` 后端直接 fail-closed，不会自动切到 `remote`。
 - `confidence` 数值保持 `null`，`evidence_level` 是确定性分类；校准版本尚未接入。
 - `visual_evidence` 标记为 `experimental`，可靠性未经验证。
-- 用户意图识别当前为纯正则匹配，未调用决策模型；该差异已记录在 `docs/PROJECT_TODO.md`。
-- 工作区当前为 clean 状态（见顶部 `verified_worktree`）；历史 `.pi/` 下文件删除已清理，不再影响项目源码。
-- `agent/langgraph_agent/` 为未跟踪目录，当前指南未纳入核心链路说明。
+- 用户意图识别采用“决策模型 + 代码安全/一致性审查 + 正则兜底”混合实现（`deterministic` 后端直接使用正则解析）。
+- 仓库已接入 GitHub PR 审查流与三项云端 CI 检查（详见 `AGENTS.md` 与 `scripts/sync_and_clean.sh`）。

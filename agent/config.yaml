@@ -3,7 +3,8 @@ agent:
   llm_timeout_seconds: 300
   local:
     base_url: http://localhost:11434/v1
-    model: tensile-qwen35:9b
+    # 待本机拉取 Ollama 决策模型后填写（例如 qwen3:8b），或通过 Web / --agent-model 指定
+    model: ""
     provider: ollama
     reasoning_effort: none
   max_low_conf_rounds: 2
