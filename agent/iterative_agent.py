@@ -138,6 +138,13 @@ class IterativeAgent:
         self._initial_full_scan_done = False
         self.localization_index = 0
         self.pending_recheck_range: list[float] | None = None
+        self.call_stats: dict[str, int] = {
+            "visual_analysis_calls": 0,
+            "visual_evidence_calls": 0,
+            "decision_llm_calls": 0,
+            "deterministic_planner_calls": 0,
+            "program_scheduled_rounds": 0,
+        }
 
         self.clip_builder = clip_builder or FfmpegVideoClipBuilder()
         self.inference_client = inference_client or self._default_inference_client()
@@ -314,6 +321,7 @@ class IterativeAgent:
             scheduled = self._next_program_owned_sample()
             if scheduled is not None:
                 sample_range, scheduler_source = scheduled
+                self.call_stats["program_scheduled_rounds"] += 1
                 internal_result = self._execute_sample_round(
                     round_idx=round_idx,
                     tool_args={
@@ -343,12 +351,14 @@ class IterativeAgent:
 
             try:
                 if hasattr(self.llm, "plan_from_state"):
+                    self.call_stats["deterministic_planner_calls"] += 1
                     response = self.llm.plan_from_state(
                         history=self.history,
                         candidate=list(self.candidate),
                         event_bounds=self._ensure_event_bounds().interval,
                     )
                 else:
+                    self.call_stats["decision_llm_calls"] += 1
                     response = self.llm.chat_with_tools(
                         messages=messages,
                         tools=TOOLS_SCHEMA,
@@ -1697,6 +1707,8 @@ class IterativeAgent:
                 and "visual_evidence_summary" not in result
                 and hasattr(self.inference_client, "infer_evidence")
             ):
+                if hasattr(self, "call_stats"):
+                    self.call_stats["visual_evidence_calls"] += 1
                 evidence_result = self.inference_client.infer_evidence(clip_result)  # type: ignore[attr-defined]
                 if evidence_result.ok:
                     evidence_pp = evidence_result.preprocessing or {}
@@ -1774,6 +1786,8 @@ class IterativeAgent:
 
         # Run inference.
         try:
+            if hasattr(self, "call_stats"):
+                self.call_stats["visual_analysis_calls"] += 1
             inference_result = self.inference_client.infer(clip_result)
         except Exception as exc:
             logger.warning("Inference transport/execution failed: %s", exc)
