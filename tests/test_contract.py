@@ -87,13 +87,17 @@ def test_visual_evidence_reference_keeps_frame_trace():
 
 
 def test_sibling_authoritative_contract_matches_when_available():
-    sibling = (
-        CONTRACT_PATH.parents[3]
+    repo_root = CONTRACT_PATH.resolve().parents[2]
+    candidates = (
+        repo_root.parent / "mVllm_2" / "pipeline" / "contracts" / CONTRACT_PATH.name,
+        repo_root.parent.parent
+        / "archive"
         / "mVllm_2"
         / "pipeline"
         / "contracts"
-        / CONTRACT_PATH.name
+        / CONTRACT_PATH.name,
     )
-    if not sibling.exists():
-        pytest.skip("mVllm_2 sibling checkout is not available")
+    sibling = next((path for path in candidates if path.exists()), None)
+    if sibling is None:
+        pytest.skip("mVllm_2 sibling/archive checkout is not available")
     assert json.loads(sibling.read_text(encoding="utf-8")) == load_visual_contract()

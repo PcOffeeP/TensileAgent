@@ -1,6 +1,6 @@
 # ── TensileAgent — 核心 Agent 推理系统依赖声明 ──
 # 本文件为 TensileAgent/agent/ 目录下的核心推理系统提供依赖声明。
-# mVllm_2/（微调流水线）有自己独立的依赖管理，不在此文件涵盖范围内。
+# mVllm_2/（历史 V4.1 归档）与 TensileAgent-Finetune/（新一代微调流水线）各有独立依赖管理，不在此文件涵盖范围内。
 
 [project]
 name = "tensile-agent"

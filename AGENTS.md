@@ -8,8 +8,8 @@
 
 ### 1. 项目边界
 
-- 本仓库只维护 Agent 决策系统、Web 交互、运行时契约和交付验证；当前 `tensile-vlm/v4.1`（及回滚 `v2`）的冻结视觉推理服务与交付上游由相邻的 `mVllm_2` 仓库负责。
-- 新一代五类标注、数据流程、模型微调与离线评测在相邻工作区 `TensileAgent-Finetune`（`mVllm_2` 仓库的 `feat/tensileagent-finetune` worktree）演进，待下一代运行时契约冻结后再接入本仓库。
+- 本仓库只维护 Agent 决策系统、Web 交互、运行时契约和交付验证；当前 `tensile-vlm/v4.1`（及回滚 `v2`）的冻结视觉推理服务与交付上游由已冷归档的 `mVllm_2` 仓库（`../../archive/mVllm_2`，tag `v4.1-frozen`）负责。
+- 新一代五类标注、数据流程、模型微调与离线评测在独立仓库 `TensileAgent-Finetune`（`PcOffeeP/TensileAgent-Finetune`，主线分支 `main`）演进，待下一代运行时契约冻结后再接入本仓库。
 - 不要把训练流水线、LLaMA-Factory 源码、模型权重或训练侧依赖重新引入本仓库。两侧通过 HTTP API、版本化契约和轻量交付清单协作。
 - 涉及上下游仓库的变更必须保持职责分离；本仓库不得依赖训练机上的源码、私有数据或本地绝对路径才能运行。
 
@@ -26,7 +26,7 @@
 
 - `docs/results/`、`delivery/history/` 和回滚记录是历史证据，不是当前实现依据。不得从历史材料恢复已废弃的契约或运行路径。
 - Agent Runtime 修改应优先运行对应测试；涉及状态机、采样、解析或推理链路时，重点覆盖 `tests/test_iterative_agent.py`、`tests/test_sampling*.py`、`tests/test_parser.py` 和 `tests/test_inference.py`。
-- 项目级验证命令为 `python3 -m pytest tests -q`；前端修改运行 `cd web && npm run build`；交付 bundle 修改运行 `python3 scripts/validate_delivery_bundle.py --mvllm-root ../mVllm_2`。
+- 项目级验证命令为 `python3 -m pytest tests -q`；前端修改运行 `cd web && npm run build`；交付 bundle 修改运行 `python3 scripts/validate_delivery_bundle.py --mvllm-root ../../archive/mVllm_2`。
 - 动态帧、临时 clip、LLM trace 和其他运行时产物写入 `data/08_runtime/`，不得提交。不要提交视频、模型权重、checkpoint、密钥、token 或大型生成结果。
 
 ### 4. 分支与权限红线
@@ -51,7 +51,7 @@
   git worktree add --no-track ../TensileAgent-<线名> -b work/<线名> github/main
   ```
   不要在主工作区切换分支，同一 worktree 内不得并行两个写入者。
-- **交付与 PR**：在任务分支完成开发、跑通准入检查（`python3 -m pytest tests -q`；涉及前端运行 `cd web && npm run build`；涉及交付 bundle 运行 `python3 scripts/validate_delivery_bundle.py --mvllm-root ../mVllm_2`）并通过独立 `reviewer` 盲审后，推送 `work/<线名>` 到 `github` 并创建指向 `main` 的 PR（`gh pr create --base main`，严格按 `.github/PULL_REQUEST_TEMPLATE.md` 填写）。
+- **交付与 PR**：在任务分支完成开发、跑通准入检查（`python3 -m pytest tests -q`；涉及前端运行 `cd web && npm run build`；涉及交付 bundle 运行 `python3 scripts/validate_delivery_bundle.py --mvllm-root ../../archive/mVllm_2`）并通过独立 `reviewer` 盲审后，推送 `work/<线名>` 到 `github` 并创建指向 `main` 的 PR（`gh pr create --base main`，严格按 `.github/PULL_REQUEST_TEMPLATE.md` 填写）。
 - **PR 审查不通过时的原地返工**：若用户对 PR 提出修改意见，严禁关闭重开或另建分支；应回到同一 worktree 与 `work/<线名>` 分支完成修改、重跑自测与复审后，**追加新提交**（不得强推改写历史）并推送至同一远程分支，同步更新 PR 步骤清单并确认云端 CI 全绿。
 - **合并与自动清理**：PR 统一由用户在远端审查并通过所有 Required Status Checks 后以 **Create a merge commit** 合并（保留“任务信封”合并节点）；远程 `work/*` 分支在 PR 合并后自动删除。对已通过 Merge Commit 合入 `github/main` 且工作树完全干净的本地 `work/*` 分支及对应 worktree，已永久预授权 Agent 通过 `bash scripts/sync_and_clean.sh` 自动清理，无需逐次请示；未合并、含未提交改动或用途不明的分支严禁删除。
 <!-- git-pr-workflow:end -->
