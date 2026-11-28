@@ -12,7 +12,7 @@
 <!-- 贴出实际运行的本地检查或 CI 检查实测输出（不得凭猜测填写） -->
 - `python3 -m pytest tests -q`：
 - `cd web && npm run build`（如涉及前端）：
-- `python3 scripts/validate_delivery_bundle.py --mvllm-root ../mVllm_2`（如涉及交付 bundle）：
+- `python3 scripts/validate_delivery_bundle.py --mvllm-root ../../archive/mVllm_2`（如涉及交付 bundle）：
 
 ## 重点审查与风险提示
 

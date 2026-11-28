@@ -14,7 +14,7 @@ fold、seed 和发布目录由 mVllm_2 的机器清单管理，不作为 Agent �
 | 当前视觉服务 | V4.1 中间推理服务，只监听 loopback，通过 SSH tunnel 联调，非生产 |
 | V4.1 consumer artifact | 已冻结：`agent/contracts/tensile_vlm_v4_1.json` |
 | 中间交付链路门 | 通过 |
-| 性能策略 | 不阻断当前中间交付；新模型在 mVllm_2 中独立实验和晋级 |
+| 性能策略 | 不阻断当前中间交付；新一代模型在独立仓库 `TensileAgent-Finetune` 中独立实验和晋级（v4.1 历史冻结线已归档至 `archive/mVllm_2`） |
 | 全量 110 条性能 | 断裂准确率/联合成功率 40.91%，断裂召回 31.11%，未断裂召回 85.00% |
 | Held-out 21 条性能 | 断裂准确率/联合成功率 42.86%，断裂召回 35.29%，未断裂召回 75.00% |
 | Stage B | 历史质量门失败 |
@@ -318,8 +318,8 @@ API Key 存储在 `agent/.env` 中（已 gitignored），不会提交到仓库�
 
 ### 准备视觉推理服务（可选；跑真实分析必需）
 
-真实分析需要 V4.1 MiniCPM-V 推理服务。该服务不在本仓库，部署请参考兄弟仓库
-**[mVllm_2](../mVllm_2)**。当前 V4.1 中间服务只监听 loopback，本机通过 SSH tunnel
+真实分析需要 V4.1 MiniCPM-V 推理服务。该服务不在本仓库，部署请参考历史归档仓库
+**[mVllm_2](../../archive/mVllm_2)**（tag `v4.1-frozen`）。当前 V4.1 中间服务只监听 loopback，本机通过 SSH tunnel
 联调；默认配置指向 `127.0.0.1:18002`，预验收配置指向 `127.0.0.1:8002`，具体端口以
 实际 deployment manifest 和 tunnel 为准。
 
@@ -505,11 +505,11 @@ pytest tests/test_web_api.py -v
 
 | 仓库 | 说明 |
 |------|------|
-| **[mVllm_2](../mVllm_2)** | V4.1 历史冻结/中间视觉服务与交付上游（`tensile-vlm/v4.1` 及回滚 `v2`） |
-| **[TensileAgent-Finetune](../TensileAgent-Finetune)** | 新一代五类数据、微调与离线评测演进线（`mVllm_2` 的 `feat/tensileagent-finetune` worktree），尚未接入当前 V4.1 运行时 |
+| **[mVllm_2](../../archive/mVllm_2)** | V4.1 历史冻结/中间视觉服务与交付上游（已冷归档，tag `v4.1-frozen`，含 `tensile-vlm/v4.1` 及回滚 `v2`） |
+| **[TensileAgent-Finetune](../TensileAgent-Finetune)** | 独立仓库（`PcOffeeP/TensileAgent-Finetune`，主线 `main`）：新一代五类数据、微调与离线评测演进线，尚未接入当前 V4.1 运行时 |
 
-`mVllm_2/main` 当前作为冻结上游维护 `tensile-vlm/v4.1` 数据、训练、发布模型和中间推理服务；V2
-数据与模型已在 archive 中冻结。新一代五类模型在 `TensileAgent-Finetune` 独立演进，待下一代运行时契约冻结后再接入本仓库。当前 V4.1 中间服务单轮返回
+`mVllm_2`（已冷归档至 `../../archive/mVllm_2`，tag `v4.1-frozen`）作为冻结上游保留 `tensile-vlm/v4.1` 历史数据、训练、发布模型和中间推理服务；V2
+数据与模型已在 archive 中冻结。新一代五类模型在独立仓库 `TensileAgent-Finetune`（`main`）演进，待下一代运行时契约冻结后再接入本仓库。当前 V4.1 中间服务单轮返回
 `clip_state`、`fracture_mechanism`、`fracture_site`、`special_case`，Agent 形成
 `tensile-agent/result/v4.1`。V2 只作为历史回滚协议。
 

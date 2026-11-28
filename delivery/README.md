@@ -13,7 +13,7 @@ Agent、模型、视觉服务、链路验收和性能快照的轻量组件，并
 
 ```bash
 python3 scripts/validate_delivery_bundle.py \
-  --mvllm-root ../mVllm_2
+  --mvllm-root ../../archive/mVllm_2
 ```
 
 生成器只从本仓和指定的 mVllm_2 工作区读取轻量清单，不读取权重、视频、密钥或
@@ -21,7 +21,7 @@ python3 scripts/validate_delivery_bundle.py \
 
 ```bash
 python3 scripts/generate_delivery_bundle.py \
-  --mvllm-root ../mVllm_2
+  --mvllm-root ../../archive/mVllm_2
 ```
 
 当前 bundle 不是生产发布物。权重继续由训练机托管，服务只监听 loopback，并通过

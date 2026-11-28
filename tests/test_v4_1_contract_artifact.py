@@ -32,7 +32,15 @@ def test_v4_1_incipient_summary_is_prospective_not_final():
 
 
 def test_v4_1_authoritative_sibling_contract_is_byte_identical():
-    sibling = PATH.parents[3] / "mVllm_2" / "pipeline/contracts/tensile_vlm_v4_1.json"
-    if not sibling.exists():
-        pytest.skip("mVllm_2 sibling checkout is not available")
+    repo_root = PATH.resolve().parents[2]
+    candidates = (
+        repo_root.parent / "mVllm_2" / "pipeline/contracts/tensile_vlm_v4_1.json",
+        repo_root.parent.parent
+        / "archive"
+        / "mVllm_2"
+        / "pipeline/contracts/tensile_vlm_v4_1.json",
+    )
+    sibling = next((path for path in candidates if path.exists()), None)
+    if sibling is None:
+        pytest.skip("mVllm_2 sibling/archive checkout is not available")
     assert sibling.read_bytes() == PATH.read_bytes()
